@@ -31,85 +31,57 @@
 ** DEALINGS IN THE SOFTWARE.                                                                 **
 *\                                                                                           */
 
-package spinaltools.bus
+package spinaltools
 
 import spinal.core._
-import spinal.lib._
-import spinal.lib.bus.regif._
 import spinal.lib.bus.misc.SizeMapping
-import spinal.lib.bus.amba3.apb._
-import spinal.lib.bus.wishbone._
 
+import spinaltools.BusDef
+import spinaltools.Utils._
 
-object BusDef {
-  type Bus = Bundle with IMasterSlave
-}
-
-/** Bus definition 
+/** Mixin for address mapped components
  *
- *  Allows components to be generic over different buses by 
- *  taking a type parameter implementing this trait and using 
- *  the included methods to instantiate the bus and register 
- *  interface
+ *  Allows automatic generation of address maps
+ *  and decoding for a bus.
  */
-trait BusDef[B <: BusDef.Bus] {
-  /** Decoder component type for the bus */
-  type DecoderType <: Component
+trait AddressMapped[B <: BusDef.Bus] {
+  /** Returns which bus to map on */
+  def mappedBus: B
 
-  /** Returns bit width of address bus */
-  def addressWidth: Int
-
-  /** Returns an instance of the bus bundle */
-  def createBus(): B
-
-  /** Returns a RegIf bus interface for the given bus */
-  def createBusInterface(
-      bus: B,
-      sizeMap: SizeMapping,
-      regPre: String = "",
-      withSecFireWall: Boolean = false
-  ): BusIf
-
-  /** Creates a bus decoder for the given master and slave mappings */
-  def createDecoder(master: B, slaves: Seq[(B, SizeMapping)]): DecoderType
+  /** Returns minimum address region size to map
+   *
+   *  A bigger region may be mapped, but it will be at
+   *  least this size.
+   */
+  def minMappedSize: BigInt
 }
 
-/** APB3 bus definition */
-case class Apb3BusDef(config: Apb3Config) extends BusDef[Apb3] {
-  type DecoderType = Apb3Decoder
+object AddressMapped {
+  /** Maps components onto a bus with automatically generated base addresses
+   *
+   * All components must implement AddressMapped. To minimize decoding logic, creates
+   * equal-sized, power-of-2 regions big enough for the biggest component.
+   */
+  def mapComponents[B <: BusDef.Bus](
+    bus: B,
+    busDef: BusDef[B],
+    baseAddress: BigInt,
+    components: Seq[AddressMapped[B]]
+  ): Component = {
+    // sanity check
+    assert(baseAddress < BigInt(2).pow(busDef.addressWidth),
+      "baseAddress is beyond bus address range")
+    assert(!components.isEmpty, "components is empty")
 
-  def addressWidth = config.addressWidth
+    // find biggest power of 2 region size
+    val regionSize = components.map(c => nextPowerOfTwo(c.minMappedSize)).max
 
-  def createBus() = Apb3(config)
+    // create mappings for decoder
+    val mappings = components.zipWithIndex.map { case(c, i) => 
+      (c.mappedBus, SizeMapping(baseAddress + (i * regionSize), regionSize))
+    }.toSeq
 
-  def createBusInterface(
-      bus: Apb3,
-      sizeMap: SizeMapping,
-      regPre: String = "",
-      withSecFireWall: Boolean = false
-  ) = Apb3BusInterface(bus, sizeMap, regPre = regPre, withSecFireWall = withSecFireWall)
-
-  def createDecoder(master: Apb3, slaves: Seq[(Apb3, SizeMapping)]) = {
-    Apb3Decoder(master, slaves)
-  }
-}
-
-/** Wishbone bus definition */
-case class WishboneBusDef(config: WishboneConfig) extends BusDef[Wishbone] {
-  type DecoderType = WishboneDecoder
-
-  def addressWidth = config.addressWidth
-
-  def createBus() = Wishbone(config)
-
-  def createBusInterface(
-      bus: Wishbone,
-      sizeMap: SizeMapping,
-      regPre: String = "",
-      withSecFireWall: Boolean = false
-  ) = WishboneBusInterface(bus, sizeMap, regPre = regPre, withSecFireWall = withSecFireWall)
-
-  def createDecoder(master: Wishbone, slaves: Seq[(Wishbone, SizeMapping)]) = {
-    WishboneDecoder(master, slaves)
+    // return the decoder
+    busDef.createDecoder(master = bus, slaves = mappings)
   }
 }
