@@ -7,10 +7,10 @@ val spinalCore = "com.github.spinalhdl" %% "spinalhdl-core" % spinalVersion
 val spinalLib = "com.github.spinalhdl" %% "spinalhdl-lib" % spinalVersion
 val spinalIdslPlugin = compilerPlugin("com.github.spinalhdl" %% "spinalhdl-idsl-plugin" % spinalVersion)
 
-lazy val spinaltools = (project in file("."))
+lazy val spiny = (project in file("."))
   .settings(
-    name := "spinaltools", 
-    Compile / scalaSource := baseDirectory.value / "src" / "spinal",
+    name := "spiny", 
+    Compile / scalaSource := baseDirectory.value / "spinal",
     libraryDependencies ++= Seq(spinalCore, spinalLib, spinalIdslPlugin)
   )
 
