@@ -38,7 +38,6 @@ import spinal.lib.bus.regif._
 
 import spiny.bus._
 import spiny.Utils.nextPowerOfTwo
-import spinal.lib.bus.misc.SizeMapping
 
 sealed trait GpioDirection
 object GpioDirection {
@@ -51,15 +50,7 @@ case class GpioBankConfig(
   width: Int,
   direction: GpioDirection,
   name: String = null
-) {
-  def numRegisters: Int = {
-    direction match {
-      case GpioDirection.Input => 1
-      case GpioDirection.Output => 1
-      case GpioDirection.InOut => 3
-    }
-  }
-}
+)
 
 object Gpio {
   val DefaultBankNames = Seq(
@@ -101,13 +92,7 @@ class Gpio[B <: BusDef.Bus](
     }
   }
 
-  def mappedBus = io.bus
-
-  def minMappedSize = {
-    nextPowerOfTwo(bankConfigs.map(c => c.numRegisters).sum)
-  }
-
-  val busIf = busDef.createBusInterface(io.bus, SizeMapping(0, minMappedSize))
+  val busIf = busDef.createBusInterface(io.bus)
 
   (io.banks, bankConfigs).zipped.foreach { (signal, bankConf) => 
     bankConf.direction match {
@@ -160,4 +145,7 @@ class Gpio[B <: BusDef.Bus](
       }
     }
   }
+
+  def mappedBus = io.bus
+  def minMappedSize = busIf.getMappedSize
 }
