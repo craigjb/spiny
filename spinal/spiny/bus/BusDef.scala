@@ -57,6 +57,9 @@ trait BusDef[B <: BusDef.Bus] {
   /** Returns bit width of address bus */
   def addressWidth: Int
 
+  /** Returns bit width of data bus */
+  def dataWidth: Int
+
   /** Returns an instance of the bus bundle */
   def createBus(): B
 
@@ -78,6 +81,8 @@ case class Apb3BusDef(config: Apb3Config) extends BusDef[Apb3] {
 
   def addressWidth = config.addressWidth
 
+  def dataWidth = config.dataWidth
+
   def createBus() = Apb3(config)
 
   def createBusInterface(
@@ -97,6 +102,8 @@ case class WishboneBusDef(config: WishboneConfig) extends BusDef[Wishbone] {
   type DecoderType = WishboneDecoder
 
   def addressWidth = config.addressWidth
+
+  def dataWidth = config.dataWidth
 
   def createBus() = Wishbone(config)
 
