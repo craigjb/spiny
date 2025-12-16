@@ -36,6 +36,18 @@ import spinal.lib.bus.misc.SizeMapping
 
 import spiny.Utils._
 
+/** Address mapping result for a component */
+case class ComponentMap[B <: BusDef.Bus](
+  component: AddressMapped[B],
+  sizeMap: SizeMapping
+)
+
+/** Result from mapComponents */
+case class AddressMap[B <: BusDef.Bus](
+  decoder: Component,
+  components: Seq[ComponentMap[B]]
+)
+
 /** Mixin for address mapped components
  *
  *  Allows automatic generation of address maps
@@ -64,7 +76,7 @@ object AddressMapped {
     busDef: BusDef[B],
     baseAddress: BigInt,
     components: Seq[AddressMapped[B]]
-  ): Component = {
+  ): AddressMap[B] = {
     // sanity check
     assert(baseAddress < BigInt(2).pow(busDef.addressWidth),
       "baseAddress is beyond bus address range")
@@ -73,12 +85,17 @@ object AddressMapped {
     // find biggest power of 2 region size
     val regionSize = components.map(c => nextPowerOfTwo(c.minMappedSize)).max
 
-    // create mappings for decoder
-    val mappings = components.zipWithIndex.map { case(c, i) => 
-      (c.mappedBus, SizeMapping(baseAddress + (i * regionSize), regionSize))
+    // map components to addresses
+    val mapped = components.zipWithIndex.map { case(c, i) => 
+      ComponentMap(c, SizeMapping(baseAddress + (i * regionSize), regionSize))
     }.toSeq
 
-    // return the decoder
-    busDef.createDecoder(master = bus, slaves = mappings)
+    // create the decoder
+    val decoder = busDef.createDecoder(
+      master = bus,
+      slaves = mapped.map(cm => (cm.component.mappedBus, cm.sizeMap)).toSeq
+    )
+
+    AddressMap(decoder, mapped)
   }
 }
