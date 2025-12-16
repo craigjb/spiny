@@ -66,7 +66,6 @@ trait BusDef[B <: BusDef.Bus] {
   /** Returns a RegIf bus interface for the given bus */
   def createBusInterface(
       bus: B,
-      sizeMap: SizeMapping,
       regPre: String = "",
       withSecFireWall: Boolean = false
   ): BusIf
@@ -87,10 +86,14 @@ case class Apb3BusDef(config: Apb3Config) extends BusDef[Apb3] {
 
   def createBusInterface(
       bus: Apb3,
-      sizeMap: SizeMapping,
       regPre: String = "",
       withSecFireWall: Boolean = false
-  ) = Apb3BusInterface(bus, sizeMap, regPre = regPre, withSecFireWall = withSecFireWall)
+  ) = Apb3BusInterface(
+    bus,
+    SizeMapping(0, 0),
+    regPre = regPre,
+    withSecFireWall = withSecFireWall
+  )
 
   def createDecoder(master: Apb3, slaves: Seq[(Apb3, SizeMapping)]) = {
     Apb3Decoder(master, slaves)
@@ -109,10 +112,14 @@ case class WishboneBusDef(config: WishboneConfig) extends BusDef[Wishbone] {
 
   def createBusInterface(
       bus: Wishbone,
-      sizeMap: SizeMapping,
       regPre: String = "",
       withSecFireWall: Boolean = false
-  ) = WishboneBusInterface(bus, sizeMap, regPre = regPre, withSecFireWall = withSecFireWall)
+  ) = WishboneBusInterface(
+    bus,
+    SizeMapping(0, 0),
+    regPre = regPre,
+    withSecFireWall = withSecFireWall
+  )
 
   def createDecoder(master: Wishbone, slaves: Seq[(Wishbone, SizeMapping)]) = {
     WishboneDecoder(master, slaves)
