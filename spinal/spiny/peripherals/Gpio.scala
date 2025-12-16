@@ -46,6 +46,12 @@ object GpioDirection {
   case object InOut extends GpioDirection
 }
 
+/** GPIO bank configuration
+ *
+ *  width: number of pins
+ *  direction: input, output, or in-out (software-controlled)
+ *  name: bank name (defaults to alphabetic sequence)
+ */
 case class GpioBankConfig(
   width: Int,
   direction: GpioDirection,
@@ -60,6 +66,12 @@ object Gpio {
   )
 }
 
+/** GPIO peripheral
+ *
+ *  Supports multiple banks with independent direction config per bank.
+ *  IO signals are available in io.banks
+ *  InOut GPIO use TriStateArray.
+ */
 class Gpio[B <: BusDef.Bus](
   busDef: BusDef[B],
   bankConfigs: Seq[GpioBankConfig]
