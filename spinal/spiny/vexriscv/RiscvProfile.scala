@@ -64,7 +64,8 @@ case class Rv32iRustProfile(
     val iBusPlugin = new IBusSimplePlugin(
     resetVector = resetVector,
     cmdForkOnSecondStage = false,
-    cmdForkPersistence = false,
+    // required for AXI
+    cmdForkPersistence = true,
   )
 
   val dBusPlugin = new DBusSimplePlugin()
