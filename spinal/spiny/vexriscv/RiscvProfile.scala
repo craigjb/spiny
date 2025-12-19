@@ -55,10 +55,10 @@ trait RiscvProfile {
   def toPlugins: Seq[Plugin[VexRiscv]]
 }
 
-case class Rv32iRust(
+case class Rv32iRustProfile(
   resetVector: BigInt = 0x0L,
   withXilinxDebug: Boolean = false,
-) {
+) extends RiscvProfile {
     val iBusPlugin = new IBusSimplePlugin(
     resetVector = resetVector,
     cmdForkOnSecondStage = false,
