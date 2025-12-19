@@ -67,7 +67,7 @@ object Axi4CpuBusDef extends CpuBusDef[
 
   def createDBus(dBusPlugin: Plugin[VexRiscv]) = {
     val config = dBusPlugin match {
-      case p: DBusSimplePlugin => IBusSimpleBus.getAxi4Config()
+      case p: DBusSimplePlugin => DBusSimpleBus.getAxi4Config()
       case p: DBusCachedPlugin => p.config.getAxi4SharedConfig()
       case _ => SpinalError("Unknown DBus plugin type")
     }
