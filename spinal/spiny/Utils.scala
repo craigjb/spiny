@@ -31,11 +31,25 @@
 
 package spiny
 
+import java.nio.file.{Files, Paths}
+
 import spinal.core._
 
 object Utils {
   def nextPowerOfTwo(n: BigInt): BigInt = {
     BigInt(1) << log2Up(n)
+  }
+
+  def read32BitMemFromFile(path: String): Seq[BigInt] = {
+    Files
+      .readAllBytes(Paths.get(path))
+      .grouped(4)
+      .map(w =>
+        new BigInt(new java.math.BigInteger(Array(
+              0.toByte, 0.toByte, 0.toByte, 0.toByte,
+              w(3), w(2), w(1), w(0)
+        )))
+      ).toSeq
   }
 
   // Adds .when to the Option companion object for Scala 2.12
