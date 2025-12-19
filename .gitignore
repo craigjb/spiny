@@ -45,6 +45,8 @@ bin/
 *.vcd
 *.swp
 !tester/src/test/resources/*.vhd
+examples/*/target
+examples/*/*.v
 
 simWorkspace/
 /xsim.dir

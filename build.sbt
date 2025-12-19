@@ -19,3 +19,14 @@ lazy val spiny = (project in file("."))
   )
 
 fork := true
+
+// Example projects
+lazy val blinky = (project in file("examples/blinky"))
+  .dependsOn(spiny) // Link to your main library
+  .dependsOn(vexRiscv)
+  .settings(
+    name := "blinky",
+    Compile / scalaSource := baseDirectory.value / "src" / "spinal",
+    publish / skip := true,
+    libraryDependencies ++= Seq(spinalIdslPlugin),
+  )
