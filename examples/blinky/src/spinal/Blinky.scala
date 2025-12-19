@@ -24,8 +24,6 @@ class Blinky extends Component {
     frequency = FixedFrequency(100 MHz)
   )
 
-  io.LEDS := B("16'h0")
-
   val sysClkArea = new ClockingArea(sysClkDomain) {
     val vexRiscv = RiscvCpu(
       Rv32iRustProfile(withXilinxDebug = true),
@@ -71,6 +69,7 @@ class Blinky extends Component {
         name = "LEDS"
       ))
     )
+    io.LEDS := gpio.getBits(0)
 
     apbBridge.io.apb <> gpio.io.bus
   }

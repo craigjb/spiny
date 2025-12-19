@@ -158,6 +158,41 @@ class Gpio[B <: BusDef.Bus](
     }
   }
 
+  /** Returns Bits for an Input or Output bank
+   *
+   * Helper to do a safe cast
+   */
+  def getBits(bankId: Int): Bits = {
+    assert(
+      bankId < bankConfigs.length,
+      s"GPIO Bank $bankId does not exist (total banks: ${bankConfigs.length})"
+    )
+    val config = bankConfigs(bankId)
+    assert(
+      (config.direction == GpioDirection.Input ||
+        config.direction == GpioDirection.Output),
+      s"GPIO Bank $bankId ('${config.name}') is configured as " + 
+        s"${config.direction}, but getBits() requires Input or Output.")
+    io.banks(bankId).asBits
+  }
+
+  /** Returns TriStateArray for an InOut bank
+   *
+   * Helper to do a safe cast
+   */
+  def getTriState(bankId: Int): TriStateArray = {
+    assert(
+      bankId < bankConfigs.length,
+      s"GPIO Bank $bankId does not exist (total banks: ${bankConfigs.length})"
+    )
+    val config = bankConfigs(bankId)
+    assert(
+      config.direction == GpioDirection.InOut,
+      s"GPIO Bank $bankId ('${config.name}') is configured as " + 
+        s"${config.direction}, but getTriState() requires InOut.")
+    io.banks(bankId).asInstanceOf[TriStateArray]
+  }
+
   def mappedBus = io.bus
   def minMappedSize = busIf.getMappedSize
 }
