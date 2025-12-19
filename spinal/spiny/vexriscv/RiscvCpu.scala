@@ -44,8 +44,8 @@ class RiscvCpu[
   cpuBusDef: CpuBusDef[IBus, DBus],
 ) extends Component {
   val io = new Bundle {
-    val iBus = cpuBusDef.createIBus(profile.iBusPlugin)
-    val dBus = cpuBusDef.createDBus(profile.dBusPlugin)
+    val iBus = master(cpuBusDef.createIBus(profile.iBusPlugin))
+    val dBus = master(cpuBusDef.createDBus(profile.dBusPlugin))
   }
 
   val debugReset = False
