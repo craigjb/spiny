@@ -49,9 +49,6 @@ trait RiscvProfile {
   def iBusPlugin: Plugin[VexRiscv]
   def dBusPlugin: Plugin[VexRiscv]
   def csrPlugin: CsrPlugin
-
-  def debugClockDomain: Option[ClockDomain]
-  def jtagClockDomain: Option[ClockDomain]
   def debugPlugin: Option[EmbeddedRiscvJtag]
 
   def toPlugins: Seq[Plugin[VexRiscv]]
@@ -82,11 +79,6 @@ case class Rv32iRustProfile(
     )
   )
 
-  val debugClockDomain = Option.when(withXilinxDebug)(
-    ClockDomain.internal("debugClock", withReset = false))
-
-  val jtagClockDomain = Option.when(withXilinxDebug)(
-    ClockDomain.internal("jtagClock", withReset=false))
   val debugPlugin = Option.when(withXilinxDebug)(
     new EmbeddedRiscvJtag(
       p = DebugTransportModuleParameter(
@@ -94,8 +86,8 @@ case class Rv32iRustProfile(
         version = 1,
         idle = 7
       ),
-      debugCd = debugClockDomain.get,
-      jtagCd = jtagClockDomain.get,
+      debugCd = null,
+      jtagCd = null,
       withTunneling = true,
       withTap = false,
     )

@@ -36,7 +36,9 @@ import spinal.lib._
 import spinal.lib.blackbox.xilinx.s7.BSCANE2
 import vexriscv._
 
-class RiscvCpu[
+import spiny.Utils._
+
+case class RiscvCpu[
   IBus <: CpuBusDef.Bus,
   DBus <: CpuBusDef.Bus
 ](
@@ -48,25 +50,26 @@ class RiscvCpu[
     val dBus = master(cpuBusDef.createDBus(profile.dBusPlugin))
   }
 
-  val debugReset = False
-  val cpuClkDomain = ClockDomain(
-    clock = ClockDomain.current.readClockWire,
-    reset = debugReset || ClockDomain.current.isResetActive,
-    frequency = ClockDomain.current.frequency
-  )
+  val jtagTap = Option.when(profile.withXilinxDebug)({
+    profile.debugPlugin.get.debugCd = ClockDomain.current
+    val tap = BSCANE2(userId = 4)
+    val jtagClockDomain = ClockDomain(clock = tap.TCK)
+    profile.debugPlugin.get.jtagCd = jtagClockDomain
+    tap
+  })
 
-  val cpuClkArea = new ClockingArea(cpuClkDomain) {
+  val debugReset = False
+  val debugRstArea = new ResetArea(debugReset, true) {
     val cpu = new VexRiscv(VexRiscvConfig(profile.toPlugins))
     cpuBusDef.connectIBus(profile.iBusPlugin, io.iBus)
     cpuBusDef.connectDBus(profile.dBusPlugin, io.dBus)
 
-    if (profile.withXilinxDebug) {
-      val jtagTap = BSCANE2(userId = 4)
-      profile.jtagClockDomain.get.clock := jtagTap.TCK
-      profile.debugPlugin.get.jtagInstruction <> 
-        jtagTap.toJtagTapInstructionCtrl()
+    profile.csrPlugin.externalInterrupt := False
+    profile.csrPlugin.timerInterrupt := False
 
-      profile.debugClockDomain.get.clock := ClockDomain.current.readClockWire
+    if (profile.withXilinxDebug) {
+      profile.debugPlugin.get.jtagInstruction <> 
+        jtagTap.get.toJtagTapInstructionCtrl()
       debugReset.setWhen(profile.debugPlugin.get.ndmreset)
     }
   }
