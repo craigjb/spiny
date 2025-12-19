@@ -37,4 +37,11 @@ object Utils {
   def nextPowerOfTwo(n: BigInt): BigInt = {
     BigInt(1) << log2Up(n)
   }
+
+  // Adds .when to the Option companion object for Scala 2.12
+  implicit class OptionFactoryExtensions(val opt: Option.type) extends AnyVal {
+    def when[A](cond: Boolean)(a: => A): Option[A] = {
+      if (cond) Some(a) else None
+    }
+  }
 }

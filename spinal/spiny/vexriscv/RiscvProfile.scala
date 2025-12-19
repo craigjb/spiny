@@ -41,6 +41,8 @@ import spinal.lib.bus.amba4.axi._
 import vexriscv._
 import vexriscv.plugin._
 
+import spiny.Utils._
+
 trait RiscvProfile {
   def resetVector: BigInt
   def withXilinxDebug: Boolean
