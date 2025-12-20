@@ -74,7 +74,7 @@ case class Rv32iRustProfile(
       mtvecInit = 0x0,
       mtvecAccess = CsrAccess.READ_WRITE,
       ebreakGen = true,
-      withPrivilegedDebug = true,
+      withPrivilegedDebug = withXilinxDebug,
       wfiGenAsWait = true
     )
   )
