@@ -1,0 +1,15 @@
+CAPI=2:
+name: craigjb:spiny:generators:0.1.0
+description: FuseSoC generators for Spiny & SpinalHDL
+
+generators:
+  spinalhdl:
+    interpreter: python3
+    command: spinalhdl.py
+    description: Elaborate a SpinalHDL project
+    usage: |
+      Requires sbt installation available on the system path
+
+      Parameters:
+        sbt_dir: Directory containing build.sbt
+        main: Which main class to run
