@@ -70,8 +70,7 @@ case class RiscvCpu[
     if (profile.withXilinxDebug) {
       profile.debugPlugin.get.jtagInstruction <> 
         jtagTap.get.toJtagTapInstructionCtrl()
-      val debugResetSync = BufferCC(profile.debugPlugin.get.ndmreset)
-      debugReset.setWhen(debugResetSync)
+      debugReset.setWhen(profile.debugPlugin.get.ndmreset)
     }
   }
 }
