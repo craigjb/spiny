@@ -109,10 +109,10 @@ case class Rv32iRustProfile(
       ),
       new FullBarrelShifterPlugin,
       new HazardSimplePlugin(
-        bypassExecute           = true,
-        bypassMemory            = true,
-        bypassWriteBack         = true,
-        bypassWriteBackBuffer   = true,
+        bypassExecute = true,
+        bypassMemory = true,
+        bypassWriteBack = true,
+        bypassWriteBackBuffer = true,
       ),
       new BranchPlugin(
         earlyBranch = false,
