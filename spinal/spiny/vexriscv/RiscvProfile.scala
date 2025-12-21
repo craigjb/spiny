@@ -100,14 +100,14 @@ case class Rv32iRustProfile(
         catchIllegalInstruction = true
       ),
       new RegFilePlugin(
-        regFileReadyKind = plugin.SYNC,
+        regFileReadyKind = plugin.ASYNC,
       ),
       new IntAluPlugin,
       new SrcPlugin(
         separatedAddSub = false,
         executeInsertion = true
       ),
-      new LightShifterPlugin,
+      new FullBarrelShifterPlugin,
       new HazardSimplePlugin(
         bypassExecute           = true,
         bypassMemory            = true,
