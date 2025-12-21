@@ -2,6 +2,7 @@ ThisBuild / version := "0.1"
 ThisBuild / scalaVersion := "2.12.18"
 ThisBuild / organization := "com.craigjb"
 ThisBuild / excludeDependencies += "com.github.spinalhdl" % "vexriscv_2.13"
+ThisBuild / fork := true
 
 val spinalVersion = "1.13.0"
 val spinalCore = "com.github.spinalhdl" %% "spinalhdl-core" % spinalVersion
@@ -18,15 +19,13 @@ lazy val spiny = (project in file("."))
     libraryDependencies ++= Seq(spinalCore, spinalLib, spinalIdslPlugin),
   )
 
-fork := true
-
 // Example projects
 lazy val blinky = (project in file("examples/blinky"))
   .dependsOn(spiny) // Link to your main library
   .dependsOn(vexRiscv)
   .settings(
     name := "blinky",
-    Compile / scalaSource := baseDirectory.value / "src" / "spinal",
+    Compile / scalaSource := baseDirectory.value / "spinal",
     publish / skip := true,
     libraryDependencies ++= Seq(spinalIdslPlugin),
   )

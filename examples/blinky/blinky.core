@@ -1,0 +1,34 @@
+CAPI=2:
+name: craigjb:spiny:blinky:0.1.0
+description: Blinky example
+
+filesets:
+  rtl:
+    files:
+      - target/spinal/Blinky.v
+    file_type: verilogSource
+
+  xdc:
+    files:
+      - data/nexys7-a100t.xdc
+    file_type: xdc
+
+  dep:
+    depend:
+      - craigjb:spiny:generators:0.1.0
+
+generate:
+  spinalhdl:
+    generator: spinalhdl
+    parameters:
+      sbt_dir: "../../"
+      main: spiny.examples.blinky.TopLevelVerilog
+
+targets:
+  default:
+    filesets: [rtl, xdc, dep]
+    generate: [spinalhdl]
+    toplevel: Blinky
+    flow: vivado
+    flow_options:
+      part: xc7a100t-csg324-1

@@ -2,14 +2,15 @@ package spiny.examples.blinky
 
 import spinal.core._
 import spinal.lib._
+import spinal.core.sim._
 import spinal.lib.bus.amba4.axi._
 
 import spiny.vexriscv._
-import spiny.Utils.nextPowerOfTwo
+import spiny.Utils._
 import spiny.bus.Apb3BusDef
 import spiny.peripheral._
 
-class Blinky extends Component {
+class Blinky(sim: Boolean = false) extends Component {
   val io = new Bundle {
     val SYS_CLK = in(Bool())
     val CPU_RESET_N = in(Bool())
@@ -18,15 +19,30 @@ class Blinky extends Component {
 
   noIoPrefix()
 
+  val resetClockDomain = ClockDomain(
+    clock = io.SYS_CLK,
+    config = ClockDomainConfig(
+          resetKind = BOOT
+    )
+  )
+
+  val syncReset = Bool()
+  val resetArea = new ClockingArea(resetClockDomain) {
+    syncReset := !BufferCC(io.CPU_RESET_N)
+  }
+
   val sysClkDomain = ClockDomain(
     clock = io.SYS_CLK,
-    reset = !io.CPU_RESET_N,
-    frequency = FixedFrequency(100 MHz)
+    reset = syncReset,
+    frequency = FixedFrequency(100 MHz),
+    config = ClockDomainConfig(
+      resetKind = SYNC,
+    )
   )
 
   val sysClkArea = new ClockingArea(sysClkDomain) {
     val vexRiscv = RiscvCpu(
-      Rv32iRustProfile(withXilinxDebug = true),
+      Rv32iRustProfile(withXilinxDebug = !sim),
       Axi4CpuBusDef
     )
 
@@ -36,8 +52,15 @@ class Blinky extends Component {
       idWidth = 2
     )
 
+    val firmware = read32BitMemFromFile("../../examples/blinky/fw/blinky.bin")
+    ram.ram.init(
+      firmware
+        .padTo(ram.wordCount.toInt, 0.toBigInt)
+        .map(w => B(w, 32 bits))
+    )
+
     val apbBridge = Axi4SharedToApb3Bridge(
-      addressWidth = 32,
+      addressWidth = 17,
       dataWidth = 32,
       idWidth = 2
     )
@@ -58,6 +81,12 @@ class Blinky extends Component {
       vexRiscv.io.iBus -> List(ram.io.axi),
       vexRiscv.io.dBus -> List(ram.io.axi, apbBridge.io.axi)
     )
+    axiCrossbar.addPipelining(apbBridge.io.axi)((crossbar, bridge) => {
+      crossbar.sharedCmd.halfPipe() >> bridge.sharedCmd
+      crossbar.writeData.halfPipe() >> bridge.writeData
+      crossbar.writeRsp << bridge.writeRsp
+      crossbar.readRsp << bridge.readRsp
+    })
     axiCrossbar.build()
 
     val apbBusDef = Apb3BusDef(apbBridge.apbConfig)
@@ -75,11 +104,26 @@ class Blinky extends Component {
   }
 }
 
-object TopLevelVerilog {
-  def main(args: Array[String]): Unit = {
-    val spinalReport = SpinalConfig(
-      targetDirectory = "examples/blinky/target/spinal",
-      inlineRom = true
-    ).generateVerilog(new Blinky())
-  }
+object TopLevelVerilog extends App{
+  val spinalReport = SpinalConfig(
+    targetDirectory = "target/spinal",
+    inlineRom = true
+  ).generateVerilog(new Blinky())
+}
+
+object TopLevelSim extends App {
+  SimConfig
+    .withWave
+    .compile(new Blinky(sim = true))
+    .doSim { dut =>
+      val clockDomain = ClockDomain(
+        clock = dut.io.SYS_CLK,
+        reset = dut.io.CPU_RESET_N,
+        config = ClockDomainConfig(
+          resetActiveLevel = LOW
+        )
+      )
+      clockDomain.forkStimulus(period = 10)
+      clockDomain.waitSampling(32768)
+    }
 }

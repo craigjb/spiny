@@ -1,15 +1,47 @@
-create_clock -period 10.0 -name SYS_CLK [get_ports SYS_CLK]
+###########################################################
+# Timing                                                  #
+###########################################################
 
+# 100 MHz clock input on board
+create_clock \
+  -period 10.0 \
+  -name SYS_CLK \
+  [get_ports SYS_CLK]
+
+# internal BSCANE2 JTAG up to 50 MHz
+create_clock \
+  -period 20.000 \
+  -name JTAG_CLK \
+  [get_pins -hierarchical *jtagTap/TCK]
+
+# clocks are not related
+set_clock_groups \
+  -asynchronous \
+  -group [get_clocks SYS_CLK] \
+  -group [get_clocks JTAG_CLK]
+
+# don't care about input and output delays on slow IOs
+set_output_delay \
+  -clock [get_clocks SYS_CLK] \
+  0.000 [get_ports { LEDS[*] }]
+set_false_path -to [get_ports { LEDS[*] }]
+set_input_delay \
+  -clock [get_clocks SYS_CLK] \
+  0.000 [get_ports { CPU_RESET_N }]
+set_false_path -from [get_ports { CPU_RESET_N }]
+
+###########################################################
+# Pins                                                  #
+###########################################################
 set_property -dict { \
   PACKAGE_PIN E3 \
   IOSTANDARD LVCMOS33 \
-} [get_ports { SYSCLK }];
+} [get_ports { SYS_CLK }];
 
 set_property -dict { \
   PACKAGE_PIN C12 \
   IOSTANDARD LVCMOS33 \
 } [get_ports { CPU_RESET_N }];
-
 set_property -dict { \
   PACKAGE_PIN H17 \
   IOSTANDARD LVCMOS33 \
