@@ -30,6 +30,7 @@
 # USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 import subprocess
+import shutil
 from pathlib import Path
 
 from fusesoc.capi2.generator import Generator
@@ -39,9 +40,29 @@ class SpinalHdlGen(Generator):
     def run(self):
         sbt_dir = self.config.get("sbt_dir")
         main = self.config.get("main")
+        output_path = self.config.get("output_path")
+        file_type = self.config.get("file_type")
+
+        if not sbt_dir:
+            sbt_dir = self.files_root
+        missing_parameter = False
+        if not main:
+            print("ERROR: 'main' is a required parameter")
+            missing_parameter = True
+        if not output_path:
+            print("ERROR: 'output_path' is a required parameter")
+            missing_parameter = True
+        if not file_type:
+            print("ERROR: 'file_type' is a required parameter")
+            missing_parameter = True
+        if missing_parameter:
+            exit(1)
+
         working_dir = Path(self.files_root) / Path(sbt_dir)
-        print("Working dir: " + str(working_dir.resolve()))
-        
+
+        src_rtl_path = Path(self.files_root) / output_path
+        dest_rtl_file = Path(output_path).name
+
         try:
             subprocess.check_call(
                 ["sbtn", "runMain", main],
@@ -51,6 +72,18 @@ class SpinalHdlGen(Generator):
             print("ERROR: SpinalHDL generation failed")
             exit(1)
 
+        if not src_rtl_path.exists():
+            print(f"ERROR: Generated file not found at {output_path}")
+            exit(1)
+        shutil.copy(src_rtl_path, dest_rtl_file)
+
+        self.add_files(
+            [dest_rtl_file],
+            fileset="rtl",
+            file_type=file_type
+        )
+
 if __name__ == "__main__":
     generator = SpinalHdlGen()
     generator.run()
+    generator.write()
