@@ -31,40 +31,34 @@
 
 package spiny.peripheral
 
+import scala.collection.mutable
+
 import spinal.core._
 import spinal.lib._
+import spinal.lib.bus.amba3.apb._
 import spinal.lib.io.TriStateArray
 import spinal.lib.bus.regif._
 
-import spiny.bus._
 import spiny.Utils.nextPowerOfTwo
 
-sealed trait GpioDirection
-object GpioDirection {
-  case object Input extends GpioDirection
-  case object Output extends GpioDirection
-  case object InOut extends GpioDirection
+sealed trait SpinyGpioDirection
+object SpinyGpioDirection {
+  case object Input extends SpinyGpioDirection
+  case object Output extends SpinyGpioDirection
+  case object InOut extends SpinyGpioDirection
 }
 
 /** GPIO bank configuration
  *
  *  width: number of pins
  *  direction: input, output, or in-out (software-controlled)
- *  name: bank name (defaults to alphabetic sequence)
+ *  name: bank name
  */
-case class GpioBankConfig(
+case class SpinyGpioBankConfig(
+  name: String,
   width: Int,
-  direction: GpioDirection,
-  name: String = null
+  direction: SpinyGpioDirection
 )
-
-object Gpio {
-  val DefaultBankNames = Seq(
-    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J",
-    "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T",
-    "U", "V", "W", "X", "Y", "Z"
-  )
-}
 
 /** GPIO peripheral
  *
@@ -72,44 +66,43 @@ object Gpio {
  *  IO signals are available in io.banks
  *  InOut GPIO use TriStateArray.
  */
-class Gpio[B <: BusDef.Bus](
-  busDef: BusDef[B],
-  bankConfigs: Seq[GpioBankConfig]
-) extends Component with AddressMapped[B] {
-  import Gpio._
+class SpinyGpio(
+  bankConfigs: Seq[SpinyGpioBankConfig],
+  addressWidth: Int = 12
+) extends Component {
+  assert(!bankConfigs.isEmpty, "No SpinyGpioBankConfigs given")
+  val bankConfigMap = mutable.LinkedHashMap[String, SpinyGpioBankConfig]()
 
-  assert(!bankConfigs.isEmpty, "No GpioBankConfigs given")
+  val apb3Config = Apb3Config(
+    addressWidth = addressWidth,
+    dataWidth = 32
+  )
 
   val io = new Bundle {
-    val bus = slave(busDef.createBus())
+    val apb = slave(Apb3(apb3Config))
+    val banks = mutable.LinkedHashMap[String, Data]()
 
-    val banks = bankConfigs.zipWithIndex.map { case(bankConf, i) => 
-      assert(bankConf.width <= busDef.dataWidth,
+    bankConfigs.zipWithIndex.foreach { case(bankConf, i) => 
+      assert(bankConf.width <= apb.config.dataWidth,
         "Gpio bank width is larger than bus data width")
 
       val signal = bankConf.direction match {
-        case GpioDirection.Input => in Bits(bankConf.width bits)
-        case GpioDirection.Output => out Bits(bankConf.width bits)
-        case GpioDirection.InOut => master(TriStateArray(bankConf.width bits))
+        case SpinyGpioDirection.Input => in Bits(bankConf.width bits)
+        case SpinyGpioDirection.Output => out Bits(bankConf.width bits)
+        case SpinyGpioDirection.InOut => master(TriStateArray(bankConf.width bits))
       }
-
-      val name = if (bankConf.name == null) {
-        DefaultBankNames(i)
-      } else {
-        bankConf.name
-      }
-
-      signal.setName(name)
-      signal
+      signal.setName(bankConf.name)
+      bankConfigMap(bankConf.name) = bankConf
+      banks(bankConf.name) = signal
     }
   }
 
-  val busIf = busDef.createBusInterface(io.bus)
+  val busIf = SpinyPeripheral.createBusInterface(io.apb)
 
-  (io.banks, bankConfigs).zipped.foreach { (signal, bankConf) => 
+  bankConfigs.foreach { bankConf => 
     bankConf.direction match {
-      case GpioDirection.Input => {
-        val port = signal.asInstanceOf[Bits]
+      case SpinyGpioDirection.Input => {
+        val port = io.banks(bankConf.name).asInstanceOf[Bits]
         val read = busIf.newReg(s"Bank ${port.name} read")
         val value = read.field(
           Bits(bankConf.width bits),
@@ -118,8 +111,8 @@ class Gpio[B <: BusDef.Bus](
         )
         value := port
       }
-      case GpioDirection.Output => {
-        val port = signal.asInstanceOf[Bits]
+      case SpinyGpioDirection.Output => {
+        val port = io.banks(bankConf.name).asInstanceOf[Bits]
         val write = busIf.newReg(s"Bank ${port.name} write")
         val value = write.field(
           Bits(bankConf.width bits),
@@ -128,8 +121,8 @@ class Gpio[B <: BusDef.Bus](
         )
         port := value
       }
-      case GpioDirection.InOut => {
-        val port = signal.asInstanceOf[TriStateArray]
+      case SpinyGpioDirection.InOut => {
+        val port = io.banks(bankConf.name).asInstanceOf[TriStateArray]
 
         val read = busIf.newReg(s"Bank ${port.name} read")
         val readValue = read.field(
@@ -162,37 +155,40 @@ class Gpio[B <: BusDef.Bus](
    *
    * Helper to do a safe cast
    */
-  def getBits(bankId: Int): Bits = {
+  def getBankBits(bank: String): Bits = {
     assert(
-      bankId < bankConfigs.length,
-      s"GPIO Bank $bankId does not exist (total banks: ${bankConfigs.length})"
+      io.banks.contains(bank),
+      s"GPIO Bank $bank does not exist"
     )
-    val config = bankConfigs(bankId)
+    val config = bankConfigMap(bank)
     assert(
-      (config.direction == GpioDirection.Input ||
-        config.direction == GpioDirection.Output),
-      s"GPIO Bank $bankId ('${config.name}') is configured as " + 
-        s"${config.direction}, but getBits() requires Input or Output.")
-    io.banks(bankId).asBits
+      (config.direction == SpinyGpioDirection.Input ||
+        config.direction == SpinyGpioDirection.Output),
+      s"GPIO Bank $bank is configured as ${config.direction}, " +
+        "but getBits() requires Input or Output.")
+    io.banks(bank).asBits
   }
 
   /** Returns TriStateArray for an InOut bank
    *
    * Helper to do a safe cast
    */
-  def getTriState(bankId: Int): TriStateArray = {
+  def getBankTriState(bank: String): TriStateArray = {
     assert(
-      bankId < bankConfigs.length,
-      s"GPIO Bank $bankId does not exist (total banks: ${bankConfigs.length})"
+      io.banks.contains(bank),
+      s"GPIO Bank $bank does not exist"
     )
-    val config = bankConfigs(bankId)
+    val config = bankConfigMap(bank)
     assert(
-      config.direction == GpioDirection.InOut,
-      s"GPIO Bank $bankId ('${config.name}') is configured as " + 
-        s"${config.direction}, but getTriState() requires InOut.")
-    io.banks(bankId).asInstanceOf[TriStateArray]
+      config.direction == SpinyGpioDirection.InOut,
+      s"GPIO Bank $bank is configured as ${config.direction}, " +
+        "but getTriState() requires InOut.")
+    io.banks(bank).asInstanceOf[TriStateArray]
   }
 
-  def mappedBus = io.bus
-  def minMappedSize = busIf.getMappedSize
+  def peripheralBus = io.apb
+  def minMappedSize = 1 << addressWidth
+
+  assert(minMappedSize >= busIf.getMappedSize,
+    s"GPIO addressWidth must be >= ${log2Up(busIf.getMappedSize)}")
 }

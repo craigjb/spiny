@@ -8,6 +8,11 @@ filesets:
       - data/nexys7-a100t.xdc
     file_type: xdc
 
+  vivado_settings:
+    files:
+      - data/vivado_settings.tcl
+    file_type: tclSource
+
   dep:
     depend:
       - craigjb:spiny:generators:0.1.0
@@ -23,7 +28,7 @@ generate:
 
 targets:
   default:
-    filesets: [xdc, dep]
+    filesets: [xdc, vivado_settings, dep]
     generate: [spinalhdl]
     toplevel: Blinky
     flow: vivado

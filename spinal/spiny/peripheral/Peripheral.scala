@@ -29,94 +29,18 @@
 ** OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE **
 ** USE OR OTHER DEALINGS IN THE SOFTWARE.                                    */
 
-package spiny.vexriscv
-
-import scala.collection.mutable.ArrayBuffer
+package spiny.peripheral
 
 import spinal.core._
 import spinal.lib._
-import spinal.lib.cpu.riscv.debug.DebugTransportModuleParameter
-import spinal.lib.blackbox.xilinx.s7.BSCANE2
-import spinal.lib.bus.amba4.axi._
-import vexriscv._
-import vexriscv.plugin._
+import spinal.lib.bus.amba3.apb._
+import spinal.lib.bus.misc.SizeMapping
+import spinal.lib.bus.regif._
 
-import spiny.Utils._
-
-trait RiscvProfile {
-  def resetVector: BigInt
-  def withXilinxDebug: Boolean
-  def iBusPlugin: Plugin[VexRiscv]
-  def dBusPlugin: Plugin[VexRiscv]
-  def csrPlugin: CsrPlugin
-  def debugPlugin: Option[EmbeddedRiscvJtag]
-
-  def toPlugins: Seq[Plugin[VexRiscv]]
-}
-
-case class Rv32iRustProfile(
-  resetVector: BigInt = 0x0L,
-  withXilinxDebug: Boolean = false,
-) extends RiscvProfile {
-    val iBusPlugin = new IBusSimplePlugin(
-    resetVector = resetVector,
-    cmdForkOnSecondStage = false,
-    // required for AXI
-    cmdForkPersistence = true,
-  )
-
-  val dBusPlugin = new DBusSimplePlugin()
-
-  val csrPlugin = new CsrPlugin(
-    config = CsrPluginConfig.smallest.copy(
-      misaExtensionsInit = 70,
-      misaAccess = CsrAccess.READ_ONLY,
-      mtvecInit = 0x0,
-      mtvecAccess = CsrAccess.READ_WRITE,
-      ebreakGen = true,
-      withPrivilegedDebug = withXilinxDebug,
-      wfiGenAsWait = true
-    )
-  )
-
-  val debugPlugin = Option.when(withXilinxDebug)(
-    new EmbeddedRiscvJtag(
-      p = DebugTransportModuleParameter(
-        addressWidth = 7,
-        version = 1,
-        idle = 7
-      ),
-      debugCd = null,
-      jtagCd = null,
-      withTunneling = true,
-      withTap = false,
-    )
-  )
-
-  def toPlugins = Seq(
-      iBusPlugin,
-      dBusPlugin,
-      new DecoderSimplePlugin(
-        catchIllegalInstruction = true
-      ),
-      new RegFilePlugin(
-        regFileReadyKind = plugin.ASYNC,
-      ),
-      new IntAluPlugin,
-      new SrcPlugin(
-        separatedAddSub = false,
-        executeInsertion = true
-      ),
-      new FullBarrelShifterPlugin,
-      new HazardSimplePlugin(
-        bypassExecute = true,
-        bypassMemory = true,
-        bypassWriteBack = true,
-        bypassWriteBackBuffer = true,
-      ),
-      new BranchPlugin(
-        earlyBranch = false,
-      ),
-      csrPlugin
-    ) ++ debugPlugin
+object SpinyPeripheral {
+  def createBusInterface(bus: Apb3): BusIf = {
+    // sizeMapping isn't used anywhere, and we want to decide late how big
+    // the mapping is anyway
+    Apb3BusInterface(bus, SizeMapping(0, 0 ))
+  }
 }

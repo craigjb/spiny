@@ -29,64 +29,67 @@
 ** OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE **
 ** USE OR OTHER DEALINGS IN THE SOFTWARE.                                    */
 
-package spiny.vexriscv
+package spiny.cpu
 
 import spinal.core._
 import spinal.lib._
+import spinal.lib.bus.simple._
 import spinal.lib.bus.amba4.axi._
-import vexriscv._
+
 import vexriscv.plugin._
 
-object CpuBusDef {
-  type Bus = Bundle with IMasterSlave
-}
+import spiny.Utils._
 
-sealed trait CpuBusDef[
-  IBus <: CpuBusDef.Bus,
-  DBus <: CpuBusDef.Bus
-] {
-  def createIBus(iBusPlugin: Plugin[VexRiscv]): IBus
-  def createDBus(dBusPlugin: Plugin[VexRiscv]): DBus
+class SpinyMainRam(
+  size: BigInt,
+  busConfig: PipelinedMemoryBusConfig,
+) extends Component {
+  val io = new Bundle {
+    val iBus = slave(PipelinedMemoryBus(busConfig))
+    val dBus = slave(PipelinedMemoryBus(busConfig))
+  }
+  assert(size % 4 == 0, "size must be an even multiple of words")
+  assert(busConfig.dataWidth == 32,
+    "SpinyMainRam only supports 32-bit iBus")
 
-  def connectIBus(iBusPlugin: Plugin[VexRiscv], iBus: IBus)
-  def connectDBus(dBusPlugin: Plugin[VexRiscv], dBus: DBus)
-}
+  val byteCount = size
+  val wordCount = byteCount / 4
+  val mem = Mem(Bits(32 bits), wordCount)
 
-object Axi4CpuBusDef extends CpuBusDef[
-  Axi4ReadOnly,
-  Axi4Shared
-] {
-  def createIBus(iBusPlugin: Plugin[VexRiscv]) = {
-    val config = iBusPlugin match {
-      case p: IBusSimplePlugin => IBusSimpleBus.getAxi4Config()
-      case p: IBusCachedPlugin => p.config.getAxi4Config()
-      case _ => SpinalError("Unknown IBus plugin type")
-    }
-    Axi4ReadOnly(config)
+  val iBusPort = new Area {
+    io.iBus.rsp.valid := RegNext(
+      io.iBus.cmd.fire && !io.iBus.cmd.write
+    ) init(False)
+    io.iBus.rsp.data := mem.readWriteSync(
+      address = (io.iBus.cmd.address >> 2).resized,
+      data = io.iBus.cmd.data,
+      enable  = io.iBus.cmd.valid,
+      write  = io.iBus.cmd.write,
+      mask  = io.iBus.cmd.mask
+    )
+    io.iBus.cmd.ready := True
   }
 
-  def createDBus(dBusPlugin: Plugin[VexRiscv]) = {
-    val config = dBusPlugin match {
-      case p: DBusSimplePlugin => DBusSimpleBus.getAxi4Config()
-      case p: DBusCachedPlugin => p.config.getAxi4SharedConfig()
-      case _ => SpinalError("Unknown DBus plugin type")
-    }
-    Axi4Shared(config)
+  val dBusPort = new Area {
+    io.dBus.rsp.valid := RegNext(
+      io.dBus.cmd.fire && !io.dBus.cmd.write
+    ) init(False)
+    io.dBus.rsp.data := mem.readWriteSync(
+      address = (io.dBus.cmd.address >> 2).resized,
+      data = io.dBus.cmd.data,
+      enable  = io.dBus.cmd.valid,
+      write  = io.dBus.cmd.write,
+      mask  = io.dBus.cmd.mask
+    )
+    io.dBus.cmd.ready := True
   }
 
-  def connectIBus(iBusPlugin: Plugin[VexRiscv], iBus: Axi4ReadOnly) {
-    iBusPlugin match {
-      case p: IBusSimplePlugin => iBus <> p.iBus.toAxi4ReadOnly()
-      case p: IBusCachedPlugin => iBus <> p.iBus.toAxi4ReadOnly()
-      case _ => SpinalError("Unknown IBus plugin type")
-    }
-  }
-
-  def connectDBus(dBusPlugin: Plugin[VexRiscv], dBus: Axi4Shared) {
-    dBusPlugin match {
-      case p: DBusSimplePlugin => dBus <> p.dBus.toAxi4Shared()
-      case p: DBusCachedPlugin => dBus <> p.dBus.toAxi4Shared()
-      case _ => SpinalError("Unknown DBus plugin type")
-    }
+  def initFromFile(path: String) = {
+    val firmware = read32BitMemFromFile(path)
+    mem.init(
+      firmware
+        .padTo(wordCount.toInt, 0.toBigInt)
+        .map(w => B(w, 32 bits))
+    )
   }
 }

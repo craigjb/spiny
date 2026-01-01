@@ -29,25 +29,100 @@
 ** OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE **
 ** USE OR OTHER DEALINGS IN THE SOFTWARE.                                    */
 
-package spiny
+package spiny.cpu
+
+import scala.collection.mutable.ArrayBuffer
 
 import spinal.core._
-import spinal.lib.bus.regif._
+import spinal.lib._
+import spinal.lib.cpu.riscv.debug.DebugTransportModuleParameter
+import spinal.lib.bus.simple._
+import spinal.lib.bus.amba4.axi._
+import vexriscv._
+import vexriscv.plugin._
 
-package object bus {
-  implicit class BusIfRich(val busIf: BusIf) extends AnyVal {
-    /** Calculates total size in bytes required by the memory map
-     *
-     * Iterates through all slices (Regs, RAMs, FIFOs) to find max address.
-     */
-    def getMappedSize: BigInt = {
-      // if empty, default to one word width
-      if (busIf.slices.isEmpty) {
-        return BigInt(busIf.busByteWidth)
-      } 
+import spiny.Utils._
 
-      val endAddresses = busIf.slices.map(slice => slice.addr + slice.size)
-      endAddresses.max
-    }
-  }
+trait SpinyCpuProfile {
+  def resetVector: BigInt
+  def withXilinxDebug: Boolean
+
+  def csrPlugin: CsrPlugin
+  def debugPlugin: Option[EmbeddedRiscvJtag]
+
+  def busConfig: PipelinedMemoryBusConfig
+  def iBus: PipelinedMemoryBus
+  def dBus: PipelinedMemoryBus
+
+  def toPlugins: Seq[Plugin[VexRiscv]]
+}
+
+/** Minimal RV32i profile that runs bare-metal Rust */
+case class SpinyRv32iRustCpuProfile(
+  resetVector: BigInt = 0x0L,
+  withXilinxDebug: Boolean = false,
+) extends SpinyCpuProfile {
+  val iBusPlugin = new IBusSimplePlugin(
+    resetVector = resetVector,
+    cmdForkOnSecondStage = false,
+    // required for AXI
+    cmdForkPersistence = true,
+  )
+  def busConfig = IBusSimpleBus.getPipelinedMemoryBusConfig()
+  def iBus = iBusPlugin.iBus.toPipelinedMemoryBus()
+  val dBusPlugin = new DBusSimplePlugin()
+  def dBus = dBusPlugin.dBus.toPipelinedMemoryBus()
+
+  val csrPlugin = new CsrPlugin(
+    config = CsrPluginConfig.smallest.copy(
+      misaExtensionsInit = 70,
+      misaAccess = CsrAccess.READ_ONLY,
+      mtvecInit = 0x0,
+      mtvecAccess = CsrAccess.READ_WRITE,
+      ebreakGen = true,
+      withPrivilegedDebug = withXilinxDebug,
+      wfiGenAsWait = true
+    )
+  )
+
+  val debugPlugin = Option.when(withXilinxDebug)(
+    new EmbeddedRiscvJtag(
+      p = DebugTransportModuleParameter(
+        addressWidth = 7,
+        version = 1,
+        idle = 7
+      ),
+      debugCd = null,
+      jtagCd = null,
+      withTunneling = true,
+      withTap = false,
+    )
+  )
+
+  def toPlugins = Seq(
+      iBusPlugin,
+      dBusPlugin,
+      new DecoderSimplePlugin(
+        catchIllegalInstruction = true
+      ),
+      new RegFilePlugin(
+        regFileReadyKind = plugin.ASYNC,
+      ),
+      new IntAluPlugin,
+      new SrcPlugin(
+        separatedAddSub = false,
+        executeInsertion = true
+      ),
+      new FullBarrelShifterPlugin,
+      new HazardSimplePlugin(
+        bypassExecute = true,
+        bypassMemory = true,
+        bypassWriteBack = true,
+        bypassWriteBackBuffer = true,
+      ),
+      new BranchPlugin(
+        earlyBranch = false,
+      ),
+      csrPlugin
+    ) ++ debugPlugin
 }

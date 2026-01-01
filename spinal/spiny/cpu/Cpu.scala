@@ -29,99 +29,46 @@
 ** OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE **
 ** USE OR OTHER DEALINGS IN THE SOFTWARE.                                    */
 
-package spiny.bus
+package spiny.cpu
 
 import spinal.core._
 import spinal.lib._
-import spinal.lib.bus.regif._
-import spinal.lib.bus.misc.SizeMapping
-import spinal.lib.bus.amba3.apb._
-import spinal.lib.bus.wishbone._
+import spinal.lib.bus.simple._
+import spinal.lib.blackbox.xilinx.s7.BSCANE2
+import spinal.lib.bus.amba4.axi._
+import vexriscv._
 
+import spiny.Utils._
 
-object BusDef {
-  type Bus = Bundle with IMasterSlave
-}
+case class SpinyCpu(profile: SpinyCpuProfile) extends Component {
+  import SpinyCpu._
 
-/** Bus definition 
- *
- *  Allows components to be generic over different buses by 
- *  taking a type parameter implementing this trait and using 
- *  the included methods to instantiate the bus and register 
- *  interface
- */
-trait BusDef[B <: BusDef.Bus] {
-  /** Decoder component type for the bus */
-  type DecoderType <: Component
-
-  /** Returns bit width of address bus */
-  def addressWidth: Int
-
-  /** Returns bit width of data bus */
-  def dataWidth: Int
-
-  /** Returns an instance of the bus bundle */
-  def createBus(): B
-
-  /** Returns a RegIf bus interface for the given bus */
-  def createBusInterface(
-      bus: B,
-      regPre: String = "",
-      withSecFireWall: Boolean = false
-  ): BusIf
-
-  /** Creates a bus decoder for the given master and slave mappings */
-  def createDecoder(master: B, slaves: Seq[(B, SizeMapping)]): DecoderType
-}
-
-/** APB3 bus definition */
-case class Apb3BusDef(config: Apb3Config) extends BusDef[Apb3] {
-  type DecoderType = Apb3Decoder
-
-  def addressWidth = config.addressWidth
-
-  def dataWidth = config.dataWidth
-
-  def createBus() = Apb3(config)
-
-  def createBusInterface(
-      bus: Apb3,
-      regPre: String = "",
-      withSecFireWall: Boolean = false
-  ) = Apb3BusInterface(
-    bus,
-    SizeMapping(0, 0),
-    regPre = regPre,
-    withSecFireWall = withSecFireWall
-  )
-
-  def createDecoder(master: Apb3, slaves: Seq[(Apb3, SizeMapping)]) = {
-    Apb3Decoder(master, slaves)
+  val io = new Bundle {
+    val iBus = master(PipelinedMemoryBus(profile.busConfig))
+    val dBus = master(PipelinedMemoryBus(profile.busConfig))
   }
-}
 
-/** Wishbone bus definition */
-case class WishboneBusDef(config: WishboneConfig) extends BusDef[Wishbone] {
-  type DecoderType = WishboneDecoder
+  val jtagTap = Option.when(profile.withXilinxDebug)({
+    profile.debugPlugin.get.debugCd = ClockDomain.current
+    val tap = BSCANE2(userId = 4)
+    val jtagClockDomain = ClockDomain(clock = tap.TCK)
+    profile.debugPlugin.get.jtagCd = jtagClockDomain
+    tap
+  })
 
-  def addressWidth = config.addressWidth
+  val debugReset = False
+  val debugRstArea = new ResetArea(debugReset, true) {
+    val cpu = new VexRiscv(VexRiscvConfig(profile.toPlugins))
+    profile.iBus <> io.iBus
+    profile.dBus <> io.dBus
 
-  def dataWidth = config.dataWidth
+    profile.csrPlugin.externalInterrupt := False
+    profile.csrPlugin.timerInterrupt := False
 
-  def createBus() = Wishbone(config)
-
-  def createBusInterface(
-      bus: Wishbone,
-      regPre: String = "",
-      withSecFireWall: Boolean = false
-  ) = WishboneBusInterface(
-    bus,
-    SizeMapping(0, 0),
-    regPre = regPre,
-    withSecFireWall = withSecFireWall
-  )
-
-  def createDecoder(master: Wishbone, slaves: Seq[(Wishbone, SizeMapping)]) = {
-    WishboneDecoder(master, slaves)
+    if (profile.withXilinxDebug) {
+      profile.debugPlugin.get.jtagInstruction <> 
+        jtagTap.get.toJtagTapInstructionCtrl()
+      debugReset.setWhen(profile.debugPlugin.get.ndmreset)
+    }
   }
 }

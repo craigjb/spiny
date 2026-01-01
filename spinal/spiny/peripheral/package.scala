@@ -29,73 +29,25 @@
 ** OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE **
 ** USE OR OTHER DEALINGS IN THE SOFTWARE.                                    */
 
-package spiny.bus
+package spiny
 
 import spinal.core._
-import spinal.lib.bus.misc.SizeMapping
+import spinal.lib.bus.regif._
 
-import spiny.Utils._
+package object peripheral {
+  implicit class BusIfRich(val busIf: BusIf) extends AnyVal {
+    /** Calculates total size in bytes required by the memory map
+     *
+     * Iterates through all slices (Regs, RAMs, FIFOs) to find max address.
+     */
+    def getMappedSize: BigInt = {
+      // if empty, default to one word width
+      if (busIf.slices.isEmpty) {
+        return BigInt(busIf.busByteWidth)
+      } 
 
-/** Address mapping result for a component */
-case class ComponentMap[B <: BusDef.Bus](
-  component: AddressMapped[B],
-  sizeMap: SizeMapping
-)
-
-/** Result from mapComponents */
-case class AddressMap[B <: BusDef.Bus](
-  decoder: Component,
-  components: Seq[ComponentMap[B]]
-)
-
-/** Mixin for address mapped components
- *
- *  Allows automatic generation of address maps
- *  and decoding for a bus.
- */
-trait AddressMapped[B <: BusDef.Bus] {
-  /** Returns which bus to map on */
-  def mappedBus: B
-
-  /** Returns minimum address region size to map
-   *
-   *  A bigger region may be mapped, but it will be at
-   *  least this size.
-   */
-  def minMappedSize: BigInt
-}
-
-object AddressMapped {
-  /** Maps components onto a bus with automatically generated base addresses
-   *
-   * All components must implement AddressMapped. To minimize decoding logic, creates
-   * equal-sized, power-of-2 regions big enough for the biggest component.
-   */
-  def mapComponents[B <: BusDef.Bus](
-    bus: B,
-    busDef: BusDef[B],
-    baseAddress: BigInt,
-    components: Seq[AddressMapped[B]]
-  ): AddressMap[B] = {
-    // sanity check
-    assert(baseAddress < BigInt(2).pow(busDef.addressWidth),
-      "baseAddress is beyond bus address range")
-    assert(!components.isEmpty, "components is empty")
-
-    // find biggest power of 2 region size
-    val regionSize = components.map(c => nextPowerOfTwo(c.minMappedSize)).max
-
-    // map components to addresses
-    val mapped = components.zipWithIndex.map { case(c, i) => 
-      ComponentMap(c, SizeMapping(baseAddress + (i * regionSize), regionSize))
-    }.toSeq
-
-    // create the decoder
-    val decoder = busDef.createDecoder(
-      master = bus,
-      slaves = mapped.map(cm => (cm.component.mappedBus, cm.sizeMap)).toSeq
-    )
-
-    AddressMap(decoder, mapped)
+      val endAddresses = busIf.slices.map(slice => slice.addr + slice.size)
+      endAddresses.max
+    }
   }
 }

@@ -3,12 +3,13 @@ package spiny.examples.blinky
 import spinal.core._
 import spinal.lib._
 import spinal.core.sim._
-import spinal.lib.bus.amba4.axi._
+import spinal.lib.bus.simple._
+import spinal.lib.bus.amba3.apb._
+import spinal.lib.bus.misc._
 
-import spiny.vexriscv._
-import spiny.Utils._
-import spiny.bus.Apb3BusDef
+import spiny.cpu._
 import spiny.peripheral._
+import spiny.Utils._
 
 class Blinky(sim: Boolean = false) extends Component {
   val io = new Bundle {
@@ -41,66 +42,46 @@ class Blinky(sim: Boolean = false) extends Component {
   )
 
   val sysClkArea = new ClockingArea(sysClkDomain) {
-    val vexRiscv = RiscvCpu(
-      Rv32iRustProfile(withXilinxDebug = !sim),
-      Axi4CpuBusDef
-    )
+    val cpu = SpinyCpu(SpinyRv32iRustCpuProfile(
+        withXilinxDebug = !sim
+    ))
 
-    val ram = Axi4SharedOnChipRam(
-      dataWidth = 32,
-      byteCount = 4 kB,
-      idWidth = 2
+    val ram = new SpinyMainRam(
+      size = 4 kB,
+      cpu.profile.busConfig
     )
+    ram.initFromFile("../../examples/blinky/fw/blinky.bin")
+    cpu.io.iBus <> ram.io.iBus
 
-    val firmware = read32BitMemFromFile("../../examples/blinky/fw/blinky.bin")
-    ram.ram.init(
-      firmware
-        .padTo(ram.wordCount.toInt, 0.toBigInt)
-        .map(w => B(w, 32 bits))
-    )
-
-    val apbBridge = Axi4SharedToApb3Bridge(
-      addressWidth = 17,
-      dataWidth = 32,
-      idWidth = 2
-    )
-
-    val axiCrossbar = Axi4CrossbarFactory()
-    val apbBase = 0x10000000L
-    axiCrossbar.addSlaves(
-      ram.io.axi -> (
-        vexRiscv.profile.resetVector,
-        nextPowerOfTwo(ram.byteCount)
-      ),
-      apbBridge.io.axi -> (
-        apbBase,
-        4 kB
-      )
-    )
-    axiCrossbar.addConnections(
-      vexRiscv.io.iBus -> List(ram.io.axi),
-      vexRiscv.io.dBus -> List(ram.io.axi, apbBridge.io.axi)
-    )
-    axiCrossbar.addPipelining(apbBridge.io.axi)((crossbar, bridge) => {
-      crossbar.sharedCmd.halfPipe() >> bridge.sharedCmd
-      crossbar.writeData.halfPipe() >> bridge.writeData
-      crossbar.writeRsp << bridge.writeRsp
-      crossbar.readRsp << bridge.readRsp
-    })
-    axiCrossbar.build()
-
-    val apbBusDef = Apb3BusDef(apbBridge.apbConfig)
-    val gpio = new Gpio(
-      apbBusDef,
-      Seq(GpioBankConfig(
+    val gpio = new SpinyGpio(
+      Seq(SpinyGpioBankConfig(
         width = 16,
-        direction = GpioDirection.Output,
+        direction = SpinyGpioDirection.Output,
         name = "LEDS"
       ))
     )
-    io.LEDS := gpio.getBits(0)
+    io.LEDS := gpio.getBankBits("LEDS")
 
-    apbBridge.io.apb <> gpio.io.bus
+    val apbBridge = PipelinedMemoryBusToApbBridge(
+      Apb3Config(
+        addressWidth = 12,
+        dataWidth = 32
+      ),
+      pipelineBridge = true,
+      pipelinedMemoryBusConfig = cpu.profile.busConfig
+    )
+    apbBridge.io.apb >> gpio.io.apb
+
+    val decoder = PipelinedMemoryBusDecoder(
+      busConfig = cpu.profile.busConfig,
+      mappings = Seq(
+        SizeMapping(0x0L, ram.byteCount),
+        SizeMapping(0x10000000, 4 kB)
+      )
+    )
+    cpu.io.dBus >> decoder.io.input
+    decoder.io.outputs(0) >> ram.io.dBus
+    decoder.io.outputs(1) >> apbBridge.io.pipelinedMemoryBus
   }
 }
 
