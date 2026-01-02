@@ -105,7 +105,8 @@ class Blinky(sim: Boolean = false) extends Component {
     gpio1.getBankBits("SWITCHES") := io.SWITCHES
 
     val apb = SpinyApb3Interconnect(
-      cpu.profile.busConfig,
+      busConfig = cpu.profile.busConfig,
+      baseAddress = 0x10000000,
       peripherals = Seq(gpio0, gpio1)
     )
 
@@ -113,7 +114,7 @@ class Blinky(sim: Boolean = false) extends Component {
       busConfig = cpu.profile.busConfig,
       mappings = Seq(
         SizeMapping(0x0L, ram.byteCount),
-        SizeMapping(0x10000000, apb.mappedSize)
+        SizeMapping(apb.baseAddress, apb.mappedSize)
       )
     )
     cpu.io.dBus >> decoder.io.input

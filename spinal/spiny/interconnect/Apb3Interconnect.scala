@@ -42,6 +42,7 @@ import spiny.Utils._
 
 case class SpinyApb3Interconnect(
   busConfig: PipelinedMemoryBusConfig,
+  baseAddress: BigInt,
   peripherals: Seq[SpinyPeripheral]
 ) extends Area {
   assert(!peripherals.isEmpty,
@@ -56,11 +57,17 @@ case class SpinyApb3Interconnect(
   val mappedSize = mappingSize * peripherals.length
 
   val addressWidth = log2Up(mappedSize) + 1
+  val alignmentMask = (BigInt(1) << addressWidth) - 1
+  assert(
+    (alignmentMask & baseAddress) == 0,
+    "SpinyApb3Interconnect baseAddress must be above addressWidth " +
+      s"(${addressWidth} bits)"
+  )
+
   val apb3Config = Apb3Config(
     addressWidth = addressWidth,
     dataWidth = 32
   )
-  println(s"APB3 addressWidth: ${addressWidth}")
 
   val bridge = PipelinedMemoryBusToApbBridge(
     apb3Config,
