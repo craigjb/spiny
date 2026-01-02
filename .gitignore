@@ -52,3 +52,5 @@ simWorkspace/
 /xsim.dir
 tmp/
 null
+*.bin
+*.out
