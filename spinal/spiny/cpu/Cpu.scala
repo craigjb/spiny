@@ -68,7 +68,9 @@ case class SpinyCpu(profile: SpinyCpuProfile) extends Component {
     if (profile.withXilinxDebug) {
       profile.debugPlugin.get.jtagInstruction <> 
         jtagTap.get.toJtagTapInstructionCtrl()
-      debugReset.setWhen(profile.debugPlugin.get.ndmreset)
+      val ndmResetCC = BufferCC(profile.debugPlugin.get.ndmreset)
+      debugReset.setWhen(ndmResetCC)
     }
   }
+  debugRstArea.setName("")
 }
