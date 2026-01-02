@@ -68,7 +68,7 @@ case class SpinyGpioBankConfig(
  */
 class SpinyGpio(
   bankConfigs: Seq[SpinyGpioBankConfig],
-  addressWidth: Int = 12
+  addressWidth: Int = 8
 ) extends Component with SpinyPeripheral {
   assert(!bankConfigs.isEmpty, "No SpinyGpioBankConfigs given")
   val bankConfigMap = mutable.LinkedHashMap[String, SpinyGpioBankConfig]()
