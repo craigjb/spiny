@@ -57,7 +57,14 @@ trait SpinyCpuProfile {
   def toPlugins: Seq[Plugin[VexRiscv]]
 }
 
-/** Minimal RV32i profile that runs bare-metal Rust */
+/** Small RV32i profile that runs bare-metal Rust 
+ *
+ * This profile is configured for IPC with Rust, so it enables bypasses
+ * and the full barrel shifter.
+ *
+ * withXilinxDebug adds a BSCANE2 JTAG tap accessible via the 
+ * FPGA configuration cable
+ */
 case class SpinyRv32iRustCpuProfile(
   resetVector: BigInt = 0x0L,
   withXilinxDebug: Boolean = false,
@@ -106,7 +113,7 @@ case class SpinyRv32iRustCpuProfile(
         catchIllegalInstruction = true
       ),
       new RegFilePlugin(
-        regFileReadyKind = plugin.ASYNC,
+        regFileReadyKind = plugin.SYNC,
       ),
       new IntAluPlugin,
       new SrcPlugin(
