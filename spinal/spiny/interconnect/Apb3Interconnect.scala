@@ -29,19 +29,57 @@
 ** OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE **
 ** USE OR OTHER DEALINGS IN THE SOFTWARE.                                    */
 
-package spiny.peripheral
+package spiny.interconnect
 
 import spinal.core._
 import spinal.lib._
+import spinal.lib.bus.simple._
 import spinal.lib.bus.amba3.apb._
-import spinal.lib.bus.misc.SizeMapping
-import spinal.lib.bus.regif._
+import spinal.lib.bus.misc._
 
-trait SpinyPeripheral {
-  def peripheralBus: Apb3
-  def peripheralMappedSize: BigInt
+import spiny.peripheral._
+import spiny.Utils._
 
-  def peripheralBusInterface(): BusIf = {
-    Apb3BusInterface(peripheralBus, SizeMapping(0, 0 ))
+case class SpinyApb3Interconnect(
+  busConfig: PipelinedMemoryBusConfig,
+  peripherals: Seq[SpinyPeripheral]
+) extends Area {
+  assert(!peripherals.isEmpty,
+    "Empty peripherals for SpinyApb3Interconnect")
+
+  /** Size of each peripheral's address space */
+  val mappingSize = nextPowerOfTwo(
+    peripherals.map(p => p.peripheralMappedSize).max - 1
+  )
+
+  /** Total mapped size of all peripherals */
+  val mappedSize = mappingSize * peripherals.length
+
+  val addressWidth = log2Up(mappedSize) + 1
+  val apb3Config = Apb3Config(
+    addressWidth = addressWidth,
+    dataWidth = 32
+  )
+  println(s"APB3 addressWidth: ${addressWidth}")
+
+  val bridge = PipelinedMemoryBusToApbBridge(
+    apb3Config,
+    pipelineBridge = true,
+    pipelinedMemoryBusConfig = busConfig
+  )
+
+  /** SizeMapping for each peripheral */
+  val mappings = peripherals.zipWithIndex.map { case(p, i) =>
+    (p, SizeMapping(i * mappingSize, mappingSize))
+  }.toSeq
+
+  val decoder = Apb3Decoder(
+    master = bridge.io.apb,
+    slaves = mappings.map{ case(p, sm) => (p.peripheralBus, sm) }
+  )
+
+  /** Bus that drives the APB3 bridge */
+  def masterBus: PipelinedMemoryBus = {
+    bridge.io.pipelinedMemoryBus
   }
 }
