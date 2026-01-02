@@ -12,4 +12,8 @@ generators:
 
       Parameters:
         sbt_dir: Directory containing build.sbt
-        main: Which main class to run
+                 (defaults core root directory)
+        main: Main class to run
+        output_path: Path for generated output
+        file_type: FuseSoC file type for generated output
+                   (e.g. verilogSource)
