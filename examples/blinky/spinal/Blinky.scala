@@ -41,7 +41,7 @@ class Blinky(sim: Boolean = false) extends Component {
     )
   )
 
-  val sysClkArea = new ClockingArea(sysClkDomain) {
+  sysClkDomain on {
     val cpu = SpinyCpu(SpinyRv32iRustCpuProfile(
         withXilinxDebug = !sim
     ))
