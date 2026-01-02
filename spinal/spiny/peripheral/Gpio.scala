@@ -69,7 +69,7 @@ case class SpinyGpioBankConfig(
 class SpinyGpio(
   bankConfigs: Seq[SpinyGpioBankConfig],
   addressWidth: Int = 12
-) extends Component {
+) extends Component with SpinyPeripheral {
   assert(!bankConfigs.isEmpty, "No SpinyGpioBankConfigs given")
   val bankConfigMap = mutable.LinkedHashMap[String, SpinyGpioBankConfig]()
 
@@ -97,7 +97,7 @@ class SpinyGpio(
     }
   }
 
-  val busIf = SpinyPeripheral.createBusInterface(io.apb)
+  val busIf = peripheralBusInterface()
 
   bankConfigs.foreach { bankConf => 
     bankConf.direction match {
@@ -166,7 +166,7 @@ class SpinyGpio(
         config.direction == SpinyGpioDirection.Output),
       s"GPIO Bank $bank is configured as ${config.direction}, " +
         "but getBits() requires Input or Output.")
-    io.banks(bank).asBits
+    io.banks(bank).asInstanceOf[Bits]
   }
 
   /** Returns TriStateArray for an InOut bank
@@ -187,8 +187,8 @@ class SpinyGpio(
   }
 
   def peripheralBus = io.apb
-  def minMappedSize = 1 << addressWidth
+  def peripheralMappedSize = 1 << addressWidth
 
-  assert(minMappedSize >= busIf.getMappedSize,
+  assert(peripheralMappedSize >= busIf.getMappedSize,
     s"GPIO addressWidth must be >= ${log2Up(busIf.getMappedSize)}")
 }
