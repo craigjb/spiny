@@ -40,6 +40,7 @@ import spinal.lib.bus.misc._
 
 import spiny.cpu._
 import spiny.peripheral._
+import spiny.interconnect._
 import spiny.Utils._
 
 class Blinky(sim: Boolean = false) extends Component {
@@ -47,6 +48,7 @@ class Blinky(sim: Boolean = false) extends Component {
     val SYS_CLK = in(Bool())
     val CPU_RESET_N = in(Bool())
     val LEDS = out(Bits(16 bits))
+    val SWITCHES = in(Bits(16 bits))
   }
 
   noIoPrefix()
@@ -84,35 +86,39 @@ class Blinky(sim: Boolean = false) extends Component {
     ram.initFromFile("../../examples/blinky/fw/blinky.bin")
     cpu.io.iBus <> ram.io.iBus
 
-    val gpio = new SpinyGpio(
+    val gpio0 = new SpinyGpio(
       Seq(SpinyGpioBankConfig(
         width = 16,
         direction = SpinyGpioDirection.Output,
         name = "LEDS"
       ))
     )
-    io.LEDS := gpio.getBankBits("LEDS")
+    io.LEDS := gpio0.getBankBits("LEDS")
 
-    val apbBridge = PipelinedMemoryBusToApbBridge(
-      Apb3Config(
-        addressWidth = 12,
-        dataWidth = 32
-      ),
-      pipelineBridge = true,
-      pipelinedMemoryBusConfig = cpu.profile.busConfig
+    val gpio1 = new SpinyGpio(
+      Seq(SpinyGpioBankConfig(
+        width = 16,
+        direction = SpinyGpioDirection.Input,
+        name = "SWITCHES"
+      ))
     )
-    apbBridge.io.apb >> gpio.io.apb
+    gpio1.getBankBits("SWITCHES") := io.SWITCHES
+
+    val apb = SpinyApb3Interconnect(
+      cpu.profile.busConfig,
+      peripherals = Seq(gpio0, gpio1)
+    )
 
     val decoder = PipelinedMemoryBusDecoder(
       busConfig = cpu.profile.busConfig,
       mappings = Seq(
         SizeMapping(0x0L, ram.byteCount),
-        SizeMapping(0x10000000, 4 kB)
+        SizeMapping(0x10000000, apb.mappedSize)
       )
     )
     cpu.io.dBus >> decoder.io.input
     decoder.io.outputs(0) >> ram.io.dBus
-    decoder.io.outputs(1) >> apbBridge.io.pipelinedMemoryBus
+    decoder.io.outputs(1) >> apb.masterBus
   }
 }
 
