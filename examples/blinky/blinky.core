@@ -18,6 +18,11 @@ filesets:
       - craigjb:spiny:generators:0.1.0
 
 generate:
+  firmware:
+    generator: makefile
+    parameters:
+      make_dir: "fw/"
+    
   spinalhdl:
     generator: spinalhdl
     parameters:
@@ -29,7 +34,7 @@ generate:
 targets:
   default:
     filesets: [xdc, vivado_settings, dep]
-    generate: [spinalhdl]
+    generate: [firmware, spinalhdl]
     toplevel: Blinky
     flow: vivado
     flow_options:
