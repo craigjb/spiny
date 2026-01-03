@@ -29,67 +29,107 @@
 ** OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE **
 ** USE OR OTHER DEALINGS IN THE SOFTWARE.                                    */
 
-package spiny.cpu
+package spiny.soc
+
+import scala.collection.mutable.ArrayBuffer
 
 import spinal.core._
 import spinal.lib._
+import spinal.lib.cpu.riscv.debug.DebugTransportModuleParameter
 import spinal.lib.bus.simple._
 import spinal.lib.bus.amba4.axi._
-
+import vexriscv._
 import vexriscv.plugin._
 
 import spiny.Utils._
 
-class SpinyMainRam(
-  size: BigInt,
-  busConfig: PipelinedMemoryBusConfig,
-) extends Component {
-  val io = new Bundle {
-    val iBus = slave(PipelinedMemoryBus(busConfig))
-    val dBus = slave(PipelinedMemoryBus(busConfig))
-  }
-  assert(size % 4 == 0, "size must be an even multiple of words")
-  assert(busConfig.dataWidth == 32,
-    "SpinyMainRam only supports 32-bit iBus")
+trait SpinyCpuProfile {
+  def resetVector: BigInt
+  def withXilinxDebug: Boolean
 
-  val byteCount = size
-  val wordCount = byteCount / 4
-  val mem = Mem(Bits(32 bits), wordCount)
+  def csrPlugin: CsrPlugin
+  def debugPlugin: Option[EmbeddedRiscvJtag]
 
-  val iBusPort = new Area {
-    io.iBus.rsp.valid := RegNext(
-      io.iBus.cmd.fire && !io.iBus.cmd.write
-    ) init(False)
-    io.iBus.rsp.data := mem.readWriteSync(
-      address = (io.iBus.cmd.address >> 2).resized,
-      data = io.iBus.cmd.data,
-      enable  = io.iBus.cmd.valid,
-      write  = io.iBus.cmd.write,
-      mask  = io.iBus.cmd.mask
+  def busConfig: PipelinedMemoryBusConfig
+  def iBus: PipelinedMemoryBus
+  def dBus: PipelinedMemoryBus
+
+  def toPlugins: Seq[Plugin[VexRiscv]]
+}
+
+/** Small RV32i profile that runs bare-metal Rust 
+ *
+ * This profile is configured for IPC with Rust, so it enables bypasses
+ * and the full barrel shifter.
+ *
+ * withXilinxDebug adds a BSCANE2 JTAG tap accessible via the 
+ * FPGA configuration cable
+ */
+case class SpinyRv32iRustCpuProfile(
+  resetVector: BigInt = 0x0L,
+  withXilinxDebug: Boolean = false,
+) extends SpinyCpuProfile {
+  val iBusPlugin = new IBusSimplePlugin(
+    resetVector = resetVector,
+    cmdForkOnSecondStage = false,
+    // required for AXI
+    cmdForkPersistence = true,
+  )
+  def busConfig = IBusSimpleBus.getPipelinedMemoryBusConfig()
+  def iBus = iBusPlugin.iBus.toPipelinedMemoryBus()
+  val dBusPlugin = new DBusSimplePlugin()
+  def dBus = dBusPlugin.dBus.toPipelinedMemoryBus()
+
+  val csrPlugin = new CsrPlugin(
+    config = CsrPluginConfig.smallest.copy(
+      misaExtensionsInit = 70,
+      misaAccess = CsrAccess.READ_ONLY,
+      mtvecInit = 0x0,
+      mtvecAccess = CsrAccess.READ_WRITE,
+      ebreakGen = true,
+      withPrivilegedDebug = withXilinxDebug,
+      wfiGenAsWait = true
     )
-    io.iBus.cmd.ready := True
-  }
+  )
 
-  val dBusPort = new Area {
-    io.dBus.rsp.valid := RegNext(
-      io.dBus.cmd.fire && !io.dBus.cmd.write
-    ) init(False)
-    io.dBus.rsp.data := mem.readWriteSync(
-      address = (io.dBus.cmd.address >> 2).resized,
-      data = io.dBus.cmd.data,
-      enable  = io.dBus.cmd.valid,
-      write  = io.dBus.cmd.write,
-      mask  = io.dBus.cmd.mask
+  val debugPlugin = Option.when(withXilinxDebug)(
+    new EmbeddedRiscvJtag(
+      p = DebugTransportModuleParameter(
+        addressWidth = 7,
+        version = 1,
+        idle = 7
+      ),
+      debugCd = null,
+      jtagCd = null,
+      withTunneling = true,
+      withTap = false,
     )
-    io.dBus.cmd.ready := True
-  }
+  )
 
-  def initFromFile(path: String) = {
-    val firmware = read32BitMemFromFile(path)
-    mem.init(
-      firmware
-        .padTo(wordCount.toInt, 0.toBigInt)
-        .map(w => B(w, 32 bits))
-    )
-  }
+  def toPlugins = Seq(
+      iBusPlugin,
+      dBusPlugin,
+      new DecoderSimplePlugin(
+        catchIllegalInstruction = true
+      ),
+      new RegFilePlugin(
+        regFileReadyKind = plugin.SYNC,
+      ),
+      new IntAluPlugin,
+      new SrcPlugin(
+        separatedAddSub = false,
+        executeInsertion = true
+      ),
+      new FullBarrelShifterPlugin,
+      new HazardSimplePlugin(
+        bypassExecute = true,
+        bypassMemory = true,
+        bypassWriteBack = true,
+        bypassWriteBackBuffer = true,
+      ),
+      new BranchPlugin(
+        earlyBranch = false,
+      ),
+      csrPlugin
+    ) ++ debugPlugin
 }

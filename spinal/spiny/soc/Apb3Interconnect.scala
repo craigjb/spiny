@@ -29,107 +29,64 @@
 ** OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE **
 ** USE OR OTHER DEALINGS IN THE SOFTWARE.                                    */
 
-package spiny.cpu
-
-import scala.collection.mutable.ArrayBuffer
+package spiny.soc
 
 import spinal.core._
 import spinal.lib._
-import spinal.lib.cpu.riscv.debug.DebugTransportModuleParameter
 import spinal.lib.bus.simple._
-import spinal.lib.bus.amba4.axi._
-import vexriscv._
-import vexriscv.plugin._
+import spinal.lib.bus.amba3.apb._
+import spinal.lib.bus.misc._
 
+import spiny.peripheral._
 import spiny.Utils._
 
-trait SpinyCpuProfile {
-  def resetVector: BigInt
-  def withXilinxDebug: Boolean
+case class SpinyApb3Interconnect(
+  busConfig: PipelinedMemoryBusConfig,
+  baseAddress: BigInt,
+  peripherals: Seq[SpinyPeripheral]
+) extends Area {
+  assert(!peripherals.isEmpty,
+    "Empty peripherals for SpinyApb3Interconnect")
 
-  def csrPlugin: CsrPlugin
-  def debugPlugin: Option[EmbeddedRiscvJtag]
-
-  def busConfig: PipelinedMemoryBusConfig
-  def iBus: PipelinedMemoryBus
-  def dBus: PipelinedMemoryBus
-
-  def toPlugins: Seq[Plugin[VexRiscv]]
-}
-
-/** Small RV32i profile that runs bare-metal Rust 
- *
- * This profile is configured for IPC with Rust, so it enables bypasses
- * and the full barrel shifter.
- *
- * withXilinxDebug adds a BSCANE2 JTAG tap accessible via the 
- * FPGA configuration cable
- */
-case class SpinyRv32iRustCpuProfile(
-  resetVector: BigInt = 0x0L,
-  withXilinxDebug: Boolean = false,
-) extends SpinyCpuProfile {
-  val iBusPlugin = new IBusSimplePlugin(
-    resetVector = resetVector,
-    cmdForkOnSecondStage = false,
-    // required for AXI
-    cmdForkPersistence = true,
-  )
-  def busConfig = IBusSimpleBus.getPipelinedMemoryBusConfig()
-  def iBus = iBusPlugin.iBus.toPipelinedMemoryBus()
-  val dBusPlugin = new DBusSimplePlugin()
-  def dBus = dBusPlugin.dBus.toPipelinedMemoryBus()
-
-  val csrPlugin = new CsrPlugin(
-    config = CsrPluginConfig.smallest.copy(
-      misaExtensionsInit = 70,
-      misaAccess = CsrAccess.READ_ONLY,
-      mtvecInit = 0x0,
-      mtvecAccess = CsrAccess.READ_WRITE,
-      ebreakGen = true,
-      withPrivilegedDebug = withXilinxDebug,
-      wfiGenAsWait = true
-    )
+  /** Size of each peripheral's address space */
+  val mappingSize = nextPowerOfTwo(
+    peripherals.map(p => p.peripheralMappedSize).max - 1
   )
 
-  val debugPlugin = Option.when(withXilinxDebug)(
-    new EmbeddedRiscvJtag(
-      p = DebugTransportModuleParameter(
-        addressWidth = 7,
-        version = 1,
-        idle = 7
-      ),
-      debugCd = null,
-      jtagCd = null,
-      withTunneling = true,
-      withTap = false,
-    )
+  /** Total mapped size of all peripherals */
+  val mappedSize = mappingSize * peripherals.length
+
+  val addressWidth = log2Up(mappedSize) + 1
+  val alignmentMask = (BigInt(1) << addressWidth) - 1
+  assert(
+    (alignmentMask & baseAddress) == 0,
+    "SpinyApb3Interconnect baseAddress must be above addressWidth " +
+      s"(${addressWidth} bits)"
   )
 
-  def toPlugins = Seq(
-      iBusPlugin,
-      dBusPlugin,
-      new DecoderSimplePlugin(
-        catchIllegalInstruction = true
-      ),
-      new RegFilePlugin(
-        regFileReadyKind = plugin.SYNC,
-      ),
-      new IntAluPlugin,
-      new SrcPlugin(
-        separatedAddSub = false,
-        executeInsertion = true
-      ),
-      new FullBarrelShifterPlugin,
-      new HazardSimplePlugin(
-        bypassExecute = true,
-        bypassMemory = true,
-        bypassWriteBack = true,
-        bypassWriteBackBuffer = true,
-      ),
-      new BranchPlugin(
-        earlyBranch = false,
-      ),
-      csrPlugin
-    ) ++ debugPlugin
+  val apb3Config = Apb3Config(
+    addressWidth = addressWidth,
+    dataWidth = 32
+  )
+
+  val bridge = PipelinedMemoryBusToApbBridge(
+    apb3Config,
+    pipelineBridge = true,
+    pipelinedMemoryBusConfig = busConfig
+  )
+
+  /** SizeMapping for each peripheral */
+  val mappings = peripherals.zipWithIndex.map { case(p, i) =>
+    (p, SizeMapping(i * mappingSize, mappingSize))
+  }.toSeq
+
+  val decoder = Apb3Decoder(
+    master = bridge.io.apb,
+    slaves = mappings.map{ case(p, sm) => (p.peripheralBus, sm) }
+  )
+
+  /** Bus that drives the APB3 bridge */
+  def masterBus: PipelinedMemoryBus = {
+    bridge.io.pipelinedMemoryBus
+  }
 }

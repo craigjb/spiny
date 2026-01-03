@@ -38,9 +38,8 @@ import spinal.lib.bus.simple._
 import spinal.lib.bus.amba3.apb._
 import spinal.lib.bus.misc._
 
-import spiny.cpu._
+import spiny.soc._
 import spiny.peripheral._
-import spiny.interconnect._
 import spiny.Utils._
 
 class Blinky(sim: Boolean = false) extends Component {
@@ -82,7 +81,7 @@ class Blinky(sim: Boolean = false) extends Component {
     val ram = new SpinyMainRam(
       size = 4 kB,
       cpu.profile.busConfig
-    )
+    ).setName("MainRam")
     ram.initFromFile("../../examples/blinky/fw/blinky.bin")
     cpu.io.iBus <> ram.io.iBus
 
@@ -90,19 +89,19 @@ class Blinky(sim: Boolean = false) extends Component {
       Seq(SpinyGpioBankConfig(
         width = 16,
         direction = SpinyGpioDirection.Output,
-        name = "LEDS"
+        name = "leds"
       ))
-    )
-    io.LEDS := gpio0.getBankBits("LEDS")
+    ).setName("Gpio0")
+    io.LEDS := gpio0.getBankBits("leds")
 
     val gpio1 = new SpinyGpio(
       Seq(SpinyGpioBankConfig(
         width = 16,
         direction = SpinyGpioDirection.Input,
-        name = "SWITCHES"
+        name = "switches"
       ))
-    )
-    gpio1.getBankBits("SWITCHES") := io.SWITCHES
+    ).setName("Gpio1")
+    gpio1.getBankBits("switches") := io.SWITCHES
 
     val apb = SpinyApb3Interconnect(
       busConfig = cpu.profile.busConfig,
