@@ -102,6 +102,7 @@ class Blinky(sim: Boolean = false) extends Component {
 
 object TopLevelVerilog extends App{
   val spinalReport = SpinalConfig(
+    targetDirectory = "target/spinal",
     inlineRom = true
   ).generateVerilog(new Blinky())
 }
