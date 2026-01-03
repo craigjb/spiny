@@ -29,96 +29,51 @@
 ** OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE **
 ** USE OR OTHER DEALINGS IN THE SOFTWARE.                                    */
 
-package spiny.examples.blinky
+package spiny.soc
 
 import spinal.core._
 import spinal.lib._
-import spinal.core.sim._
 import spinal.lib.bus.simple._
-import spinal.lib.bus.amba3.apb._
 import spinal.lib.bus.misc._
 
-import spiny.soc._
 import spiny.peripheral._
-import spiny.Utils._
 
-class Blinky(sim: Boolean = false) extends Component {
-  val io = new Bundle {
-    val SYS_CLK = in(Bool())
-    val CPU_RESET_N = in(Bool())
-    val LEDS = out(Bits(16 bits))
-    val SWITCHES = in(Bits(16 bits))
+class SpinySoC(
+  cpuProfile: SpinyCpuProfile,
+  ramSize: BigInt,
+  ramBaseAddress: BigInt = 0x0,
+  firmwarePath: String = null,
+  peripheralsBaseAddress: BigInt = 0x10000000
+) extends Area {
+  val cpu = SpinyCpu(cpuProfile).setName("Cpu")
+
+  val ram = new SpinyMainRam(
+    size = 4 kB,
+    cpuProfile.busConfig
+  ).setName("MainRam")
+
+  if (firmwarePath != null) {
+    ram.initFromFile(firmwarePath)
   }
+  cpu.io.iBus <> ram.io.iBus
 
-  noIoPrefix()
+  def build(peripherals: Seq[SpinyPeripheral]) {
+    val apb = SpinyApb3Interconnect(
+      busConfig = cpuProfile.busConfig,
+      baseAddress = 0x10000000,
+      peripherals = peripherals
+    ).setName("Apb")
 
-  val resetClockDomain = ClockDomain(
-    clock = io.SYS_CLK,
-    config = ClockDomainConfig(
-      resetKind = BOOT
-    )
-  )
-
-  val syncReset = Bool()
-  resetClockDomain on {
-    syncReset := !BufferCC(io.CPU_RESET_N)
-  }
-
-  val sysClkDomain = ClockDomain(
-    clock = io.SYS_CLK,
-    reset = syncReset,
-    frequency = FixedFrequency(100 MHz),
-    config = ClockDomainConfig(
-      resetKind = SYNC,
-    )
-  )
-
-  sysClkDomain on new SpinySoC(
-    cpuProfile = SpinyRv32iRustCpuProfile(withXilinxDebug = !sim),
-    ramSize = 4 kB,
-    firmwarePath = "../../examples/blinky/fw/blinky.bin"
-  ) {
-    val gpio0 = new SpinyGpio(
-      Seq(SpinyGpioBankConfig(
-        width = 16,
-        direction = SpinyGpioDirection.Output,
-        name = "leds"
-      ))
-    ).setName("Gpio0")
-    io.LEDS := gpio0.getBankBits("leds")
-
-    val gpio1 = new SpinyGpio(
-      Seq(SpinyGpioBankConfig(
-        width = 16,
-        direction = SpinyGpioDirection.Input,
-        name = "switches"
-      ))
-    ).setName("Gpio1")
-    gpio1.getBankBits("switches") := io.SWITCHES
-
-    build(peripherals = Seq(gpio0, gpio1))
-  }
-}
-
-object TopLevelVerilog extends App{
-  val spinalReport = SpinalConfig(
-    inlineRom = true
-  ).generateVerilog(new Blinky())
-}
-
-object TopLevelSim extends App {
-  SimConfig
-    .withWave
-    .compile(new Blinky(sim = true))
-    .doSim { dut =>
-      val clockDomain = ClockDomain(
-        clock = dut.io.SYS_CLK,
-        reset = dut.io.CPU_RESET_N,
-        config = ClockDomainConfig(
-          resetActiveLevel = LOW
-        )
+    val decoder = PipelinedMemoryBusDecoder(
+      busConfig = cpuProfile.busConfig,
+      mappings = Seq(
+        SizeMapping(ramBaseAddress, ram.byteCount),
+        SizeMapping(apb.baseAddress, apb.mappedSize)
       )
-      clockDomain.forkStimulus(period = 10)
-      clockDomain.waitSampling(32768)
-    }
+    ).setName("Decoder")
+
+    cpu.io.dBus >> decoder.io.input
+    decoder.io.outputs(0) >> ram.io.dBus
+    decoder.io.outputs(1) >> apb.masterBus
+  }
 }
