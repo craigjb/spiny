@@ -38,10 +38,22 @@ import spinal.lib.bus.misc.SizeMapping
 import spinal.lib.bus.regif._
 
 trait SpinyPeripheral {
-  def peripheralBus: Apb3
-  def peripheralMappedSize: BigInt
+  var peripheralBus: Apb3 = null
+  var peripheralBusIf: Apb3BusInterface = null
+  var peripheralMappedSize: BigInt = null
 
-  def peripheralBusInterface(): BusIf = {
-    Apb3BusInterface(peripheralBus, SizeMapping(0, 0 ))
+  def getName(): String
+
+  def createPeripheralBusInterface(bus: Apb3): Apb3BusInterface = {
+    peripheralBus = bus
+    peripheralBusIf = Apb3BusInterface(peripheralBus, SizeMapping(0, 0))
+    peripheralMappedSize = 1 << bus.config.addressWidth
+    peripheralBusIf
+  }
+
+  def checkPeripheralMapping() {
+    assert(peripheralMappedSize >= peripheralBusIf.getMappedSize,
+      "Peripheral addressWidth must be >= " + 
+      s"${log2Up(peripheralBusIf.getMappedSize)}")
   }
 }

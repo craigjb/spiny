@@ -97,7 +97,7 @@ class SpinyGpio(
     }
   }
 
-  val busIf = peripheralBusInterface()
+  val busIf = createPeripheralBusInterface(io.apb)
 
   bankConfigs.foreach { bankConf => 
     bankConf.direction match {
@@ -186,9 +186,5 @@ class SpinyGpio(
     io.banks(bank).asInstanceOf[TriStateArray]
   }
 
-  def peripheralBus = io.apb
-  def peripheralMappedSize = 1 << addressWidth
-
-  assert(peripheralMappedSize >= busIf.getMappedSize,
-    s"GPIO addressWidth must be >= ${log2Up(busIf.getMappedSize)}")
+  checkPeripheralMapping()
 }
