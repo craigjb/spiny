@@ -41,6 +41,7 @@ import spinal.lib.bus.misc._
 import spiny.soc._
 import spiny.peripheral._
 import spiny.Utils._
+import spiny.svd._
 
 class Blinky(sim: Boolean = false) extends Component {
   val io = new Bundle {
@@ -73,7 +74,7 @@ class Blinky(sim: Boolean = false) extends Component {
     )
   )
 
-  sysClkDomain on new SpinySoC(
+  val soc = sysClkDomain on new SpinySoC(
     cpuProfile = SpinyRv32iRustCpuProfile(withXilinxDebug = !sim),
     ramSize = 4 kB,
     firmwarePath = "../../examples/blinky/fw/blinky.bin"
@@ -100,11 +101,12 @@ class Blinky(sim: Boolean = false) extends Component {
   }
 }
 
-object TopLevelVerilog extends App{
+object TopLevelVerilog extends App {
   val spinalReport = SpinalConfig(
     targetDirectory = "target/spinal",
     inlineRom = true
   ).generateVerilog(new Blinky())
+  spinalReport.toplevel.soc.dumpSvd("target/spinal/Blinky.svd", "Blinky")
 }
 
 object TopLevelSim extends App {

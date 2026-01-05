@@ -37,6 +37,7 @@ import spinal.lib.bus.simple._
 import spinal.lib.bus.misc._
 
 import spiny.peripheral._
+import spiny.svd._
 
 class SpinySoC(
   cpuProfile: SpinyCpuProfile,
@@ -57,8 +58,10 @@ class SpinySoC(
   }
   cpu.io.iBus <> ram.io.iBus
 
+  var apb: SpinyApb3Interconnect = null
+
   def build(peripherals: Seq[SpinyPeripheral]) {
-    val apb = SpinyApb3Interconnect(
+    apb = SpinyApb3Interconnect(
       busConfig = cpuProfile.busConfig,
       baseAddress = 0x10000000,
       peripherals = peripherals
@@ -75,5 +78,14 @@ class SpinySoC(
     cpu.io.dBus >> decoder.io.input
     decoder.io.outputs(0) >> ram.io.dBus
     decoder.io.outputs(1) >> apb.masterBus
+  }
+
+  def peripheralMappings: Seq[(SpinyPeripheral, SizeMapping)] = {
+    assert(apb != null, "Must call build() on SpinySoC first")
+    apb.mappings
+  }
+
+  def dumpSvd(path: String, name: String) = {
+    SpinySvd.dump(path, name, peripheralMappings)
   }
 }

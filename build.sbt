@@ -16,7 +16,12 @@ lazy val spiny = (project in file("."))
   .settings(
     name := "spiny", 
     Compile / scalaSource := baseDirectory.value / "spinal",
-    libraryDependencies ++= Seq(spinalCore, spinalLib, spinalIdslPlugin),
+    libraryDependencies ++= Seq(
+      spinalCore,
+      spinalLib,
+      spinalIdslPlugin,
+      "org.scala-lang.modules" %% "scala-xml" % "2.1.0"
+    )
   )
 
 // Example projects
