@@ -31,6 +31,8 @@
 
 package spiny.soc
 
+import java.io.PrintWriter
+
 import spinal.core._
 import spinal.lib._
 import spinal.lib.bus.simple._
@@ -87,5 +89,26 @@ class SpinySoC(
 
   def dumpSvd(path: String, name: String) = {
     SpinySvd.dump(path, name, peripheralMappings)
+  }
+
+  def dumpLinkerScript(path: String) = {
+    val linkerScript = 
+      f"""|MEMORY
+          |{
+          |  RAM : ORIGIN = 0x${ramBaseAddress}%x, LENGTH = ${ramSize}
+          |}
+          |
+          |REGION_ALIAS("REGION_TEXT", RAM);
+          |REGION_ALIAS("REGION_RODATA", RAM);
+          |REGION_ALIAS("REGION_DATA", RAM);
+          |REGION_ALIAS("REGION_BSS", RAM);
+          |REGION_ALIAS("REGION_HEAP", RAM);
+          |REGION_ALIAS("REGION_STACK", RAM);
+          |}""".stripMargin
+
+    val pw = new PrintWriter(path)
+    pw.write(linkerScript)
+    pw.close()
+    SpinalInfo(s"Linker script dumped to: ${path}")
   }
 }

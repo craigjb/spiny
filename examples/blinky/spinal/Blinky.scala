@@ -106,7 +106,10 @@ object TopLevelVerilog extends App {
     targetDirectory = "target/spinal",
     inlineRom = true
   ).generateVerilog(new Blinky())
-  spinalReport.toplevel.soc.dumpSvd("target/spinal/Blinky.svd", "Blinky")
+
+  val soc = spinalReport.toplevel.soc
+  soc.dumpSvd("target/spinal/Blinky.svd", "Blinky")
+  soc.dumpLinkerScript("target/spinal/memory.x")
 }
 
 object TopLevelSim extends App {
