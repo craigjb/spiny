@@ -18,11 +18,15 @@ filesets:
       - craigjb:spiny:generators:0.1.0
 
 generate:
-  firmware:
-    generator: makefile
+  rustpac:
+    generator: rustpac
     parameters:
-      make_dir: "fw/"
-    
+      crate_name: blinky-pac
+      crate_version: 0.1.0
+      output_path: "target/rust/blinky-pac"
+      svd_path: "target/spinal/Blinky.svd"
+      linker_script_path: "target/spinal/memory.x"
+   
   spinalhdl:
     generator: spinalhdl
     parameters:
@@ -34,7 +38,7 @@ generate:
 targets:
   default:
     filesets: [xdc, vivado_settings, dep]
-    generate: [firmware, spinalhdl]
+    generate: [spinalhdl, rustpac]
     toplevel: Blinky
     flow: vivado
     flow_options:

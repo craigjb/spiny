@@ -32,3 +32,17 @@ generators:
                  (defaults to core root directory)
         target: Makefile target to build
                 (default to first target)
+
+  rustpac:
+    interpreter: python3
+    command: rustpac.py
+    description: Generate Rust peripheral access crate (PAC)
+    usage: |
+      Runs svd2rust, form, and rustfmt. Generates Cargo.toml and build.rs
+
+      Parameters:
+        crate_name: Output PAC name
+        crate_version: Output PAC version
+        output_path: Path to create output PAC at
+        svd_path: Path to input SVD file
+        linker_script_path: Path to input linker script file (optional)
