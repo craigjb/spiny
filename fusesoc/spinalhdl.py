@@ -49,19 +49,15 @@ class SpinalHdlGen(Generator):
         if not main:
             print("ERROR: 'main' is a required parameter")
             missing_parameter = True
-        if not output_path:
-            print("ERROR: 'output_path' is a required parameter")
-            missing_parameter = True
-        if not file_type:
-            print("ERROR: 'file_type' is a required parameter")
+        if output_path and not file_type:
+            print("ERROR: 'file_type' is a required parameter " + 
+                "if 'output_path' is set0")
             missing_parameter = True
         if missing_parameter:
             exit(1)
 
         working_dir = Path(self.files_root) / Path(sbt_dir)
 
-        src_rtl_path = Path(self.files_root) / output_path
-        dest_rtl_file = Path(output_path).name
 
         try:
             subprocess.check_call(
@@ -72,16 +68,20 @@ class SpinalHdlGen(Generator):
             print("ERROR: SpinalHDL generation failed")
             exit(1)
 
-        if not src_rtl_path.exists():
-            print(f"ERROR: Generated file not found at {output_path}")
-            exit(1)
-        shutil.copy(src_rtl_path, dest_rtl_file)
+        if output_path:
+            src_rtl_path = Path(self.files_root) / output_path
+            dest_rtl_file = Path(output_path).name
 
-        self.add_files(
-            [dest_rtl_file],
-            fileset="rtl",
-            file_type=file_type
-        )
+            if not src_rtl_path.exists():
+                print(f"ERROR: Generated file not found at {output_path}")
+                exit(1)
+            shutil.copy(src_rtl_path, dest_rtl_file)
+
+            self.add_files(
+                [dest_rtl_file],
+                fileset="rtl",
+                file_type=file_type
+            )
 
 if __name__ == "__main__":
     generator = SpinalHdlGen()
