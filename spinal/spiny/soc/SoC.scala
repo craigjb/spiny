@@ -49,7 +49,7 @@ class SpinySoC(
   val cpu = SpinyCpu(cpuProfile).setName("Cpu")
 
   val ram = new SpinyMainRam(
-    size = 4 kB,
+    size = ramSize,
     cpuProfile.busConfig
   ).setName("MainRam")
 
