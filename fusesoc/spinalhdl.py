@@ -42,6 +42,7 @@ class SpinalHdlGen(Generator):
         main = self.config.get("main")
         output_path = self.config.get("output_path")
         file_type = self.config.get("file_type")
+        args = self.config.get("args")
 
         if not sbt_dir:
             sbt_dir = self.files_root
@@ -57,13 +58,12 @@ class SpinalHdlGen(Generator):
             exit(1)
 
         working_dir = Path(self.files_root) / Path(sbt_dir)
-
+        command = ["sbtn", "runMain", main]
+        if args:
+            command += args
 
         try:
-            subprocess.check_call(
-                ["sbtn", "runMain", main],
-                cwd=working_dir
-            )
+            subprocess.check_call(command, cwd=working_dir)
         except subprocess.CalledProcessError:
             print("ERROR: SpinalHDL generation failed")
             exit(1)
