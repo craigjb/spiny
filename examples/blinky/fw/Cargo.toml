@@ -1,0 +1,18 @@
+[package]
+name = "blinky"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+riscv = { version = "0.16.0", features = ["critical-section-single-hart"] }
+riscv-rt = { version = "0.17.0", features = ["single-hart"] }
+panic-halt = "1.0.0"
+blinky-pac = { path = "../target/rust/blinky-pac", features = ["rt", "critical-section"] }
+
+[profile.release]
+codegen-units = 1
+debug = 2
+lto = 'fat'
+debug-assertions = false
+incremental = false
+opt-level = 2
