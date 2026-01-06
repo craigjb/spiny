@@ -43,7 +43,10 @@ import spiny.peripheral._
 import spiny.Utils._
 import spiny.svd._
 
-class Blinky(sim: Boolean = false) extends Component {
+class Blinky(
+  sim: Boolean = false,
+  firmwarePath: String = null
+) extends Component {
   val io = new Bundle {
     val SYS_CLK = in(Bool())
     val CPU_RESET_N = in(Bool())
@@ -77,7 +80,7 @@ class Blinky(sim: Boolean = false) extends Component {
   val soc = sysClkDomain on new SpinySoC(
     cpuProfile = SpinyRv32iRustCpuProfile(withXilinxDebug = !sim),
     ramSize = 4 kB,
-    firmwarePath = "../../examples/blinky/fw/blinky.bin"
+    firmwarePath = firmwarePath
   ) {
     val gpio0 = new SpinyGpio(
       Seq(SpinyGpioBankConfig(
@@ -102,10 +105,20 @@ class Blinky(sim: Boolean = false) extends Component {
 }
 
 object TopLevelVerilog extends App {
+  val firmwarePath = if (args.length == 1) {
+    println(f"[Blinky] using firmware: ${args(0)}")
+    args(0)
+  } else {
+    null
+  }
+
   val spinalReport = SpinalConfig(
     targetDirectory = "target/spinal",
     inlineRom = true
-  ).generateVerilog(new Blinky())
+  ).generateVerilog(new Blinky(
+    sim = false,
+    firmwarePath = firmwarePath
+  ))
 
   val soc = spinalReport.toplevel.soc
   soc.dumpSvd("target/spinal/Blinky.svd", "Blinky")
@@ -113,9 +126,19 @@ object TopLevelVerilog extends App {
 }
 
 object TopLevelSim extends App {
+  val firmwarePath = if (args.length == 1) {
+    println(f"[Blinky] using firmware: ${args(0)}")
+    args(0)
+  } else {
+    null
+  }
+
   SimConfig
     .withWave
-    .compile(new Blinky(sim = true))
+    .compile(new Blinky(
+      sim = true,
+      firmwarePath = firmwarePath
+    ))
     .doSim { dut =>
       val clockDomain = ClockDomain(
         clock = dut.io.SYS_CLK,
