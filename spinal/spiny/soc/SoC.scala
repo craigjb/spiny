@@ -84,7 +84,9 @@ class SpinySoC(
 
   def peripheralMappings: Seq[(SpinyPeripheral, SizeMapping)] = {
     assert(apb != null, "Must call build() on SpinySoC first")
-    apb.mappings
+    apb.mappings.map { case(p, sm) =>
+      (p, SizeMapping(sm.base + peripheralsBaseAddress, sm.size))
+    }.toSeq
   }
 
   def dumpSvd(path: String, name: String) = {
