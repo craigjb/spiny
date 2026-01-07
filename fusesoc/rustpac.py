@@ -216,6 +216,12 @@ class RustPacGen(Generator):
 
         should_run = True
         state_file = output_path / ".generator_state.json"
+        if output_path.exists() and not state_file.exists():
+            print("ERROR: The output path exists, but has no generator state")
+            print(f"Refusing to overwrite: {output_path}")
+            print("Check if output_dir path is correct or delete manually")
+            sys.exit(1)
+
         if (state_file.exists() and 
                 (output_path / "src").exists() and 
                 (output_path / "Cargo.toml").exists() and 
@@ -224,12 +230,9 @@ class RustPacGen(Generator):
                 saved_state = json.loads(state_file.read_text())
                 if saved_state == current_hashes:
                     print(f"[{crate_name}] Inputs unchanged. Skipping generation.")
-                    should_run = False
+                    return
             except (json.JSONDecodeError, KeyError):
                 pass
-
-        if not should_run:
-            return
 
         # generate PAC src files and format
         lib_rs_path, device_x_path = self.run_svd2rust(
