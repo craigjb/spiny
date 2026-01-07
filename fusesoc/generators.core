@@ -47,3 +47,14 @@ generators:
         output_path: Path to create output PAC at
         svd_path: Path to input SVD file
         linker_script_path: Path to input linker script file (optional)
+
+  cargo:
+    interpreter: python3
+    command: cargo.py
+    description: Build a Rust project
+    usage: |
+      Runs cargo with supplied arguments
+
+      Parameters:
+        project_dir: Path to Rust project folder (with Cargo.toml)
+        args: List of arguments to cargo

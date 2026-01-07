@@ -34,6 +34,18 @@ generate:
       output_path: "target/rust/blinky-pac"
       svd_path: "target/spinal/Blinky.svd"
       linker_script_path: "target/spinal/memory.x"
+
+  firmware:
+    generator: cargo
+    parameters:
+      project_dir: "fw"
+      args:
+        - "objcopy"
+        - "--release"
+        - "--"
+        - "-O"
+        - "binary"
+        - "target/release/blinky.bin"
    
   spinalhdl:
     generator: spinalhdl
@@ -48,7 +60,7 @@ generate:
 targets:
   default:
     filesets: [xdc, vivado_settings, dep]
-    generate: [svd, rustpac, spinalhdl]
+    generate: [svd, rustpac, firmware, spinalhdl]
     toplevel: Blinky
     flow: vivado
     flow_options:
