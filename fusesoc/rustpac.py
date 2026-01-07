@@ -29,6 +29,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 # USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+import sys
 import subprocess
 import shutil
 import textwrap
@@ -85,7 +86,7 @@ class RustPacGen(Generator):
         if not svd_src_path.is_file():
             print("ERROR: SVD input does not exist or is not a file")
             print(f"(expected here: {svd_src_path.resolve().as_posix()}")
-            exit(1)
+            sys.exit(1)
 
         try:
             subprocess.check_call([
@@ -96,19 +97,19 @@ class RustPacGen(Generator):
         except subprocess.CalledProcessError:
             print("ERROR: svd2rust failed")
             print("(make sure it's installed and on PATH)")
-            exit(1)
+            sys.exit(1)
 
         lib_rs_path = Path("lib.rs")
         if not lib_rs_path.is_file():
             print("ERROR: svd2rust failed to generate lib.rs")
             print(f"(expected here: {lib_rs_path.resolve().as_posix()})")
-            exit(1)
+            sys.exit(1)
 
         device_x_path = Path("device.x")
         if not device_x_path.is_file():
             print("ERROR: svd2rust failed to generate device.x")
             print(f"(expected here: {device_x_path.resolve().as_posix()})")
-            exit(1)
+            sys.exit(1)
 
         return lib_rs_path, device_x_path
 
@@ -127,11 +128,11 @@ class RustPacGen(Generator):
         except subprocess.CalledProcessError:
             print("ERROR: form failed")
             print("(make sure it's installed and on PATH)")
-            exit(1)
+            sys.exit(1)
 
         if not any(src_path.iterdir()):
             print("ERROR: src directory output from form is empty")
-            exit(1)
+            sys.exit(1)
 
         return src_path
 
@@ -139,7 +140,7 @@ class RustPacGen(Generator):
         src_lib_rs_path = src_path / "lib.rs"
         if not src_lib_rs_path.is_file():
             print("ERROR: src/lib.rs is missing for rustfmt")
-            exit(1)
+            sys.exit(1)
 
         try:
             subprocess.check_call(
@@ -148,7 +149,7 @@ class RustPacGen(Generator):
         except subprocess.CalledProcessError:
             print("ERROR: rustfmt failed")
             print("(make sure it's installed and on PATH)")
-            exit(1)
+            sys.exit(1)
 
     def generate_cargo_toml(self, crate_name, crate_version):
         content = textwrap.dedent(f"""\
@@ -187,7 +188,7 @@ class RustPacGen(Generator):
             print("ERROR: 'svd_path' is a required parameter")
             missing_parameter = True
         if missing_parameter:
-            exit(1)
+            sys.exit(1)
 
         files_root = Path(self.files_root)
         output_path = files_root / output_path

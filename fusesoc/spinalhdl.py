@@ -31,6 +31,7 @@
 
 import subprocess
 import shutil
+import sys
 from pathlib import Path
 
 from fusesoc.capi2.generator import Generator
@@ -52,10 +53,10 @@ class SpinalHdlGen(Generator):
             missing_parameter = True
         if output_path and not file_type:
             print("ERROR: 'file_type' is a required parameter " + 
-                "if 'output_path' is set0")
+                "if 'output_path' is set")
             missing_parameter = True
         if missing_parameter:
-            exit(1)
+            sys.exit(1)
 
         working_dir = Path(self.files_root) / Path(sbt_dir)
         command = ["sbtn", "runMain", main]
@@ -66,7 +67,7 @@ class SpinalHdlGen(Generator):
             subprocess.check_call(command, cwd=working_dir)
         except subprocess.CalledProcessError:
             print("ERROR: SpinalHDL generation failed")
-            exit(1)
+            sys.exit(1)
 
         if output_path:
             src_rtl_path = Path(self.files_root) / output_path
@@ -74,7 +75,7 @@ class SpinalHdlGen(Generator):
 
             if not src_rtl_path.exists():
                 print(f"ERROR: Generated file not found at {output_path}")
-                exit(1)
+                sys.exit(1)
             shutil.copy(src_rtl_path, dest_rtl_file)
 
             self.add_files(

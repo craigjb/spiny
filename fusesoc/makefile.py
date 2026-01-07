@@ -29,6 +29,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 # USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+import sys
 import subprocess
 from pathlib import Path
 
@@ -49,7 +50,7 @@ class Makefile(Generator):
             subprocess.check_call(command, cwd=working_dir)
         except subprocess.CalledProcessError:
             print("ERROR: Makefile failed")
-            exit(1)
+            sys.exit(1)
 
 
 if __name__ == "__main__":
