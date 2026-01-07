@@ -51,6 +51,9 @@ class Makefile(Generator):
         except subprocess.CalledProcessError:
             print("ERROR: Makefile failed")
             sys.exit(1)
+        except FileNotFoundError:
+            print("ERROR: 'make' command not found. Is make installed?")
+            sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -96,7 +96,10 @@ class RustPacGen(Generator):
             ])
         except subprocess.CalledProcessError:
             print("ERROR: svd2rust failed")
-            print("(make sure it's installed and on PATH)")
+            sys.exit(1)
+        except FileNotFoundError:
+            print("ERROR: 'svd2rust' command not found. " + 
+                "Is svd2rust installed?")
             sys.exit(1)
 
         lib_rs_path = Path("lib.rs")
@@ -129,6 +132,9 @@ class RustPacGen(Generator):
             print("ERROR: form failed")
             print("(make sure it's installed and on PATH)")
             sys.exit(1)
+        except FileNotFoundError:
+            print("ERROR: 'form' command not found. Is form installed?")
+            sys.exit(1)
 
         if not any(src_path.iterdir()):
             print("ERROR: src directory output from form is empty")
@@ -149,6 +155,9 @@ class RustPacGen(Generator):
         except subprocess.CalledProcessError:
             print("ERROR: rustfmt failed")
             print("(make sure it's installed and on PATH)")
+            sys.exit(1)
+        except FileNotFoundError:
+            print("ERROR: 'rustfmt' command not found. Is rustfmt installed?")
             sys.exit(1)
 
     def generate_cargo_toml(self, crate_name, crate_version):

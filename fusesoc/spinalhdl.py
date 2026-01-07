@@ -68,6 +68,9 @@ class SpinalHdlGen(Generator):
         except subprocess.CalledProcessError:
             print("ERROR: SpinalHDL generation failed")
             sys.exit(1)
+        except FileNotFoundError:
+            print("ERROR: 'sbtn' command not found. Is sbt installed?")
+            sys.exit(1)
 
         if output_path:
             src_rtl_path = Path(self.files_root) / output_path
