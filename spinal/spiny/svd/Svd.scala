@@ -81,7 +81,7 @@ object SpinySvd {
     sizeMapping: SizeMapping
   ): Elem =  {
     val regSlices = peripheral.peripheralBusIf.slices.filter(
-      slice => slice.isInstanceOf[RegInst]
+      slice => slice.isInstanceOf[RegInst] || slice.isInstanceOf[FifoInst]
     )
 
     <peripheral>
