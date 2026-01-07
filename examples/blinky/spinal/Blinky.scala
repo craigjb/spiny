@@ -50,8 +50,6 @@ class Blinky(
   val io = new Bundle {
     val SYS_CLK = in(Bool())
     val CPU_RESET_N = in(Bool())
-    val LEDS = out(Bits(16 bits))
-    val SWITCHES = in(Bits(16 bits))
   }
 
   noIoPrefix()
@@ -89,7 +87,7 @@ class Blinky(
         name = "leds"
       ))
     ).setName("Gpio0")
-    io.LEDS := gpio0.getBankBits("leds")
+    gpio0.getBankBits("leds").toIo().setName("LEDS")
 
     val gpio1 = new SpinyGpio(
       Seq(SpinyGpioBankConfig(
@@ -98,7 +96,7 @@ class Blinky(
         name = "switches"
       ))
     ).setName("Gpio1")
-    gpio1.getBankBits("switches") := io.SWITCHES
+    gpio1.getBankBits("switches").toIo().setName("SWITCHES")
 
     build(peripherals = Seq(gpio0, gpio1))
   }
