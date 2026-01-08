@@ -33,10 +33,6 @@ package spiny.examples.blinky
 
 import spinal.core._
 import spinal.lib._
-import spinal.core.sim._
-import spinal.lib.bus.simple._
-import spinal.lib.bus.amba3.apb._
-import spinal.lib.bus.misc._
 import spinal.lib.blackbox.xilinx.s7._
 
 import spiny.soc._
