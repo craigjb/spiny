@@ -3,8 +3,8 @@
 
 extern crate panic_halt;
 
-use riscv::asm::delay;
 use blinky_pac::Peripherals;
+use riscv::asm::delay;
 
 const MAC_ADDR_W0: u32 = 0x00020000;
 const MAC_ADDR_W1: u32 = 0x01000000;
@@ -15,14 +15,18 @@ fn main() -> ! {
     let leds = &peripherals.gpio0;
     let eth = &peripherals.eth;
 
-    eth.ctrl().write(|w| w
-        .phy_reset().clear_bit()
-        .rx_reset().clear_bit()
-        .tx_reset().clear_bit()
-        .rx_align().set_bit()
-    );
+    eth.ctrl().write(|w| {
+        w.phy_reset()
+            .clear_bit()
+            .rx_reset()
+            .clear_bit()
+            .tx_reset()
+            .clear_bit()
+            .rx_align()
+            .set_bit()
+    });
 
-    delay(10_000_000); 
+    delay(10_000_000);
 
     loop {
         let status = eth.status().read();
