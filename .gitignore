@@ -26,6 +26,7 @@ out
 
 # Metals
 .metals
+.bsp
 project/metals.sbt
 
 # Eclipse
@@ -41,7 +42,6 @@ bin/
 /*.v*.bin
 /vivado*
 *.cf
-*.json
 *.vcd
 *.swp
 !tester/src/test/resources/*.vhd

@@ -1,0 +1,8 @@
+{
+  "lspconfig": {
+    "rust_analyzer": {
+      "rust-analyzer.cargo.allTargets": false,
+      "rust-analyzer.check.allTargets": false,
+    }
+  }
+}
