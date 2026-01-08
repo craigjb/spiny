@@ -37,11 +37,10 @@ import spinal.core.sim._
 import spinal.lib.bus.simple._
 import spinal.lib.bus.amba3.apb._
 import spinal.lib.bus.misc._
+import spinal.lib.blackbox.xilinx.s7._
 
 import spiny.soc._
 import spiny.peripheral._
-import spiny.Utils._
-import spiny.svd._
 
 class Blinky(
   sim: Boolean = false,
@@ -50,30 +49,55 @@ class Blinky(
   val io = new Bundle {
     val SYS_CLK = in(Bool())
     val CPU_RESET_N = in(Bool())
+    val RMII_PHY_RESET_N = out(Bool())
+    val RMII_CLK = out(Bool())
   }
 
   noIoPrefix()
 
-  val resetClockDomain = ClockDomain(
-    clock = io.SYS_CLK,
-    config = ClockDomainConfig(
-      resetKind = BOOT
-    )
+  val clkInFreq = 100 MHz
+  val clkInPeriodNs = clkInFreq.toTime.toBigDecimal / 1e-9
+  val mmcm = MMCME2_BASE(
+    CLKIN1_PERIOD = clkInPeriodNs.toDouble,
+    CLKFBOUT_MULT_F = 10.0,
+    CLKOUT0_DIVIDE_F = 10.0,
+    CLKOUT1_DIVIDE = 20.0,
+    CLKOUT2_DIVIDE = 20.0,
+    CLKOUT2_PHASE = -90.0
   )
+  mmcm.CLKIN1 := io.SYS_CLK
+  mmcm.CLKFBIN := BUFG.on(mmcm.CLKFBOUT)
+  mmcm.RST := !io.CPU_RESET_N
+  mmcm.PWRDWN := False
+  val rawReset = !mmcm.LOCKED
 
-  val syncReset = Bool()
-  resetClockDomain on {
-    syncReset := !BufferCC(io.CPU_RESET_N)
-  }
-
+  val sysClk = BUFG.on(mmcm.CLKOUT0)
   val sysClkDomain = ClockDomain(
-    clock = io.SYS_CLK,
-    reset = syncReset,
+    clock = sysClk,
+    reset = ResetCtrl.asyncAssertSyncDeassert(
+      input = rawReset,
+      clockDomain = ClockDomain(sysClk)
+    ),
     frequency = FixedFrequency(100 MHz),
     config = ClockDomainConfig(
       resetKind = SYNC,
     )
   )
+
+  val rmiiClk = BUFG.on(mmcm.CLKOUT1)
+  val rmiiClkDomain = ClockDomain(
+    clock = rmiiClk,
+    reset = ResetCtrl.asyncAssertSyncDeassert(
+      input = rawReset,
+      clockDomain = ClockDomain(rmiiClk)
+    ),
+    frequency = FixedFrequency(50 MHz),
+    config = ClockDomainConfig(
+      resetKind = SYNC,
+    )
+  )
+
+  val rmiiClkFwdDomain = ClockDomain(BUFG.on(mmcm.CLKOUT2))
 
   val soc = sysClkDomain on new SpinySoC(
     cpuProfile = SpinyRv32iRustCpuProfile(withXilinxDebug = !sim),
@@ -98,7 +122,19 @@ class Blinky(
     ).setName("Gpio1")
     gpio1.getBankBits("switches").toIo().setName("SWITCHES")
 
-    build(peripherals = Seq(gpio0, gpio1))
+    val eth = new SpinyEthernet(
+      rxCd = rmiiClkDomain,
+      txCd = rmiiClkDomain
+    ).setName("Eth")
+    eth.io.rmii.toIo().setName("RMII")
+    io.RMII_PHY_RESET_N := !eth.io.phyReset
+    io.RMII_CLK := eth.rmiiClkOutXilinxOddr(oddrCd = rmiiClkFwdDomain)
+
+    build(peripherals = Seq(
+      gpio0,
+      gpio1,
+      eth
+    ))
   }
 }
 
@@ -121,31 +157,4 @@ object TopLevelVerilog extends App {
   val soc = spinalReport.toplevel.soc
   soc.dumpSvd("target/spinal/Blinky.svd", "Blinky")
   soc.dumpLinkerScript("target/spinal/memory.x")
-}
-
-object TopLevelSim extends App {
-  val firmwarePath = if (args.length == 1) {
-    println(f"[Blinky] using firmware: ${args(0)}")
-    args(0)
-  } else {
-    null
-  }
-
-  SimConfig
-    .withWave
-    .compile(new Blinky(
-      sim = true,
-      firmwarePath = firmwarePath
-    ))
-    .doSim { dut =>
-      val clockDomain = ClockDomain(
-        clock = dut.io.SYS_CLK,
-        reset = dut.io.CPU_RESET_N,
-        config = ClockDomainConfig(
-          resetActiveLevel = LOW
-        )
-      )
-      clockDomain.forkStimulus(period = 10)
-      clockDomain.waitSampling(32768)
-    }
 }
