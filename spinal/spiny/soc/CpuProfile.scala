@@ -57,20 +57,14 @@ trait SpinyCpuProfile {
   def toPlugins: Seq[Plugin[VexRiscv]]
 }
 
-/** Small RV32i profile that runs bare-metal Rust 
- *
- * This profile is configured for IPC with Rust, so it enables bypasses
- * and the full barrel shifter.
- *
- * withXilinxDebug adds a BSCANE2 JTAG tap accessible via the 
- * FPGA configuration cable
- */
-case class SpinyRv32iRustCpuProfile(
+abstract class SpinyRvRustCpuProfile(
   resetVector: BigInt = 0x0L,
+  withCompressed: Boolean = false,
   withXilinxDebug: Boolean = false,
 ) extends SpinyCpuProfile {
   val iBusPlugin = new IBusSimplePlugin(
     resetVector = resetVector,
+    compressedGen = withCompressed,
     cmdForkOnSecondStage = false,
     // required for AXI
     cmdForkPersistence = true,
@@ -133,3 +127,38 @@ case class SpinyRv32iRustCpuProfile(
       csrPlugin
     ) ++ debugPlugin
 }
+
+/** Small profile that runs bare-metal Rust 
+ *
+ * This profile is configured for IPC with Rust, so it enables bypasses
+ * and the full barrel shifter.
+ *
+ * withXilinxDebug adds a BSCANE2 JTAG tap accessible via the 
+ * FPGA configuration cable
+ */
+case class SpinyRv32iRustCpuProfile(
+    override val resetVector: BigInt = 0x0L,
+    override val withXilinxDebug: Boolean = false,
+) extends SpinyRvRustCpuProfile(
+  resetVector = resetVector,
+  withCompressed = false,
+  withXilinxDebug = withXilinxDebug
+)
+
+/** Small profile that runs bare-metal Rust with compressed
+ *  instruction support
+ *
+ * This profile is configured for IPC with Rust, so it enables bypasses
+ * and the full barrel shifter.
+ *
+ * withXilinxDebug adds a BSCANE2 JTAG tap accessible via the 
+ * FPGA configuration cable
+ */
+case class SpinyRv32icRustCpuProfile(
+    override val resetVector: BigInt = 0x0L,
+    override val withXilinxDebug: Boolean = false,
+) extends SpinyRvRustCpuProfile(
+  resetVector = resetVector,
+  withCompressed = true,
+  withXilinxDebug = withXilinxDebug
+)
