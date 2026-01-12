@@ -52,6 +52,7 @@ import spinal.lib.bus.regif._
  *  @param numCompares Number of compare channels
  *  @param prescalerResetValue Initial value for the prescaler
  *  @param isMachineTimer If true, use as machine timer (wired to csrPlugin.timerInterrupt)
+ *  @param simSpeedUp Simulation speedup factor (divides prescaler value, 1 = no speedup)
  *  @param addressWidth Address width for APB3 bus
  */
 class SpinyTimer(
@@ -60,10 +61,12 @@ class SpinyTimer(
     numCompares: Int = 2,
     prescalerResetValue: Int = 0,
     isMachineTimer: Boolean = false,
+    simSpeedUp: Int = 1,
     addressWidth: Int = 8
 ) extends Component with SpinyPeripheral {
   assert(timerWidth <= 32, "timerWidth must be <= 32")
   assert(prescaleWidth <= 32, "prescaleWidth must be <= 32")
+  assert(simSpeedUp > 0, "simSpeedUp must be > 0")
 
   val apb3Config = Apb3Config(
     addressWidth = addressWidth,
@@ -88,11 +91,18 @@ class SpinyTimer(
       doc = "Timer prescale divisor"
     )
 
+    // Apply simulation speedup by dividing prescaler value
+    val scaledValue = if (simSpeedUp > 1) {
+      value / simSpeedUp
+    } else {
+      value
+    }
+
     val counter = RegInit(U(0, prescaleWidth bits))
     counter := counter + 1
 
     val clear = Bool()
-    val out = counter === value
+    val out = counter === scaledValue
     when(out || clear) {
       counter := 0
     }
@@ -109,7 +119,7 @@ class SpinyTimer(
   )
   val clear = controlReg.field(
     Bool(),
-    AccessType.WO,
+    AccessType.W1P,
     resetValue = 0,
     doc = "Clear prescaler and counter"
   )
