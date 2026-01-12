@@ -53,7 +53,20 @@ trait SpinyPeripheral {
 
   def checkPeripheralMapping() {
     assert(peripheralMappedSize >= peripheralBusIf.getMappedSize,
-      "Peripheral addressWidth must be >= " + 
+      "Peripheral addressWidth must be >= " +
       s"${log2Up(peripheralBusIf.getMappedSize)}")
   }
+
+  /** Override to provide interrupt signal
+   *
+   *  Return Some(interrupt) if peripheral has interrupt support,
+   *  None otherwise
+   */
+  def interrupt: Option[Bool] = None
+
+  /** Override to provide interrupt name
+   *
+   *  Used for UserInterruptPlugin and code generation
+   */
+  def interruptName: String = getName() + "Int"
 }
