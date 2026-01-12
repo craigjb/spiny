@@ -51,6 +51,7 @@ import spinal.lib.bus.regif._
  *  @param prescaleWidth Width of the prescaler in bits (max 32)
  *  @param numCompares Number of compare channels
  *  @param prescalerResetValue Initial value for the prescaler
+ *  @param isMachineTimer If true, use as machine timer (wired to csrPlugin.timerInterrupt)
  *  @param addressWidth Address width for APB3 bus
  */
 class SpinyTimer(
@@ -58,6 +59,7 @@ class SpinyTimer(
     prescaleWidth: Int = 16,
     numCompares: Int = 2,
     prescalerResetValue: Int = 0,
+    isMachineTimer: Boolean = false,
     addressWidth: Int = 8
 ) extends Component with SpinyPeripheral {
   assert(timerWidth <= 32, "timerWidth must be <= 32")
@@ -201,5 +203,9 @@ class SpinyTimer(
 
   checkPeripheralMapping()
 
-  override def interrupt: Option[Bool] = Some(io.interrupt)
+  override def interrupt: Option[Bool] =
+    if (isMachineTimer) None else Some(io.interrupt)
+
+  override def machineTimerInterrupt: Option[Bool] =
+    if (isMachineTimer) Some(io.interrupt) else None
 }

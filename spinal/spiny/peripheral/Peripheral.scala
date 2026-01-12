@@ -70,6 +70,15 @@ trait SpinyPeripheral {
    */
   def interrupt: Option[Bool] = None
 
+  /** Override to provide machine timer interrupt signal
+   *
+   *  Return Some(interrupt) to designate this peripheral as the
+   *  machine timer. Will be wired to csrPlugin.timerInterrupt.
+   *  Only one peripheral per SoC should provide this.
+   *  Mutually exclusive with interrupt.
+   */
+  def machineTimerInterrupt: Option[Bool] = None
+
   /** Override to provide interrupt name
    *
    *  Used for UserInterruptPlugin and code generation

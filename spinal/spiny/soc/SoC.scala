@@ -61,6 +61,12 @@ class SpinySoC(
   var apb: SpinyApb3Interconnect = null
 
   def build(peripherals: Seq[SpinyPeripheral]) {
+    // extract machine timer interrupt if present
+    val machineTimerPeripherals = peripherals.filter(_.machineTimerInterrupt.isDefined)
+    assert(machineTimerPeripherals.length <= 1,
+      "Only one peripheral can provide machineTimerInterrupt")
+    val withMachineTimer = machineTimerPeripherals.nonEmpty
+
     // extract interrupt descriptors from peripherals
     val peripheralsWithInterrupts = peripherals
       .filter(_.interrupt.isDefined)
@@ -73,12 +79,17 @@ class SpinySoC(
     }
 
     // create CPU with interrupt descriptors
-    cpu = SpinyCpu(cpuProfile, interrupts).setName("Cpu")
+    cpu = SpinyCpu(cpuProfile, interrupts, withMachineTimer).setName("Cpu")
     cpu.io.iBus <> ram.io.iBus
 
     // connect peripheral interrupts to CPU
     peripheralsWithInterrupts.zipWithIndex.foreach { case (peripheral, idx) =>
       cpu.io.interrupts(idx) := peripheral.interrupt.get
+    }
+
+    // connect machine timer interrupt if present
+    if (withMachineTimer) {
+      cpu.io.machineTimerInterrupt := machineTimerPeripherals.head.machineTimerInterrupt.get
     }
 
     apb = SpinyApb3Interconnect(

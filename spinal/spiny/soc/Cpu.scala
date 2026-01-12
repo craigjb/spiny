@@ -52,7 +52,8 @@ case class SpinyCpuInterrupt(name: String, code: Int)
 
 case class SpinyCpu(
   profile: SpinyCpuProfile,
-  interruptDescs: Seq[SpinyCpuInterrupt] = Seq()
+  interruptDescs: Seq[SpinyCpuInterrupt] = Seq(),
+  withMachineTimer: Boolean = false
 ) extends Component {
   import SpinyCpu._
 
@@ -60,6 +61,7 @@ case class SpinyCpu(
     val iBus = master(PipelinedMemoryBus(profile.busConfig))
     val dBus = master(PipelinedMemoryBus(profile.busConfig))
     val interrupts = in Vec(Bool(), interruptDescs.length)
+    val machineTimerInterrupt = withMachineTimer generate (in Bool())
   }
 
   // Create UserInterruptPlugins from interrupt descriptors
@@ -89,7 +91,11 @@ case class SpinyCpu(
     profile.dBus <> io.dBus
 
     profile.csrPlugin.externalInterrupt := False
-    profile.csrPlugin.timerInterrupt := False
+    if (withMachineTimer) {
+      profile.csrPlugin.timerInterrupt := io.machineTimerInterrupt
+    } else {
+      profile.csrPlugin.timerInterrupt := False
+    }
 
     // Wire up interrupt signals to UserInterruptPlugins
     interruptPlugins.zipWithIndex.foreach { case (plugin, idx) =>
