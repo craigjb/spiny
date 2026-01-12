@@ -103,7 +103,8 @@ class Blinky(
     val timer = new SpinyTimer(
       timerWidth = 32,
       prescaleWidth = 16,
-      numCompares = 2
+      numCompares = 1,
+      isMachineTimer = true
     ).setName("Timer")
 
     val gpio0 = new SpinyGpio(
