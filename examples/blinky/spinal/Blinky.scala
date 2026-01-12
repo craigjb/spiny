@@ -100,6 +100,12 @@ class Blinky(
     ramSize = 4 kB,
     firmwarePath = firmwarePath
   ) {
+    val timer = new SpinyTimer(
+      timerWidth = 32,
+      prescaleWidth = 16,
+      numCompares = 2
+    ).setName("Timer")
+
     val gpio0 = new SpinyGpio(
       Seq(SpinyGpioBankConfig(
         width = 16,
@@ -127,6 +133,7 @@ class Blinky(
     io.RMII_CLK := eth.rmiiClkOutXilinxOddr(oddrCd = rmiiClkFwdDomain)
 
     build(peripherals = Seq(
+      timer,
       gpio0,
       gpio1,
       eth
