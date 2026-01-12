@@ -33,6 +33,7 @@ package spiny.examples.blinky
 
 import spinal.core._
 import spinal.lib._
+import spinal.core.sim._
 
 import spiny.soc._
 import spiny.peripheral._
@@ -69,7 +70,8 @@ class Blinky(
       timerWidth = 32,
       prescaleWidth = 16,
       numCompares = 1,
-      isMachineTimer = true
+      isMachineTimer = true,
+      simSpeedUp = if (sim) 10000 else 1
     ).setName("Timer")
 
     val gpio = new SpinyGpio(
@@ -115,4 +117,29 @@ object TopLevelVerilog extends App {
   val soc = spinalReport.toplevel.soc
   soc.dumpSvd("target/spinal/Blinky.svd", "Blinky")
   soc.dumpLinkerScript("target/spinal/memory.x")
+}
+
+object TopLevelSim extends App {
+  val firmwarePath = if (args.length == 1) {
+    println(f"[Blinky Sim] using firmware: ${args(0)}")
+    args(0)
+  } else {
+    null
+  }
+
+  SimConfig
+    .withWave
+    .compile(new Blinky(sim = true, firmwarePath = firmwarePath))
+    .doSim { dut =>
+      val clockDomain = ClockDomain(
+        clock = dut.io.SYS_CLK,
+        reset = dut.io.CPU_RESET_N,
+        config = ClockDomainConfig(
+          resetActiveLevel = LOW
+        )
+      )
+
+      clockDomain.forkStimulus(period = 10)
+      clockDomain.waitSampling(100000)
+    }
 }
