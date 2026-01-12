@@ -42,15 +42,21 @@ trait SpinyPeripheral {
   var peripheralBusIf: Apb3BusInterface = null
   var peripheralMappedSize: BigInt = null
 
+  /** Implementation typically comes from SpinalHDL Component base class */
   def getName(): String
 
+  /** Creates primary peripheral bus interface for allocating registers */
   def createPeripheralBusInterface(bus: Apb3): Apb3BusInterface = {
     peripheralBus = bus
+    // the SizeMapping parameter isn't used, so just pass all zeros
     peripheralBusIf = Apb3BusInterface(peripheralBus, SizeMapping(0, 0))
     peripheralMappedSize = 1 << bus.config.addressWidth
     peripheralBusIf
   }
 
+  /** Makes sure the peripheral's allocated registers fit into the
+   *  mapped address space 
+   */
   def checkPeripheralMapping() {
     assert(peripheralMappedSize >= peripheralBusIf.getMappedSize,
       "Peripheral addressWidth must be >= " +
