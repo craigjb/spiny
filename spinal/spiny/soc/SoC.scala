@@ -48,8 +48,6 @@ class SpinySoC(
   firmwarePath: String = null,
   peripheralsBaseAddress: BigInt = 0x10000000
 ) extends Area {
-  val cpu = SpinyCpu(cpuProfile).setName("Cpu")
-
   val ram = new SpinyMainRam(
     size = ramSize,
     cpuProfile.busConfig
@@ -58,11 +56,31 @@ class SpinySoC(
   if (firmwarePath != null) {
     ram.initFromFile(firmwarePath)
   }
-  cpu.io.iBus <> ram.io.iBus
 
+  var cpu: SpinyCpu = null
   var apb: SpinyApb3Interconnect = null
 
   def build(peripherals: Seq[SpinyPeripheral]) {
+    // extract interrupt descriptors from peripherals
+    val peripheralsWithInterrupts = peripherals
+      .filter(_.interrupt.isDefined)
+    val interrupts = peripheralsWithInterrupts
+      .zipWithIndex.map { case (peripheral, idx) =>
+        SpinyCpuInterrupt(
+          name = peripheral.interruptName,
+          code = 16 + idx  // Start at code 16 for user interrupts
+        )
+    }
+
+    // create CPU with interrupt descriptors
+    cpu = SpinyCpu(cpuProfile, interrupts).setName("Cpu")
+    cpu.io.iBus <> ram.io.iBus
+
+    // connect peripheral interrupts to CPU
+    peripheralsWithInterrupts.zipWithIndex.foreach { case (peripheral, idx) =>
+      cpu.io.interrupts(idx) := peripheral.interrupt.get
+    }
+
     apb = SpinyApb3Interconnect(
       busConfig = cpuProfile.busConfig,
       baseAddress = 0x10000000,

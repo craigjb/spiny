@@ -31,21 +31,45 @@
 
 package spiny.soc
 
+import scala.collection.mutable.ArrayBuffer
+
 import spinal.core._
 import spinal.lib._
 import spinal.lib.bus.simple._
 import spinal.lib.blackbox.xilinx.s7.BSCANE2
 import spinal.lib.bus.amba4.axi._
 import vexriscv._
+import vexriscv.plugin._
 
 import spiny.Utils._
 
-case class SpinyCpu(profile: SpinyCpuProfile) extends Component {
+/** Interrupt descriptor for SpinyCpu
+ *
+ *  @param name Interrupt name
+ *  @param code Interrupt code (CSR exception code)
+ */
+case class SpinyCpuInterrupt(name: String, code: Int)
+
+case class SpinyCpu(
+  profile: SpinyCpuProfile,
+  interruptDescs: Seq[SpinyCpuInterrupt] = Seq()
+) extends Component {
   import SpinyCpu._
 
   val io = new Bundle {
     val iBus = master(PipelinedMemoryBus(profile.busConfig))
     val dBus = master(PipelinedMemoryBus(profile.busConfig))
+    val interrupts = in Vec(Bool(), interruptDescs.length)
+  }
+
+  // Create UserInterruptPlugins from interrupt descriptors
+  val interruptPlugins = ArrayBuffer[UserInterruptPlugin]()
+  interruptDescs.foreach { intDesc =>
+    val plugin = new UserInterruptPlugin(
+      interruptName = intDesc.name,
+      code = intDesc.code
+    )
+    interruptPlugins += plugin
   }
 
   val jtagTap = Option.when(profile.withXilinxDebug)({
@@ -58,15 +82,22 @@ case class SpinyCpu(profile: SpinyCpuProfile) extends Component {
 
   val debugReset = False
   val debugRstArea = new ResetArea(debugReset, true) {
-    val cpu = new VexRiscv(VexRiscvConfig(profile.toPlugins))
+    val cpu = new VexRiscv(
+      VexRiscvConfig(profile.toPlugins ++ interruptPlugins)
+    )
     profile.iBus <> io.iBus
     profile.dBus <> io.dBus
 
     profile.csrPlugin.externalInterrupt := False
     profile.csrPlugin.timerInterrupt := False
 
+    // Wire up interrupt signals to UserInterruptPlugins
+    interruptPlugins.zipWithIndex.foreach { case (plugin, idx) =>
+      plugin.interrupt := io.interrupts(idx)
+    }
+
     if (profile.withXilinxDebug) {
-      profile.debugPlugin.get.jtagInstruction <> 
+      profile.debugPlugin.get.jtagInstruction <>
         jtagTap.get.toJtagTapInstructionCtrl()
       val ndmResetCC = BufferCC(profile.debugPlugin.get.ndmreset)
       debugReset.setWhen(ndmResetCC)
