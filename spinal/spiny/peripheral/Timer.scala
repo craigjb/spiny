@@ -200,4 +200,6 @@ class SpinyTimer(
   io.interrupt := interruptEnable && (maskedCompareFire || maskedOverflowStatus)
 
   checkPeripheralMapping()
+
+  override def interrupt: Option[Bool] = Some(io.interrupt)
 }
