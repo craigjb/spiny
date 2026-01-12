@@ -23,41 +23,6 @@ set_clock_groups \
 set_false_path -from [get_ports { CPU_RESET_N }]
 set_false_path -to [get_ports { LEDS[*] }]
 set_false_path -from [get_ports { SWITCHES[*] }]
-set_false_path -to [get_ports { RMII_PHY_RESET_N }]
-
-# Ethernet PHY
-create_generated_clock \
-  -name RMII_CLK_FWD \
-  -source [get_pins {mmcm/CLKOUT2}] \
-  -divide_by 1 \
-  [get_ports RMII_CLK]
-
-set_multicycle_path -setup 2 \
-  -from [get_clocks RMII_CLK_FWD] \
-  -to [get_clocks -of_objects [get_pins -hierarchical mmcm/CLKOUT1]]
-set_multicycle_path -hold 1 \
-  -from [get_clocks RMII_CLK_FWD] \
-  -to [get_clocks -of_objects [get_pins -hierarchical mmcm/CLKOUT1]]
-
-set_input_delay \
-  -clock [get_clocks RMII_CLK_FWD] \
-  -max 14.0 \
-  [get_ports {RMII_RX_D[*] RMII_RX_CRS_DV}]
-set_input_delay \
-  -clock [get_clocks RMII_CLK_FWD] \
-  -min 2.0 \
-  [get_ports {RMII_RX_D[*] RMII_RX_CRS_DV}]
-set_property IOB TRUE [get_ports {RMII_RX_D[*] RMII_RX_CRS_DV}]
-
-set_output_delay \
-  -clock [get_clocks RMII_CLK_FWD] \
-  -max 4.0 \
-  [get_ports {RMII_TX_D[*] RMII_TX_EN}]
-set_output_delay \
-  -clock [get_clocks RMII_CLK_FWD] \
-  -min -2.0 \
-  [get_ports {RMII_TX_D[*] RMII_TX_EN}]
-set_property IOB TRUE [get_ports {RMII_TX_D[*] RMII_TX_EN}]
 
 ###########################################################
 # Pins                                                    #
@@ -201,39 +166,6 @@ set_property -dict { \
   PACKAGE_PIN V10 \
   IOSTANDARD LVCMOS33 \
 } [get_ports { SWITCHES[15] }];
-
-set_property -dict { \
-  PACKAGE_PIN B3 \
-  IOSTANDARD LVCMOS33 \
-} [get_ports { RMII_PHY_RESET_N }];
-set_property -dict { \
-  PACKAGE_PIN D9 \
-  IOSTANDARD LVCMOS33 \
-} [get_ports { RMII_RX_CRS_DV }];
-set_property -dict { \
-  PACKAGE_PIN C11 \
-  IOSTANDARD LVCMOS33 \
-} [get_ports { RMII_RX_D[0] }];
-set_property -dict { \
-  PACKAGE_PIN D10 \
-  IOSTANDARD LVCMOS33 \
-} [get_ports { RMII_RX_D[1] }];
-set_property -dict { \
-  PACKAGE_PIN B9 \
-  IOSTANDARD LVCMOS33 \
-} [get_ports { RMII_TX_EN }];
-set_property -dict { \
-  PACKAGE_PIN A10 \
-  IOSTANDARD LVCMOS33 \
-} [get_ports { RMII_TX_D[0] }];
-set_property -dict { \
-  PACKAGE_PIN A8 \
-  IOSTANDARD LVCMOS33 \
-} [get_ports { RMII_TX_D[1] }];
-set_property -dict { \
-  PACKAGE_PIN D5 \
-  IOSTANDARD LVCMOS33 \
-} [get_ports { RMII_CLK }];
 
 ###########################################################
 # Config Voltage                                          #
