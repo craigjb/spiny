@@ -33,7 +33,6 @@ package spiny.examples.blinky
 
 import spinal.core._
 import spinal.lib._
-import spinal.lib.blackbox.xilinx.s7._
 
 import spiny.soc._
 import spiny.peripheral._
@@ -45,55 +44,21 @@ class Blinky(
   val io = new Bundle {
     val SYS_CLK = in(Bool())
     val CPU_RESET_N = in(Bool())
-    val RMII_PHY_RESET_N = out(Bool())
-    val RMII_CLK = out(Bool())
   }
 
   noIoPrefix()
 
-  val clkInFreq = 100 MHz
-  val clkInPeriodNs = clkInFreq.toTime.toBigDecimal / 1e-9
-  val mmcm = MMCME2_BASE(
-    CLKIN1_PERIOD = clkInPeriodNs.toDouble,
-    CLKFBOUT_MULT_F = 10.0,
-    CLKOUT0_DIVIDE_F = 10.0,
-    CLKOUT1_DIVIDE = 20.0,
-    CLKOUT2_DIVIDE = 20.0,
-    CLKOUT2_PHASE = -90.0
-  )
-  mmcm.CLKIN1 := io.SYS_CLK
-  mmcm.CLKFBIN := BUFG.on(mmcm.CLKFBOUT)
-  mmcm.RST := !io.CPU_RESET_N
-  mmcm.PWRDWN := False
-  val rawReset = !mmcm.LOCKED
-
-  val sysClk = BUFG.on(mmcm.CLKOUT0)
   val sysClkDomain = ClockDomain(
-    clock = sysClk,
+    clock = io.SYS_CLK,
     reset = ResetCtrl.asyncAssertSyncDeassert(
-      input = rawReset,
-      clockDomain = ClockDomain(sysClk)
+      input = !io.CPU_RESET_N,
+      clockDomain = ClockDomain(io.SYS_CLK)
     ),
     frequency = FixedFrequency(100 MHz),
     config = ClockDomainConfig(
       resetKind = SYNC,
     )
   )
-
-  val rmiiClk = BUFG.on(mmcm.CLKOUT1)
-  val rmiiClkDomain = ClockDomain(
-    clock = rmiiClk,
-    reset = ResetCtrl.asyncAssertSyncDeassert(
-      input = rawReset,
-      clockDomain = ClockDomain(rmiiClk)
-    ),
-    frequency = FixedFrequency(50 MHz),
-    config = ClockDomainConfig(
-      resetKind = SYNC,
-    )
-  )
-
-  val rmiiClkFwdDomain = ClockDomain(BUFG.on(mmcm.CLKOUT2))
 
   val soc = sysClkDomain on new SpinySoC(
     cpuProfile = SpinyRv32iRustCpuProfile(withXilinxDebug = !sim),
@@ -107,37 +72,26 @@ class Blinky(
       isMachineTimer = true
     ).setName("Timer")
 
-    val gpio0 = new SpinyGpio(
-      Seq(SpinyGpioBankConfig(
-        width = 16,
-        direction = SpinyGpioDirection.Output,
-        name = "leds"
-      ))
-    ).setName("Gpio0")
-    gpio0.getBankBits("leds").toIo().setName("LEDS")
-
-    val gpio1 = new SpinyGpio(
-      Seq(SpinyGpioBankConfig(
-        width = 16,
-        direction = SpinyGpioDirection.Input,
-        name = "switches"
-      ))
-    ).setName("Gpio1")
-    gpio1.getBankBits("switches").toIo().setName("SWITCHES")
-
-    val eth = new SpinyEthernet(
-      rxCd = rmiiClkDomain,
-      txCd = rmiiClkDomain
-    ).setName("Eth")
-    eth.io.rmii.toIo().setName("RMII")
-    io.RMII_PHY_RESET_N := !eth.io.phyReset
-    io.RMII_CLK := eth.rmiiClkOutXilinxOddr(oddrCd = rmiiClkFwdDomain)
+    val gpio = new SpinyGpio(
+      Seq(
+        SpinyGpioBankConfig(
+          width = 16,
+          direction = SpinyGpioDirection.Output,
+          name = "leds"
+        ),
+        SpinyGpioBankConfig(
+          width = 16,
+          direction = SpinyGpioDirection.Input,
+          name = "switches"
+        )
+      )
+    ).setName("Gpio")
+    gpio.getBankBits("leds").toIo().setName("LEDS")
+    gpio.getBankBits("switches").toIo().setName("SWITCHES")
 
     build(peripherals = Seq(
       timer,
-      gpio0,
-      gpio1,
-      eth
+      gpio
     ))
   }
 }
