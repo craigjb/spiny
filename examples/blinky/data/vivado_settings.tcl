@@ -1,6 +1,6 @@
 # performance optimized synthesis + place & route
 set_property strategy Flow_PerfOptimized_high [get_runs synth_1]
-set_property strategy Performance_Explore [get_runs impl_1]
+set_property strategy Performance_ExtraTimingOpt [get_runs impl_1]
 
 # known issues (harmless) with vivado 2024.1, just noise
 set_msg_config -id {Device 21-9320} -new_severity INFO
