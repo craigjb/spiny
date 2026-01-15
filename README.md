@@ -5,16 +5,19 @@ A library for building FPGA projects using SpinalHDL, Rust (with Embassy), and F
 ## Overview
 
 Spiny has three main components:
-1. [SpinalHDL](https://spinalhdl.github.io/RTD/master/index.html) library
-  - **VexRiscv CPU** profiles for running embedded Rust
-  - Customizable peripherals with **auto-generated Rust boilerplate** (and documentation)
-  - **Automated mapping and wiring** for peripheral bus and interrupts
-  - Output **[system view description (SVD)](https://open-cmsis-pack.github.io/svd-spec/latest/index.html)** file
-  - Generate linker script for SoC memory layout
-2. [FuseSoC](https://fusesoc.readthedocs.io) generators
-  - Automatically generate **peripheral access crate (PAC) for Rust** from SVD file
-  - Include Rust firmware build in FuseSoC dependency tree
-3. Hardware abstraction layer for [Embassy](https://embassy.dev) (coming soon)
+
+**1. [SpinalHDL](https://spinalhdl.github.io/RTD/master/index.html) library**
+- VexRiscv CPU profiles for running embedded Rust
+- Customizable peripherals with auto-generated Rust boilerplate (and documentation)
+- Automated mapping and wiring for peripheral bus and interrupts
+- Output [system view description (SVD)](https://open-cmsis-pack.github.io/svd-spec/latest/index.html) file
+- Generate linker script for SoC memory layout
+
+**2. [FuseSoC](https://fusesoc.readthedocs.io) generators**
+- Automatically generate peripheral access crate (PAC) for Rust from SVD file
+- Include Rust firmware build in FuseSoC dependency tree
+
+**3. Hardware abstraction layer for [Embassy](https://embassy.dev) (coming soon)**
 
 ## Quick Start
 
