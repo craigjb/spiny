@@ -58,7 +58,7 @@ generate:
         - "fw/target/release/blinky.bin"
 
 targets:
-  default:
+  nexys_a7_100t:
     filesets: [xdc, vivado_settings, dep]
     generate: [svd, rustpac, firmware, spinalhdl]
     toplevel: Blinky
