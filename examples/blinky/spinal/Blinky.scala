@@ -134,12 +134,13 @@ object TopLevelSim extends App {
       val clockDomain = ClockDomain(
         clock = dut.io.SYS_CLK,
         reset = dut.io.CPU_RESET_N,
+        frequency = FixedFrequency(100 MHz),
         config = ClockDomainConfig(
           resetActiveLevel = LOW
         )
       )
 
-      clockDomain.forkStimulus(period = 10)
+      clockDomain.forkStimulus()
       clockDomain.waitSampling(100000)
     }
 }
