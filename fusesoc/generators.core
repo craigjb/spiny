@@ -58,3 +58,11 @@ generators:
       Parameters:
         project_dir: Path to Rust project folder (with Cargo.toml)
         args: List of arguments to cargo
+
+  litedram:
+    interpreter: python3
+    command: litedram_gen.py
+    cache_type: input
+    description: Generate LiteDRAM core
+    usage: |
+      TODO

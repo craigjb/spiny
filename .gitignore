@@ -47,6 +47,7 @@ bin/
 !tester/src/test/resources/*.vhd
 examples/*/target
 examples/*/*.v
+__pycache__
 
 simWorkspace/
 /xsim.dir
