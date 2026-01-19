@@ -14,13 +14,14 @@ lazy val vexRiscv = RootProject(uri("https://github.com/SpinalHDL/VexRiscv.git#m
 lazy val spiny = (project in file("."))
   .dependsOn(vexRiscv)
   .settings(
-    name := "spiny", 
+    name := "spiny",
     Compile / scalaSource := baseDirectory.value / "spinal",
     libraryDependencies ++= Seq(
       spinalCore,
       spinalLib,
       spinalIdslPlugin,
-      "org.scala-lang.modules" %% "scala-xml" % "2.1.0"
+      "org.scala-lang.modules" %% "scala-xml" % "2.1.0",
+      "org.yaml" % "snakeyaml" % "2.0"
     )
   )
 
