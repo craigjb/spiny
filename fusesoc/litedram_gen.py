@@ -180,28 +180,26 @@ def validate_speedgrade_timings(timings_def):
     )
 
 
-def create_custom_module(module_def, mem_type):
+def create_custom_module(module_def, mem_type, geom):
     """
     LiteDRAM only has some DRAM modules built-in, so this creates a new
     sub-class based on a YAML definition
     """
     container_name = "dram_module"
     module_name = validate_exists(module_def, "name", container_name)
-    geom_def = validate_exists(module_def, "geometry", container_name)
     timings_def = validate_exists(module_def, "timings", container_name)
 
-    if None in [module_name, geom_def, timings_def]:
+    if None in [module_name, timings_def]:
         sys.exit(1)
 
-    geom = validate_geometry(geom_def)
     tech_timings = validate_tech_timings(timings_def)
     speedgrade_timings = validate_speedgrade_timings(timings_def)
 
     if mem_type not in MODULE_BASE_CLASS_MAP:
-        print(f"ERROR: Unknown module type: {module_type}. ")
+        print(f"ERROR: Unknown module type: {mem_type}. ")
         print(f"       Must be one of {list(MODULE_BASE_CLASS_MAP.keys())}")
         sys.exit(1)
-    base_class = MODULE_BASE_CLASS_MAP[module_type]
+    base_class = MODULE_BASE_CLASS_MAP[mem_type]
 
     return type(module_name, (base_class,), {
         "nbanks": geom["nbanks"],
@@ -218,7 +216,7 @@ def translate_config(config):
     """
     Translate config to LiteDRAM config and create custom module if needed
     """
-    ctn_name = "parameters"
+    ctn_name = "config file"
 
     # general
     fpga_speedgrade = validate_int(config, "fpga_speedgrade", ctn_name)
@@ -246,13 +244,18 @@ def translate_config(config):
     # user ports
     user_ports = validate_exists(config, "user_ports", ctn_name)
 
+    # geometry (always required)
+    geom_def = validate_exists(config, "dram_geometry", ctn_name)
+
     required_fields = [
         fpga_speedgrade, mem_type, extra_cmd_latency, num_byte_groups,
         num_ranks, phy, input_clk_freq, user_clk_freq, iodelay_clk_freq,
-        cmd_buffer_depth, user_ports
+        cmd_buffer_depth, user_ports, geom_def
     ]
     if None in required_fields:
         sys.exit(1)
+
+    geom = validate_geometry(geom_def)
 
     # check only supported memory type is used
     if mem_type not in SUPPORTED_MEM_TYPES:
@@ -303,7 +306,7 @@ def translate_config(config):
     module_def = validate_exists(config, "dram_module", ctn_name)
     if isinstance(module_def, dict):
         # custom
-        custom_class = create_custom_module(module_def, mem_type)
+        custom_class = create_custom_module(module_def, mem_type, geom)
         module_name = custom_class.__name__
         setattr(litedram_modules, module_name, custom_class)
         litedram_config["sdram_module"] = module_name
@@ -316,39 +319,52 @@ def translate_config(config):
 
 class LiteDramGen(Generator):
     def run(self):
-        litex_name = self.config.get("name", "litedram_core")
-        litedram_config = translate_config(self.config)
+        config_file = self.config.get("config_file", None)
+        if not config_file:
+            print(f"ERROR: `config_file` is a required parameter")
+            sys.exit(1)
 
-        config_path = Path("litedram_config.yml")
-        config_path.write_text(yaml.dump(litedram_config))
+        in_config_path = Path(self.files_root) / config_file
+        in_config = yaml.safe_load(in_config_path.read_text())
+
+        litex_name = in_config.get("name", "litedram_core")
+        litedram_config = translate_config(in_config)
+
         output_dir = Path("litex_build")
+        verilog_path = output_dir / "gateware" / f"{litex_name}.v"
+        xdc_path = output_dir / "gateware" / f"{litex_name}.xdc"
+
+        out_config_path = Path("litedram_config.yml")
+        out_config_path.write_text(yaml.dump(litedram_config))
 
         command = [
             "litedram_gen",
             "--no-compile",
             "--name", litex_name,
             "--output-dir", output_dir.resolve().as_posix(),
-            config_path.resolve().as_posix(),
+            out_config_path.resolve().as_posix(),
         ]
 
-        try:
-            subprocess.check_call(command)
-        except subprocess.CalledProcessError:
-            print("ERROR: litedram_gen failed")
-            sys.exit(1)
-        except FileNotFoundError:
-            print("ERROR: litedram_gen command not found. "
-                  "Is litex installed and on PATH?")
-            sys.exit(1)
+        log_file = output_dir / "litedram_gen.log"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        with open(log_file, "w") as f:
+            try:
+                subprocess.check_call(command, stdout=f, stderr=subprocess.STDOUT)
+            except subprocess.CalledProcessError:
+                print("ERROR: litedram_gen failed")
+                print(f"See log: {log_file.resolve().as_posix()}")
+                sys.exit(1)
+            except FileNotFoundError:
+                print("ERROR: litedram_gen command not found. "
+                        "Is litex installed and on PATH?")
+                sys.exit(1)
 
-        verilog_path = output_dir / "gateware" / f"{litex_name}.v"
         if not verilog_path.is_file():
             print("ERROR: litedram_gen failed, output verilog not found:")
             print(f"       {verilog_path.resolve().as_posix()}")
             sys.exit(1)
 
-        xdc_path = output_dir / "gateware" / f"{litex_name}.xdc"
-        if not verilog_path.is_file():
+        if not xdc_path.is_file():
             print("ERROR: litedram_gen failed, output constraints not found:")
             print(f"       {xdc_path.resolve().as_posix()}")
             sys.exit(1)
@@ -363,6 +379,8 @@ class LiteDramGen(Generator):
             fileset="xdc",
             file_type="xdc"
         )
+
+        print(f"[{litex_name}] LiteDRAM generation completed")
 
 
 if __name__ == "__main__":
