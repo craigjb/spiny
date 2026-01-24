@@ -22,9 +22,7 @@ generate:
     generator: spinalhdl
     parameters:
       sbt_dir: "../../"
-      output_path: "target/spinal/Blinky.v"
       main: spiny.examples.blinky.TopLevelVerilog
-      file_type: verilogSource
 
   rustpac:
     generator: rustpac
