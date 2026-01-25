@@ -362,11 +362,13 @@ class LiteDramGen(Generator):
         if not verilog_path.is_file():
             print("ERROR: litedram_gen failed, output verilog not found:")
             print(f"       {verilog_path.resolve().as_posix()}")
+            print(f"See log: {log_file.resolve().as_posix()}")
             sys.exit(1)
 
         if not xdc_path.is_file():
             print("ERROR: litedram_gen failed, output constraints not found:")
             print(f"       {xdc_path.resolve().as_posix()}")
+            print(f"See log: {log_file.resolve().as_posix()}")
             sys.exit(1)
 
         self.add_files(
