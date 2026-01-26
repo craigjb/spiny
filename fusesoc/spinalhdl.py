@@ -40,6 +40,7 @@ from fusesoc.capi2.generator import Generator
 class SpinalHdlGen(Generator):
     def run(self):
         sbt_dir = self.config.get("sbt_dir")
+        project = self.config.get("project", None)
         main = self.config.get("main")
         output_path = self.config.get("output_path")
         file_type = self.config.get("file_type")
@@ -58,8 +59,13 @@ class SpinalHdlGen(Generator):
         if missing_parameter:
             sys.exit(1)
 
+        if project is not None:
+            project_prefix = f"{project}/"
+        else:
+            project_prefix = ""
+
         working_dir = Path(self.files_root) / Path(sbt_dir)
-        command = ["sbtn", "runMain", main]
+        command = ["sbtn", f"{project_prefix}runMain", main]
         if args:
             command += args
 

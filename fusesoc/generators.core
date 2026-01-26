@@ -14,6 +14,7 @@ generators:
         sbt_dir: Directory containing build.sbt
                  (defaults to core root directory)
         main: Main class to run
+        project: sbt project name (optional; use for multi-project workspaces)
         output_path: Path for generated output
                      (if omitted, runs elaboration but does not include 
                      output in build)
