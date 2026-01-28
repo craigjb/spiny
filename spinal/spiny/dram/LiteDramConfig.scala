@@ -31,10 +31,12 @@
 
 package spiny.dram
 
-import spinal.core._
 import java.io.FileInputStream
-import org.yaml.snakeyaml.Yaml
 import scala.collection.JavaConverters._
+
+import org.yaml.snakeyaml.Yaml
+
+import spinal.core._
 
 /** DDR memory types supported by LiteDRAM */
 sealed trait DramMemType
@@ -123,6 +125,22 @@ case class LiteDramConfig(
    * Bank address width (bits needed to address banks)
    */
   def bankAddressWidth: Int = geometry.bankAddressWidth
+
+  /**
+   * Calculate native port address width based on port data width
+   */
+  def nativePortAddressWidth(portDataWidth: Int): Int = {
+    log2Up(geometry.numRows) + log2Up(geometry.numCols) +
+      log2Up(geometry.numBanks) + log2Up(numByteGroups) -
+      log2Up(portDataWidth / 8)
+  }
+
+  /**
+   * Get only the native port configurations
+   */
+  def nativePortConfigs: Map[String, UserPortConfig] = {
+    userPorts.filter(_._2.portType == UserPortType.Native)
+  }
 }
 
 object LiteDramConfig {
