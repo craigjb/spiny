@@ -324,6 +324,8 @@ class LiteDramGen(Generator):
             print(f"ERROR: `config_file` is a required parameter")
             sys.exit(1)
 
+        sim = self.config.get("sim", False)
+
         in_config_path = Path(self.files_root) / config_file
         in_config = yaml.safe_load(in_config_path.read_text())
 
@@ -342,8 +344,11 @@ class LiteDramGen(Generator):
             "--no-compile",
             "--name", litex_name,
             "--output-dir", output_dir.resolve().as_posix(),
-            out_config_path.resolve().as_posix(),
+            out_config_path.resolve().as_posix()
         ]
+
+        if sim:
+            command.append("--sim")
 
         log_file = output_dir / "litedram_gen.log"
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -365,7 +370,7 @@ class LiteDramGen(Generator):
             print(f"See log: {log_file.resolve().as_posix()}")
             sys.exit(1)
 
-        if not xdc_path.is_file():
+        if not sim and not xdc_path.is_file():
             print("ERROR: litedram_gen failed, output constraints not found:")
             print(f"       {xdc_path.resolve().as_posix()}")
             print(f"See log: {log_file.resolve().as_posix()}")
@@ -376,11 +381,13 @@ class LiteDramGen(Generator):
             fileset="rtl",
             file_type="verilogSource"
         )
-        self.add_files(
-            [xdc_path.resolve().as_posix()],
-            fileset="xdc",
-            file_type="xdc"
-        )
+
+        if not sim:
+            self.add_files(
+                [xdc_path.resolve().as_posix()],
+                fileset="xdc",
+                file_type="xdc"
+            )
 
         print(f"[{litex_name}] LiteDRAM generation completed")
 

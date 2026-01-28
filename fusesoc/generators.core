@@ -70,3 +70,4 @@ generators:
 
       Parameters:
         config_file: Path to YAML config file (see Spiny docs for details)
+        sim: Generate for simulation with built-in DRAM model (yes, no)
