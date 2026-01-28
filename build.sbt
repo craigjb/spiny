@@ -27,10 +27,20 @@ lazy val spiny = (project in file("."))
 
 // Example projects
 lazy val blinky = (project in file("examples/blinky"))
-  .dependsOn(spiny) // Link to your main library
+  .dependsOn(spiny)
   .dependsOn(vexRiscv)
   .settings(
     name := "blinky",
+    Compile / scalaSource := baseDirectory.value / "spinal",
+    publish / skip := true,
+    libraryDependencies ++= Seq(spinalIdslPlugin),
+  )
+
+lazy val ddrtest = (project in file("examples/ddrtest"))
+  .dependsOn(spiny)
+  .dependsOn(vexRiscv)
+  .settings(
+    name := "ddrtest",
     Compile / scalaSource := baseDirectory.value / "spinal",
     publish / skip := true,
     libraryDependencies ++= Seq(spinalIdslPlugin),

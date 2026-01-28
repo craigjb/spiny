@@ -1,0 +1,32 @@
+CAPI=2:
+name: craigjb:spiny:ddrtest:0.1.0
+description: DDR memory example
+
+filesets:
+  dep:
+    depend:
+      - craigjb:spiny:generators:0.1.0
+
+generate:
+  litedram_sim:
+    generator: litedram
+    parameters:
+      config_file: Ddr2Sim.yaml
+      sim: yes
+      verilog_output_path: "target/litedram/Ddr2Sim.v"
+
+  spinalsim:
+    generator: spinalhdl
+    parameters:
+      sbt_dir: "../../"
+      main: spiny.examples.ddrtest.DramSim
+      project: ddrtest
+
+targets:
+  spinal_sim:
+    filesets: [dep]
+    generate: [litedram_sim, spinalsim]
+    toplevel: DramSim
+    flow: generic
+    flow_options:
+      tool: icarus # dummy
