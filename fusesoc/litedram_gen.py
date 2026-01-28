@@ -32,6 +32,7 @@
 import sys
 import yaml
 import subprocess
+import shutil
 from pathlib import Path
 from collections.abc import Iterable
 
@@ -325,6 +326,7 @@ class LiteDramGen(Generator):
             sys.exit(1)
 
         sim = self.config.get("sim", False)
+        verilog_output_path = self.config.get("verilog_output_path", None)
 
         in_config_path = Path(self.files_root) / config_file
         in_config = yaml.safe_load(in_config_path.read_text())
@@ -381,6 +383,11 @@ class LiteDramGen(Generator):
             fileset="rtl",
             file_type="verilogSource"
         )
+
+        if verilog_output_path is not None:
+            dest_path = Path(self.files_root) / verilog_output_path
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(verilog_path, dest_path)
 
         if not sim:
             self.add_files(
