@@ -80,9 +80,13 @@ object SpinySvd {
     peripheral: SpinyPeripheral,
     sizeMapping: SizeMapping
   ): Elem =  {
-    val regSlices = peripheral.peripheralBusIf.slices.filter(
-      slice => slice.isInstanceOf[RegInst] || slice.isInstanceOf[FifoInst]
-    )
+    val regSlices = if (peripheral.peripheralBusIf != null) {
+      peripheral.peripheralBusIf.slices.filter(
+        slice => slice.isInstanceOf[RegInst] || slice.isInstanceOf[FifoInst]
+      )
+    } else {
+      Seq()
+    }
 
     <peripheral>
       <name>{ peripheral.getName() }</name>
