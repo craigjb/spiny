@@ -60,7 +60,10 @@ class SpinySoC(
   var cpu: SpinyCpu = null
   var apb: SpinyApb3Interconnect = null
 
-  def build(peripherals: Seq[SpinyPeripheral]) {
+  def build(
+    peripherals: Seq[SpinyPeripheral],
+    mainBusSlaves: Seq[(SizeMapping, PipelinedMemoryBus)] = Seq()
+  ) {
     // extract machine timer interrupt if present
     val machineTimerPeripherals = peripherals.filter(_.machineTimerInterrupt.isDefined)
     assert(machineTimerPeripherals.length <= 1,
@@ -98,17 +101,28 @@ class SpinySoC(
       peripherals = peripherals
     ).setName("Apb")
 
+    val mainBusMappings = Seq(
+      SizeMapping(ramBaseAddress, ram.byteCount),
+      SizeMapping(apb.baseAddress, apb.mappedSize)
+    ) ++ mainBusSlaves.map(bs => bs._1)
+    assert(!AddressMapping.verifyOverlapping(mainBusMappings),
+      "Overlapping address mappings found on main bus")
+
+    println(mainBusMappings)
+
     val decoder = PipelinedMemoryBusDecoder(
       busConfig = cpuProfile.busConfig,
-      mappings = Seq(
-        SizeMapping(ramBaseAddress, ram.byteCount),
-        SizeMapping(apb.baseAddress, apb.mappedSize)
-      )
+      mappings = mainBusMappings
     ).setName("Decoder")
-
     cpu.io.dBus >> decoder.io.input
-    decoder.io.outputs(0) >> ram.io.dBus
-    decoder.io.outputs(1) >> apb.masterBus
+
+    val decodedBuses = Seq(
+      ram.io.dBus,
+      apb.masterBus
+    ) ++ mainBusSlaves.map(bs => bs._2)
+    decoder.io.outputs.zip(decodedBuses).foreach {
+      case(output, bus) => output >> bus
+    }
   }
 
   def peripheralMappings: Seq[(SpinyPeripheral, SizeMapping)] = {
