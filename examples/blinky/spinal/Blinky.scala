@@ -39,7 +39,8 @@ import spiny.soc._
 import spiny.peripheral._
 
 class Blinky(
-  sim: Boolean = false,
+  numLeds: Int = 16,
+  numSwitches: Int = 16,
   firmwarePath: String = null
 ) extends Component {
   val io = new Bundle {
@@ -62,7 +63,7 @@ class Blinky(
   )
 
   val soc = sysClkDomain on new SpinySoC(
-    cpuProfile = SpinyRv32iRustCpuProfile(withXilinxDebug = !sim),
+    cpuProfile = SpinyRv32iRustCpuProfile(),
     ramSize = 4 kB,
     firmwarePath = firmwarePath
   ) {
@@ -71,18 +72,17 @@ class Blinky(
       prescaleWidth = 16,
       numCompares = 1,
       isMachineTimer = true,
-      simSpeedUp = if (sim) 10000 else 1
     ).setName("Timer")
 
     val gpio = new SpinyGpio(
       Seq(
         SpinyGpioBankConfig(
-          width = 16,
+          width = numLeds,
           direction = SpinyGpioDirection.Output,
           name = "leds"
         ),
         SpinyGpioBankConfig(
-          width = 16,
+          width = numSwitches,
           direction = SpinyGpioDirection.Input,
           name = "switches"
         )
@@ -99,9 +99,21 @@ class Blinky(
 }
 
 object TopLevelVerilog extends App {
-  val firmwarePath = if (args.length == 1) {
-    println(f"[Blinky] using firmware: ${args(0)}")
-    args(0)
+  val numLeds = if (args.length >= 1) {
+    args(0).toInt
+  } else {
+    16
+  }
+  println(f"[Blinky] numLeds: ${numLeds}")
+  val numSwitches = if (args.length >= 2) {
+    args(1).toInt
+  } else {
+    16
+  }
+  println(f"[Blinky] numSwitches: ${numSwitches}")
+  val firmwarePath = if (args.length >= 3) {
+    println(f"[Blinky] using firmware: ${args(2)}")
+    args(2)
   } else {
     null
   }
@@ -110,7 +122,8 @@ object TopLevelVerilog extends App {
     targetDirectory = "target/spinal",
     inlineRom = true
   ).generateVerilog(new Blinky(
-    sim = false,
+    numLeds = numLeds,
+    numSwitches = numSwitches,
     firmwarePath = firmwarePath
   ))
 
@@ -129,7 +142,7 @@ object TopLevelSim extends App {
 
   SimConfig
     .withWave
-    .compile(new Blinky(sim = true, firmwarePath = firmwarePath))
+    .compile(new Blinky(firmwarePath = firmwarePath))
     .doSim { dut =>
       val clockDomain = ClockDomain(
         clock = dut.io.SYS_CLK,

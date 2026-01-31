@@ -3,6 +3,16 @@ name: craigjb:spiny:blinky:0.1.0
 description: Blinky example
 
 filesets:
+  xdc_nexys_a7:
+    files:
+      - data/nexys7-a100t.xdc
+    file_type: xdc
+
+  xdc_nexys_video:
+    files:
+      - data/nexys_video.xdc
+    file_type: xdc
+
   xdc:
     files:
       - data/nexys7-a100t.xdc
@@ -23,6 +33,7 @@ generate:
     parameters:
       sbt_dir: "../../"
       main: spiny.examples.blinky.TopLevelVerilog
+      project: blinky
 
   rustpac:
     generator: rustpac
@@ -51,15 +62,44 @@ generate:
       sbt_dir: "../../"
       output_path: "target/spinal/Blinky.v"
       main: spiny.examples.blinky.TopLevelVerilog
+      project: blinky
       file_type: verilogSource
-      args:
-        - "fw/target/release/blinky.bin"
 
 targets:
   nexys_a7_100t:
-    filesets: [xdc, vivado_settings, dep]
-    generate: [svd, rustpac, firmware, spinalhdl]
+    filesets: [xdc_nexys_a7, vivado_settings, dep]
+    generate:
+      - svd:
+          args:
+            - "16"
+            - "16"
+      - rustpac
+      - firmware
+      - spinalhdl:
+          args:
+            - "16"
+            - "16"
+            - "fw/target/release/blinky.bin"
     toplevel: Blinky
     flow: vivado
     flow_options:
       part: xc7a100t-csg324-1
+
+  nexys_video:
+    filesets: [xdc_nexys_video, vivado_settings, dep]
+    generate:
+      - svd:
+          args:
+            - "8"
+            - "8"
+      - rustpac
+      - firmware
+      - spinalhdl:
+          args:
+            - "8"
+            - "8"
+            - "fw/target/release/blinky.bin"
+    toplevel: Blinky
+    flow: vivado
+    flow_options:
+      part: xc7a200t-sbg484-1
