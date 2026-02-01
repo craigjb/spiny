@@ -5,7 +5,7 @@ description: Blinky example
 filesets:
   xdc_nexys_a7:
     files:
-      - data/nexys7-a100t.xdc
+      - data/nexys_a7_a100t.xdc
     file_type: xdc
 
   xdc_nexys_video:
