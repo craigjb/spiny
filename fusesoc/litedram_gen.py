@@ -45,9 +45,7 @@ from litedram.modules import (
 )
 
 
-SUPPORTED_MEM_TYPES = [
-    "DDR2"
-]
+SUPPORTED_MEM_TYPES = ["DDR2", "DDR3"]
 
 MODULE_BASE_CLASS_MAP = {
     "SDR": SDRModule,
