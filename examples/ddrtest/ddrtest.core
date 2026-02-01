@@ -5,7 +5,7 @@ description: DDR memory example
 filesets:
   nexys_a7_xdc:
     files:
-      - data/nexys7-a100t.xdc
+      - data/nexys_a7_100t.xdc
     file_type: xdc
 
   nexys_video_xdc:
