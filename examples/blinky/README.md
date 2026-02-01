@@ -85,16 +85,10 @@ This command will:
 3. Generate Rust PAC from SVD
 4. Build Rust firmware in release mode
 5. Convert firmware ELF to binary
+6. Run simulation in SpinalHDL (with verilator)
 
 ```bash
-fusesoc run --setup --target=nexys_a7_100t craigjb:spiny:blinky:0.1.0
-```
-
-This command will run the SpinalHDL simulation with Verilator:
-
-```bash
-# Run from spiny's root directory.
-sbtn "runMain spiny.examples.blinky.TopLevelSim fw/target/release/blinky.bin"
+fusesoc run --target=sim craigjb:spiny:blinky:0.1.0
 ```
 
 The waveform file `.vcd` will be output in to `simWorkspace/Blinky/test/wave.vcd`. You can open this in a waveform viewer like [Surfer](https://surfer-project.org).
