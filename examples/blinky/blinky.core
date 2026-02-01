@@ -55,17 +55,48 @@ generate:
         - "-O"
         - "binary"
         - "target/release/blinky.bin"
+
+  spinalsim:
+    generator: spinalhdl
+    parameters:
+      sbt_dir: "../../"
+      main: spiny.examples.blinky.TopLevelSim
+      project: blinky
+      output_path: "target/spinal/Blinky.v"
+      file_type: verilogSource
    
   spinalhdl:
     generator: spinalhdl
     parameters:
       sbt_dir: "../../"
-      output_path: "target/spinal/Blinky.v"
       main: spiny.examples.blinky.TopLevelVerilog
       project: blinky
+      output_path: "target/spinal/Blinky.v"
       file_type: verilogSource
 
 targets:
+  sim:
+    filesets: [dep]
+    generate:
+        - svd:
+            args:
+              - "16"
+              - "16"
+        - rustpac
+        - firmware
+        - spinalsim:
+            args:
+              - "16"
+              - "16"
+              - "fw/target/release/blinky.bin"
+    toplevel: Blinky
+    flow: generic # dummy flow
+    flow_options: # only lint, sim is done with SpinalHDL
+      tool: verilator 
+      mode: lint-only
+      verilator_options:
+        - "-Wno-WIDTH"
+
   nexys_a7_100t:
     filesets: [xdc_nexys_a7, vivado_settings, dep]
     generate:
