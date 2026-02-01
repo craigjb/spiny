@@ -3,6 +3,16 @@ name: craigjb:spiny:ddrtest:0.1.0
 description: DDR memory example
 
 filesets:
+  xdc:
+    files:
+      - data/nexys7-a100t.xdc
+    file_type: xdc
+
+  vivado_settings:
+    files:
+      - data/vivado_settings.tcl
+    file_type: tclSource
+
   dep:
     depend:
       - craigjb:spiny:generators:0.1.0
@@ -21,12 +31,39 @@ generate:
       sbt_dir: "../../"
       main: spiny.examples.ddrtest.DramSim
       project: ddrtest
+      output_path: "target/spinal/DdrTest.v"
+      file_type: verilogSource
+
+  litedram_nexys_a7:
+    generator: litedram
+    parameters:
+      config_file: Ddr2Ctrl.yaml
+      # extra copy in handy spot for inspection
+      # this copy is not used for build
+      verilog_output_path: "target/litedram/Ddr2Ctrl.v"
+
+  spinalhdl:
+    generator: spinalhdl
+    parameters:
+      sbt_dir: "../../"
+      output_path: "target/spinal/DdrTest.v"
+      main: spiny.examples.ddrtest.TopLevelVerilog
+      project: ddrtest
+      file_type: verilogSource
 
 targets:
-  spinal_sim:
+  sim:
     filesets: [dep]
     generate: [litedram_sim, spinalsim]
-    toplevel: DramSim
-    flow: generic
+    toplevel: DdrTest
+    flow: generic # dummy flow
     flow_options:
-      tool: icarus # dummy
+      tool: verilator 
+
+  nexys_a7_100t:
+    filesets: [xdc, vivado_settings, dep]
+    generate: [litedram_nexys_a7, spinalhdl]
+    toplevel: DdrTest
+    flow: vivado
+    flow_options:
+      part: xc7a100t-csg324-1
