@@ -42,7 +42,7 @@ import spiny.dram._
 import spiny.sim._
 
 case class DramSim() extends Component {
-  val dramConfig = LiteDramConfig.fromYaml("Ddr2Sim.yaml")
+  val dramConfig = LiteDramConfig.fromYaml("data/Ddr2Sim.yaml")
   val dramCtrl = SpinyDram(dramConfig, sim = true).setName("Dram")
 
   val nativePort = dramCtrl.nativePort("port0")

@@ -3,9 +3,14 @@ name: craigjb:spiny:ddrtest:0.1.0
 description: DDR memory example
 
 filesets:
-  xdc:
+  nexys_a7_xdc:
     files:
       - data/nexys7-a100t.xdc
+    file_type: xdc
+
+  nexys_video_xdc:
+    files:
+      - data/nexys_video.xdc
     file_type: xdc
 
   vivado_settings:
@@ -21,7 +26,7 @@ generate:
   litedram_sim:
     generator: litedram
     parameters:
-      config_file: Ddr2Sim.yaml
+      config_file: data/Ddr2Sim.yaml
       sim: yes
       verilog_output_path: "target/litedram/Ddr2Sim.v"
 
@@ -34,13 +39,12 @@ generate:
       output_path: "target/spinal/DdrTest.v"
       file_type: verilogSource
 
-  litedram_nexys_a7:
+  litedram:
     generator: litedram
     parameters:
-      config_file: Ddr2Ctrl.yaml
       # extra copy in handy spot for inspection
       # this copy is not used for build
-      verilog_output_path: "target/litedram/Ddr2Ctrl.v"
+      verilog_output_path: "target/litedram/LiteDram.v"
 
   spinalhdl:
     generator: spinalhdl
@@ -61,8 +65,13 @@ targets:
       tool: verilator 
 
   nexys_a7_100t:
-    filesets: [xdc, vivado_settings, dep]
-    generate: [litedram_nexys_a7, spinalhdl]
+    filesets: [nexys_a7_xdc, vivado_settings, dep]
+    generate:
+      - litedram:
+          config_file: data/Ddr2Ctrl.yaml
+      - spinalhdl:
+          args:
+            - "data/Ddr2Ctrl.yaml"
     toplevel: DdrTest
     flow: vivado
     flow_options:

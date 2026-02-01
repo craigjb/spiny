@@ -39,7 +39,10 @@ import spiny.soc._
 import spiny.peripheral._
 import spiny.dram._
 
-class DdrTest(firmwarePath: String = null) extends Component {
+class DdrTest(
+  dramConfigPath: String,
+  firmwarePath: String = null
+) extends Component {
   val io = new Bundle {
     val SYS_CLK = in(Bool())
     val CPU_RESET_N = in(Bool())
@@ -56,7 +59,7 @@ class DdrTest(firmwarePath: String = null) extends Component {
   )
 
   // Instantiate SpinyDram in input clock domain 
-  val dramConfig = LiteDramConfig.fromYaml("Ddr2Ctrl.yaml")
+  val dramConfig = LiteDramConfig.fromYaml(dramConfigPath)
   val dram = inputClkDomain on SpinyDram(dramConfig).setName("Dram")
 
   // Expose DDR physical interface
@@ -103,9 +106,16 @@ class DdrTest(firmwarePath: String = null) extends Component {
 }
 
 object TopLevelVerilog extends App {
-  val firmwarePath = if (args.length == 1) {
-    println(f"[DdrTest] using firmware: ${args(0)}")
-    args(0)
+  if (args.length < 1) {
+    println("[DdrTest] usage: <dramConfigPath> [firmwarePath]")
+    throw new Exception("Missing dramConfigPath")
+  }
+  val dramConfigPath = args(0)
+  println(f"[DdrTest] using DRAM config: ${dramConfigPath}")
+
+  val firmwarePath = if (args.length >= 2) {
+    println(f"[DdrTest] using firmware: ${args(1)}")
+    args(1)
   } else {
     null
   }
@@ -114,6 +124,7 @@ object TopLevelVerilog extends App {
     targetDirectory = "target/spinal",
     inlineRom = true
   ).generateVerilog(new DdrTest(
+    dramConfigPath = dramConfigPath,
     firmwarePath = firmwarePath
   ))
 
