@@ -46,7 +46,6 @@ class DdrTest(
   val io = new Bundle {
     val SYS_CLK = in(Bool())
     val CPU_RESET_N = in(Bool())
-    val PLL_NOT_LOCKED = out(Bool())
   }
 
   noIoPrefix()
@@ -65,12 +64,6 @@ class DdrTest(
   // Expose DDR physical interface
   dram.io.dram.toIo().setName("dram")
 
-  // Expose status signals
-  dram.io.pllLocked.toIo().setName("PLL_LOCKED")
-  dram.io.initDone.toIo().setName("INIT_DONE")
-  dram.io.initError.toIo().setName("INIT_ERROR")
-  io.PLL_NOT_LOCKED := !dram.io.pllLocked
-
   // SoC runs on user clock domain
   val cpuProfile = SpinyRv32iRustCpuProfile(withXilinxDebug = true) 
   val soc = dram.userClockDomain on new SpinySoC(
@@ -81,7 +74,7 @@ class DdrTest(
     val gpio = new SpinyGpio(
       Seq(
         SpinyGpioBankConfig(
-          width = 16,
+          width = 8,
           direction = SpinyGpioDirection.Output,
           name = "leds"
         )

@@ -5,12 +5,12 @@ description: DDR memory example
 filesets:
   nexys_a7_xdc:
     files:
-      - data/nexys_a7_100t.xdc
+      - data/nexys_a7_100t/nexys_a7_100t.xdc
     file_type: xdc
 
   nexys_video_xdc:
     files:
-      - data/nexys_video.xdc
+      - data/nexys_video/nexys_video.xdc
     file_type: xdc
 
   vivado_settings:
@@ -42,9 +42,7 @@ generate:
   litedram:
     generator: litedram
     parameters:
-      # extra copy in handy spot for inspection
-      # this copy is not used for build
-      verilog_output_path: "target/litedram/LiteDram.v"
+      verilog_output_path: "target/litedram/litedram.v"
 
   spinalhdl:
     generator: spinalhdl
@@ -68,11 +66,26 @@ targets:
     filesets: [nexys_a7_xdc, vivado_settings, dep]
     generate:
       - litedram:
-          config_file: data/Ddr2Ctrl.yaml
+          config_file: data/nexys_a7_100t/Ddr2Ctrl.yaml
+          verilog_output_path: "target/litedram/Ddr2Ctrl.v"
       - spinalhdl:
           args:
-            - "data/Ddr2Ctrl.yaml"
+            - "data/nexys_a7_100t/Ddr2Ctrl.yaml"
     toplevel: DdrTest
     flow: vivado
     flow_options:
       part: xc7a100t-csg324-1
+
+  nexys_video:
+    filesets: [nexys_video_xdc, vivado_settings, dep]
+    generate:
+      - litedram:
+          config_file: data/nexys_video/Ddr3Ctrl.yaml
+          verilog_output_path: "target/litedram/Ddr3Ctrl.v"
+      - spinalhdl:
+          args:
+            - "data/nexys_video/Ddr3Ctrl.yaml"
+    toplevel: DdrTest
+    flow: vivado
+    flow_options:
+      part: xc7a200t-sbg484-1
