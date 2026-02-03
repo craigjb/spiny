@@ -164,21 +164,24 @@ case class LiteDram(
           master(SdrDramIo(
             addressWidth = config.addressWidth,
             bankAddressWidth = config.bankAddressWidth,
-            dataWidth = config.ddrDataWidth
+            dataWidth = config.ddrDataWidth,
+            withChipSelects = config.withChipSelects
           ).setLiteDramNames())
         case DramMemType.Ddr2 =>
           master(Ddr2Io(
             addressWidth = config.addressWidth,
             bankAddressWidth = config.bankAddressWidth,
             dataWidth = config.ddrDataWidth,
-            numRanks = config.numRanks
+            numRanks = config.numRanks,
+            withChipSelects = config.withChipSelects
           ).setLiteDramNames())
         case DramMemType.Ddr3 =>
           master(Ddr3Io(
             addressWidth = config.addressWidth,
             bankAddressWidth = config.bankAddressWidth,
             dataWidth = config.ddrDataWidth,
-            numRanks = config.numRanks
+            numRanks = config.numRanks,
+            withChipSelects = config.withChipSelects
           ).setLiteDramNames())
         case DramMemType.Ddr4 =>
           master(Ddr4Io(
@@ -186,7 +189,8 @@ case class LiteDram(
             bankAddressWidth = config.bankAddressWidth,
             bankGroupWidth = 2,
             dataWidth = config.ddrDataWidth,
-            numRanks = config.numRanks
+            numRanks = config.numRanks,
+            withChipSelects = config.withChipSelects
           ).setLiteDramNames())
       }
     }
@@ -235,25 +239,28 @@ object LiteDram {
    */
   def createDramIo(config: LiteDramConfig): Bundle with IMasterSlave = {
     config.memType match {
-      case DramMemType.Sdr => 
+      case DramMemType.Sdr =>
         SdrDramIo(
           addressWidth = config.addressWidth,
           bankAddressWidth = config.bankAddressWidth,
-          dataWidth = config.ddrDataWidth
+          dataWidth = config.ddrDataWidth,
+          withChipSelects = config.withChipSelects
         )
       case DramMemType.Ddr2 =>
         Ddr2Io(
           addressWidth = config.addressWidth,
           bankAddressWidth = config.bankAddressWidth,
           dataWidth = config.ddrDataWidth,
-          numRanks = config.numRanks
+          numRanks = config.numRanks,
+          withChipSelects = config.withChipSelects
         )
       case DramMemType.Ddr3 =>
         Ddr3Io(
           addressWidth = config.addressWidth,
           bankAddressWidth = config.bankAddressWidth,
           dataWidth = config.ddrDataWidth,
-          numRanks = config.numRanks
+          numRanks = config.numRanks,
+          withChipSelects = config.withChipSelects
         )
       case DramMemType.Ddr4 =>
         Ddr4Io(
@@ -261,7 +268,8 @@ object LiteDram {
           bankAddressWidth = config.bankAddressWidth,
           bankGroupWidth = 2,
           dataWidth = config.ddrDataWidth,
-          numRanks = config.numRanks
+          numRanks = config.numRanks,
+          withChipSelects = config.withChipSelects
         )
     }
   }

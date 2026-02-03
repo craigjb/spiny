@@ -108,7 +108,8 @@ case class LiteDramConfig(
   numRanks: Int,
   geometry: DramGeometry,          // Always required (even for built-in modules)
   userClkFreq: HertzNumber,
-  userPorts: Map[String, UserPortConfig]
+  userPorts: Map[String, UserPortConfig],
+  withChipSelects: Boolean = true  // Some boards tie CS to ground
 ) {
 
   /**
@@ -181,6 +182,14 @@ object LiteDramConfig {
     }
   }
 
+  private def getOptBool(map: java.util.Map[String, Any], key: String, default: Boolean): Boolean = {
+    Option(map.get(key)) match {
+      case Some(b: java.lang.Boolean) => b.booleanValue()
+      case Some(x) => throw new IllegalArgumentException(s"Invalid type for $key: ${x.getClass}, expected boolean")
+      case None => default
+    }
+  }
+
   /**
    * Load configuration from YAML file.
    *
@@ -198,6 +207,7 @@ object LiteDramConfig {
     val numByteGroups = getInt(data, "num_byte_groups")
     val numRanks = getInt(data, "num_ranks")
     val userClkFreq = getDouble(data, "user_clk_freq") Hz
+    val withChipSelects = getOptBool(data, "with_chip_selects", default = true)
 
     // Parse geometry (always required)
     val geomMap = data.get("dram_geometry").asInstanceOf[java.util.Map[String, Any]]
@@ -223,7 +233,8 @@ object LiteDramConfig {
       numRanks = numRanks,
       geometry = geometry,
       userClkFreq = userClkFreq,
-      userPorts = userPorts
+      userPorts = userPorts,
+      withChipSelects = withChipSelects
     )
   }
 }

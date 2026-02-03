@@ -40,20 +40,22 @@ import spinal.lib._
 case class SdrDramIo(
   addressWidth: Int,
   bankAddressWidth: Int,
-  dataWidth: Int
+  dataWidth: Int,
+  withChipSelects: Boolean = true
 ) extends Bundle with IMasterSlave {
   val a = Bits(addressWidth bits).setCompositeName(this, "a")
   val ba = Bits(bankAddressWidth bits).setCompositeName(this, "ba")
   val rasN = Bool().setCompositeName(this, "rasN")
   val casN = Bool().setCompositeName(this, "casN")
   val weN = Bool().setCompositeName(this, "weN")
-  val csN = Bool().setCompositeName(this, "csN")
+  val csN = withChipSelects generate Bool().setCompositeName(this, "csN")
   val dm = Bits(dataWidth / 8 bits).setCompositeName(this, "dm")
   val dq = inout(Analog(Bits(dataWidth bits))).setCompositeName(this, "dq")
   val cke = Bool().setCompositeName(this, "cke")
 
   override def asMaster(): Unit = {
-    out(a, ba, rasN, casN, weN, csN, dm, cke)
+    out(a, ba, rasN, casN, weN, dm, cke)
+    if (withChipSelects) out(csN)
   }
 
   /**
@@ -65,7 +67,7 @@ case class SdrDramIo(
     rasN.setName("sdram_ras_n")
     casN.setName("sdram_cas_n")
     weN.setName("sdram_we_n")
-    csN.setName("sdram_cs_n")
+    if (withChipSelects) csN.setName("sdram_cs_n")
     dm.setName("sdram_dm")
     dq.setName("sdram_dq")
     cke.setName("sdram_cke")
@@ -80,14 +82,15 @@ case class Ddr2Io(
   addressWidth: Int,
   bankAddressWidth: Int,
   dataWidth: Int,
-  numRanks: Int
+  numRanks: Int,
+  withChipSelects: Boolean = true
 ) extends Bundle with IMasterSlave {
   val a = Bits(addressWidth bits).setCompositeName(this, "a")
   val ba = Bits(bankAddressWidth bits).setCompositeName(this, "ba")
   val rasN = Bool().setCompositeName(this, "rasN")
   val casN = Bool().setCompositeName(this, "casN")
   val weN = Bool().setCompositeName(this, "weN")
-  val csN = Bits(numRanks bits).setCompositeName(this, "csN")
+  val csN = withChipSelects generate Bits(numRanks bits).setCompositeName(this, "csN")
   val dm = Bits(dataWidth / 8 bits).setCompositeName(this, "dm")
   val dq = inout(Analog(Bits(dataWidth bits))).setCompositeName(this, "dq")
   val dqsP = inout(Analog(Bits(dataWidth / 8 bits))).setCompositeName(this, "dqsP")
@@ -98,7 +101,8 @@ case class Ddr2Io(
   val odt = Bits(numRanks bits).setCompositeName(this, "odt")
 
   override def asMaster(): Unit = {
-    out(a, ba, rasN, casN, weN, csN, dm, clkP, clkN, cke, odt)
+    out(a, ba, rasN, casN, weN, dm, clkP, clkN, cke, odt)
+    if (withChipSelects) out(csN)
   }
 
   /**
@@ -110,7 +114,7 @@ case class Ddr2Io(
     rasN.setName("ddram_ras_n")
     casN.setName("ddram_cas_n")
     weN.setName("ddram_we_n")
-    csN.setName("ddram_cs_n")
+    if (withChipSelects) csN.setName("ddram_cs_n")
     dm.setName("ddram_dm")
     dq.setName("ddram_dq")
     dqsP.setName("ddram_dqs_p")
@@ -130,14 +134,15 @@ case class Ddr3Io(
   addressWidth: Int,
   bankAddressWidth: Int,
   dataWidth: Int,
-  numRanks: Int
+  numRanks: Int,
+  withChipSelects: Boolean = true
 ) extends Bundle with IMasterSlave {
   val a = Bits(addressWidth bits).setCompositeName(this, "a")
   val ba = Bits(bankAddressWidth bits).setCompositeName(this, "ba")
   val rasN = Bool().setCompositeName(this, "rasN")
   val casN = Bool().setCompositeName(this, "casN")
   val weN = Bool().setCompositeName(this, "weN")
-  val csN = Bits(numRanks bits).setCompositeName(this, "csN")
+  val csN = withChipSelects generate Bits(numRanks bits).setCompositeName(this, "csN")
   val dm = Bits(dataWidth / 8 bits).setCompositeName(this, "dm")
   val dq = inout(Analog(Bits(dataWidth bits))).setCompositeName(this, "dq")
   val dqsP = inout(Analog(Bits(dataWidth / 8 bits))).setCompositeName(this, "dqsP")
@@ -149,7 +154,8 @@ case class Ddr3Io(
   val resetN = Bool().setCompositeName(this, "resetN")
 
   override def asMaster(): Unit = {
-    out(a, ba, rasN, casN, weN, csN, dm, clkP, clkN, cke, odt, resetN)
+    out(a, ba, rasN, casN, weN, dm, clkP, clkN, cke, odt, resetN)
+    if (withChipSelects) out(csN)
   }
 
   /**
@@ -161,7 +167,7 @@ case class Ddr3Io(
     rasN.setName("ddram_ras_n")
     casN.setName("ddram_cas_n")
     weN.setName("ddram_we_n")
-    csN.setName("ddram_cs_n")
+    if (withChipSelects) csN.setName("ddram_cs_n")
     dm.setName("ddram_dm")
     dq.setName("ddram_dq")
     dqsP.setName("ddram_dqs_p")
@@ -183,7 +189,8 @@ case class Ddr4Io(
   bankAddressWidth: Int,
   bankGroupWidth: Int,
   dataWidth: Int,
-  numRanks: Int
+  numRanks: Int,
+  withChipSelects: Boolean = true
 ) extends Bundle with IMasterSlave {
   val a = Bits(addressWidth bits).setCompositeName(this, "a")
   val ba = Bits(bankAddressWidth bits).setCompositeName(this, "ba")
@@ -191,7 +198,7 @@ case class Ddr4Io(
   val rasN = Bool().setCompositeName(this, "rasN")
   val casN = Bool().setCompositeName(this, "casN")
   val weN = Bool().setCompositeName(this, "weN")
-  val csN = Bits(numRanks bits).setCompositeName(this, "csN")
+  val csN = withChipSelects generate Bits(numRanks bits).setCompositeName(this, "csN")
   val actN = Bool().setCompositeName(this, "actN")
   val dm = Bits(dataWidth / 8 bits).setCompositeName(this, "dm")
   val dq = inout(Analog(Bits(dataWidth bits))).setCompositeName(this, "dq")
@@ -204,7 +211,8 @@ case class Ddr4Io(
   val resetN = Bool().setCompositeName(this, "resetN")
 
   override def asMaster(): Unit = {
-    out(a, ba, bg, rasN, casN, weN, csN, actN, dm, clkP, clkN, cke, odt, resetN)
+    out(a, ba, bg, rasN, casN, weN, actN, dm, clkP, clkN, cke, odt, resetN)
+    if (withChipSelects) out(csN)
   }
 
   /**
@@ -217,7 +225,7 @@ case class Ddr4Io(
     rasN.setName("ddram_ras_n")
     casN.setName("ddram_cas_n")
     weN.setName("ddram_we_n")
-    csN.setName("ddram_cs_n")
+    if (withChipSelects) csN.setName("ddram_cs_n")
     actN.setName("ddram_act_n")
     dm.setName("ddram_dm")
     dq.setName("ddram_dq")

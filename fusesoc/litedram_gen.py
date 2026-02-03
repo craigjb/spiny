@@ -125,6 +125,14 @@ def validate_tuple_cycles_time(input, param_name, container_name):
         return None
 
 
+def validate_opt_bool(input, param_name, container_name, default):
+    value = input.get(param_name, default)
+    if not isinstance(value, bool):
+        print(f"ERROR: `{param_name}` must be a boolean (yes/no, true/false)")
+        return None
+    return value
+
+
 def validate_geometry(geom_def):
     nbanks = validate_int(geom_def, "num_banks", "geometry")
     nrows = validate_int(geom_def, "num_rows", "geometry")
@@ -231,6 +239,10 @@ def translate_config(config):
     rtt_nom = config.get("rtt_nom", None)
     rtt_wr = config.get("rtt_wr", None)
     ron = config.get("ron", None)
+
+    # optional IO config
+    with_chip_selects = validate_opt_bool(
+        config, "with_chip_selects", ctn_name, default=True)
     
     # frequency
     input_clk_freq = validate_float(config, "input_clk_freq", ctn_name)
