@@ -37,6 +37,8 @@ import spinal.lib.bus.amba3.apb._
 import spinal.lib.bus.simple._
 
 import spiny.peripheral.SpinyPeripheral
+import spiny.svd.SpinySvd
+import spinal.lib.bus.misc.SizeMapping
 
 /**
  * SpinyDram - Wrapper around LiteDram BlackBox
@@ -48,7 +50,8 @@ import spiny.peripheral.SpinyPeripheral
 case class SpinyDram(
     config: LiteDramConfig,
     sim: Boolean = false,
-    ctrlAddressWidth: Int = 16
+    ctrlAddressWidth: Int = 16,
+    svdPath: Option[String] = None
 ) extends Component with SpinyPeripheral {
 
   val apb3Config = Apb3Config(
@@ -145,6 +148,16 @@ case class SpinyDram(
    * Use this for logic that interfaces with the DRAM controller.
    */
   def userClockDomain: ClockDomain = liteDram.userClockDomain
+
+  override def svdPeripherals(sizeMapping: SizeMapping): Seq[scala.xml.Elem] = {
+    svdPath match {
+      case Some(path) =>
+        SpinySvd.parseAndRebasePeripherals(path, sizeMapping.base)
+      case None =>
+        // Default: empty peripheral (no peripheralBusIf)
+        super.svdPeripherals(sizeMapping)
+    }
+  }
 
   /**
    * Type-safe accessor for a native port by name.
