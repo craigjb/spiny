@@ -364,7 +364,9 @@ class LiteDramGen(Generator):
             command.append("--sim")
 
         if svd_output_path is not None:
-            command.extend(["--soc-svd", svd_output_path])
+            svd_path = Path(self.files_root) / svd_output_path
+            svd_path.parent.mkdir(parents=True, exist_ok=True)
+            command.extend(["--soc-svd", svd_path])
 
         log_file = output_dir / "litedram_gen.log"
         output_dir.mkdir(parents=True, exist_ok=True)
