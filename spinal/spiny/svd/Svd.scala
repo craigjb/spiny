@@ -32,7 +32,7 @@
 package spiny.svd
 
 import java.io.PrintWriter
-import scala.xml._
+import scala.xml.{Elem, PrettyPrinter, XML}
 
 import spinal.core._
 import spinal.lib.bus.regif._
@@ -71,7 +71,7 @@ object SpinySvd {
     <device schemaVersion="1.0" xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" xs:noNamespaceSchemaLocation="CMSIS-SVD_Schema_1_0.xsd">
       <name>{ name }</name>
       <peripherals>
-        {peripheralMappings.map { case (p, sm) => peripheralXml(p, sm) } }
+        {peripheralMappings.flatMap { case (p, sm) => p.svdPeripherals(sm) } }
       </peripherals>
     </device>
   } 
@@ -192,6 +192,40 @@ object SpinySvd {
       case RC | WRC | WSRC | W1SRC | W0SRC => "clear"
       case _ =>
         throw new Exception(f"Unknown access type for SVD: $accessType")
+    }
+  }
+
+  /** Parse an external SVD file and rebase peripheral addresses.
+   *
+   *  Loads the SVD file, extracts all peripheral elements, and adjusts
+   *  their baseAddress by adding the given offset.
+   *
+   *  @param svdPath Path to the external SVD file
+   *  @param baseOffset Offset to add to each peripheral's baseAddress
+   *  @return Sequence of peripheral XML elements with rebased addresses
+   */
+  def parseAndRebasePeripherals(
+    svdPath: String,
+    baseOffset: BigInt
+  ): Seq[Elem] = {
+    val svd = XML.loadFile(svdPath)
+    val peripherals = svd \ "peripherals" \ "peripheral"
+
+    peripherals.collect { case peripheral: Elem =>
+      val origBase = BigInt(
+        (peripheral \ "baseAddress").text.stripPrefix("0x"),
+        16
+      )
+      val newBase = origBase + baseOffset
+
+      // Replace baseAddress element with rebased value
+      val updatedChildren = peripheral.child.map {
+        case e: Elem if e.label == "baseAddress" =>
+          <baseAddress>{ f"0x${newBase}%08x" }</baseAddress>
+        case other => other
+      }
+
+      peripheral.copy(child = updatedChildren)
     }
   }
 }

@@ -37,6 +37,8 @@ import spinal.lib.bus.amba3.apb._
 import spinal.lib.bus.misc.SizeMapping
 import spinal.lib.bus.regif._
 
+import spiny.svd.SpinySvd
+
 trait SpinyPeripheral {
   var peripheralBus: Apb3 = null
   var peripheralBusIf: Apb3BusInterface = null
@@ -84,4 +86,13 @@ trait SpinyPeripheral {
    *  Used for UserInterruptPlugin and code generation
    */
   def interruptName: String = getName() + "Int"
+
+  /** Override to customize SVD generation for this peripheral.
+   *
+   *  Default returns a single peripheral XML element using SpinySvd.peripheralXml.
+   *  Override to return multiple peripherals (e.g., from an external SVD file).
+   */
+  def svdPeripherals(sizeMapping: SizeMapping): Seq[scala.xml.Elem] = {
+    Seq(SpinySvd.peripheralXml(this, sizeMapping))
+  }
 }
