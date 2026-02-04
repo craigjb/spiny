@@ -337,6 +337,7 @@ class LiteDramGen(Generator):
 
         sim = self.config.get("sim", False)
         verilog_output_path = self.config.get("verilog_output_path", None)
+        svd_output_path = self.config.get("svd_output_path", None)
 
         in_config_path = Path(self.files_root) / config_file
         in_config = yaml.safe_load(in_config_path.read_text())
@@ -361,6 +362,9 @@ class LiteDramGen(Generator):
 
         if sim:
             command.append("--sim")
+
+        if svd_output_path is not None:
+            command.extend(["--soc-svd", svd_output_path])
 
         log_file = output_dir / "litedram_gen.log"
         output_dir.mkdir(parents=True, exist_ok=True)
