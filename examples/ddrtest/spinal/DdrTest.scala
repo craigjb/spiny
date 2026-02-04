@@ -41,6 +41,7 @@ import spiny.dram._
 
 class DdrTest(
   dramConfigPath: String,
+  dramSvdPath: String = null,
   firmwarePath: String = null
 ) extends Component {
   val io = new Bundle {
@@ -57,9 +58,12 @@ class DdrTest(
     config = ClockDomainConfig(resetActiveLevel = HIGH)
   )
 
-  // Instantiate SpinyDram in input clock domain 
+  // Instantiate SpinyDram in input clock domain
   val dramConfig = LiteDramConfig.fromYaml(dramConfigPath)
-  val dram = inputClkDomain on SpinyDram(dramConfig).setName("Dram")
+  val dram = inputClkDomain on SpinyDram(
+    dramConfig,
+    svdPath = Option(dramSvdPath)
+  ).setName("Dram")
 
   // Expose DDR physical interface
   dram.io.dram.toIo().setName("dram")
@@ -100,15 +104,22 @@ class DdrTest(
 
 object TopLevelVerilog extends App {
   if (args.length < 1) {
-    println("[DdrTest] usage: <dramConfigPath> [firmwarePath]")
+    println("[DdrTest] usage: <dramConfigPath> [dramSvdPath] [firmwarePath]")
     throw new Exception("Missing dramConfigPath")
   }
   val dramConfigPath = args(0)
   println(f"[DdrTest] using DRAM config: ${dramConfigPath}")
 
-  val firmwarePath = if (args.length >= 2) {
-    println(f"[DdrTest] using firmware: ${args(1)}")
+  val dramSvdPath = if (args.length >= 2) {
+    println(f"[DdrTest] using DRAM SVD: ${args(1)}")
     args(1)
+  } else {
+    null
+  }
+
+  val firmwarePath = if (args.length >= 3) {
+    println(f"[DdrTest] using firmware: ${args(2)}")
+    args(2)
   } else {
     null
   }
@@ -118,6 +129,7 @@ object TopLevelVerilog extends App {
     inlineRom = true
   ).generateVerilog(new DdrTest(
     dramConfigPath = dramConfigPath,
+    dramSvdPath = dramSvdPath,
     firmwarePath = firmwarePath
   ))
 

@@ -44,6 +44,23 @@ generate:
     parameters:
       verilog_output_path: "target/litedram/litedram.v"
 
+  svd:
+    generator: spinalhdl
+    parameters:
+      sbt_dir: "../../"
+      main: spiny.examples.ddrtest.TopLevelVerilog
+      project: ddrtest
+
+  rustpac:
+    generator: rustpac
+    parameters:
+      crate_name: ddrtest-pac
+      crate_version: 0.1.0
+      output_path: "target/rust/ddrtest-pac"
+      svd_path: "target/spinal/DdrTest.svd"
+      linker_script_path: "target/spinal/memory.x"
+
+
   spinalhdl:
     generator: spinalhdl
     parameters:
@@ -68,9 +85,11 @@ targets:
       - litedram:
           config_file: data/nexys_a7_100t/Ddr2Ctrl.yaml
           verilog_output_path: "target/litedram/Ddr2Ctrl.v"
+          svd_output_path: "target/litedram/Ddr2Ctrl.svd"
       - spinalhdl:
           args:
             - "data/nexys_a7_100t/Ddr2Ctrl.yaml"
+            - "target/litedram/Ddr2Ctrl.svd"
     toplevel: DdrTest
     flow: vivado
     flow_options:
@@ -82,9 +101,16 @@ targets:
       - litedram:
           config_file: data/nexys_video/Ddr3Ctrl.yaml
           verilog_output_path: "target/litedram/Ddr3Ctrl.v"
+          svd_output_path: "target/litedram/Ddr3Ctrl.svd"
+      - svd:
+          args:
+            - "data/nexys_video/Ddr3Ctrl.yaml"
+            - "target/litedram/Ddr3Ctrl.svd"
+      - rustpac
       - spinalhdl:
           args:
             - "data/nexys_video/Ddr3Ctrl.yaml"
+            - "target/litedram/Ddr3Ctrl.svd"
     toplevel: DdrTest
     flow: vivado
     flow_options:
