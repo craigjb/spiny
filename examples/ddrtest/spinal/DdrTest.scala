@@ -92,7 +92,7 @@ class DdrTest(
     build(
       peripherals = Seq(gpio, dram),
       mainBusSlaves = Seq(
-        (SizeMapping(0x20000000, 128 MiB), dramBus)
+        (SizeMapping(0x20000000, dram.ramSize), dramBus)
       )
     )
   }

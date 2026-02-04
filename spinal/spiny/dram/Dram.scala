@@ -131,6 +131,16 @@ case class SpinyDram(
   }
 
   /**
+   * Total RAM size in bytes, based on DRAM geometry and byte groups.
+   */
+  def ramSize: BigInt = {
+    BigInt(config.geometry.numBanks) *
+      config.geometry.numRows *
+      config.geometry.numCols *
+      config.numByteGroups
+  }
+
+  /**
    * User clock domain from LiteDram.
    * Use this for logic that interfaces with the DRAM controller.
    */
