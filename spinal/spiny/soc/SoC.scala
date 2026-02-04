@@ -108,8 +108,6 @@ class SpinySoC(
     assert(!AddressMapping.verifyOverlapping(mainBusMappings),
       "Overlapping address mappings found on main bus")
 
-    println(mainBusMappings)
-
     val decoder = PipelinedMemoryBusDecoder(
       busConfig = cpuProfile.busConfig,
       mappings = mainBusMappings
