@@ -11,6 +11,8 @@ nexys_video = []
 riscv = { version = "0.16.0", features = ["critical-section-single-hart"] }
 riscv-rt = { version = "0.17.0", features = ["single-hart"] }
 panic-halt = "1.0.0"
+defmt = "1.0"
+defmt-rtt = { version = "0.4", features = ["disable-blocking-mode"] }
 ddrtest-pac = { path = "../target/rust/ddrtest-pac", features = ["rt", "critical-section"] }
 
 [profile.release]
