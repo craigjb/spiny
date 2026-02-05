@@ -83,7 +83,7 @@ class SpinySoC(
 
     // create CPU with interrupt descriptors
     cpu = SpinyCpu(cpuProfile, interrupts, withMachineTimer).setName("Cpu")
-    cpu.io.iBus <> ram.io.iBus
+    cpu.io.iBus >> ram.io.iBus
 
     // connect peripheral interrupts to CPU
     peripheralsWithInterrupts.zipWithIndex.foreach { case (peripheral, idx) =>

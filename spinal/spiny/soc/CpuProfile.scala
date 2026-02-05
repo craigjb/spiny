@@ -65,7 +65,7 @@ abstract class SpinyRvRustCpuProfile(
   val iBusPlugin = new IBusSimplePlugin(
     resetVector = resetVector,
     compressedGen = withCompressed,
-    cmdForkOnSecondStage = false,
+    cmdForkOnSecondStage = true,
     // required for AXI
     cmdForkPersistence = true,
   )

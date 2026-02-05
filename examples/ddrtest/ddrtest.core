@@ -60,6 +60,10 @@ generate:
       svd_path: "target/spinal/DdrTest.svd"
       linker_script_path: "target/spinal/memory.x"
 
+  firmware:
+    generator: cargo
+    parameters:
+      project_dir: "fw"
 
   spinalhdl:
     generator: spinalhdl
@@ -86,10 +90,26 @@ targets:
           config_file: data/nexys_a7_100t/Ddr2Ctrl.yaml
           verilog_output_path: "target/litedram/Ddr2Ctrl.v"
           svd_output_path: "target/litedram/Ddr2Ctrl.svd"
+      - svd:
+          args:
+            - "data/nexys_a7_100t/Ddr2Ctrl.yaml"
+            - "target/litedram/Ddr2Ctrl.svd"
+      - rustpac
+      - firmware:
+          args:
+            - "objcopy"
+            - "--release"
+            - "--features"
+            - "nexys_a7_100t"
+            - "--"
+            - "-O"
+            - "binary"
+            - "target/release/ddrtest-fw.bin"
       - spinalhdl:
           args:
             - "data/nexys_a7_100t/Ddr2Ctrl.yaml"
             - "target/litedram/Ddr2Ctrl.svd"
+            - "fw/target/release/ddrtest-fw.bin"
     toplevel: DdrTest
     flow: vivado
     flow_options:
@@ -107,10 +127,21 @@ targets:
             - "data/nexys_video/Ddr3Ctrl.yaml"
             - "target/litedram/Ddr3Ctrl.svd"
       - rustpac
+      - firmware:
+          args:
+            - "objcopy"
+            - "--release"
+            - "--features"
+            - "nexys_video"
+            - "--"
+            - "-O"
+            - "binary"
+            - "target/release/ddrtest-fw.bin"
       - spinalhdl:
           args:
             - "data/nexys_video/Ddr3Ctrl.yaml"
             - "target/litedram/Ddr3Ctrl.svd"
+            - "fw/target/release/ddrtest-fw.bin"
     toplevel: DdrTest
     flow: vivado
     flow_options:
