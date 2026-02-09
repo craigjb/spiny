@@ -72,7 +72,7 @@ class DdrTest(
   val cpuProfile = SpinyRv32iRustCpuProfile(withXilinxDebug = true) 
   val soc = dram.userClockDomain on new SpinySoC(
     cpuProfile = cpuProfile,
-    ramSize = 4 kB,
+    ramSize = 16 kB,
     firmwarePath = firmwarePath
   ) {
     val gpio = new SpinyGpio(
