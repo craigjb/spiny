@@ -107,7 +107,7 @@ abstract class SpinyRvRustCpuProfile(
         catchIllegalInstruction = true
       ),
       new RegFilePlugin(
-        regFileReadyKind = plugin.SYNC,
+        regFileReadyKind = plugin.ASYNC,
       ),
       new IntAluPlugin,
       new SrcPlugin(
