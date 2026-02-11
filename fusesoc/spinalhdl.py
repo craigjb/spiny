@@ -65,7 +65,7 @@ class SpinalHdlGen(Generator):
             project_prefix = ""
 
         working_dir = Path(self.files_root) / Path(sbt_dir)
-        command = ["sbtn", f"{project_prefix}runMain", main]
+        command = ["sbt", "--client", f"{project_prefix}runMain", main]
         if args:
             command += args
 
@@ -75,7 +75,7 @@ class SpinalHdlGen(Generator):
             print("ERROR: SpinalHDL generation failed")
             sys.exit(1)
         except FileNotFoundError:
-            print("ERROR: 'sbtn' command not found. Is sbt installed?")
+            print("ERROR: 'sbt' command not found. Is sbt installed?")
             sys.exit(1)
 
         if output_path:
