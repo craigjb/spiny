@@ -1,5 +1,5 @@
 CAPI=2:
-name: craigjb:spiny:ddrtest:0.1.0
+name: craigjb:spiny:ddrtest:0
 description: DDR memory example
 
 filesets:

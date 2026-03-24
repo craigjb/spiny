@@ -27,10 +27,10 @@ git clone https://github.com/craigjb/spiny.git
 cd spiny
 
 # Build firmware and simulate example. Run from spiny's root directory.
-fusesoc run --target=sim craigjb:spiny:blinky:0.1.0
+fusesoc run --target=sim blinky
 
 # Build example for FPGA (Digilent Nexys A7-100T board)
-fusesoc run --build --target=nexys_a7_100t craigjb:spiny:blinky:0.1.0
+fusesoc run --build --target=nexys_a7_100t blinky
 ```
 
 See [examples/blinky](examples/blinky) for detailed build instructions and expected behavior.
