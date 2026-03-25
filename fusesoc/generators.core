@@ -60,6 +60,22 @@ generators:
         project_dir: Path to Rust project folder (with Cargo.toml)
         args: List of arguments to cargo
 
+  spinyhal:
+    interpreter: python3
+    command: spinyhal.py
+    description: Generate Rust HAL crate from Spiny's JSON output
+    usage: |
+      Reads HAL JSON emitted by Spiny and generates a Rust HAL crate
+      with spiny-hal macro invocations.
+
+      Parameters:
+        crate_name: Output HAL crate name
+        output_path: Path to create output crate at
+        json_path: Path to input HAL JSON file
+        pac_crate_name: PAC crate name (with hyphens)
+        pac_crate_path: Relative path from output crate to PAC crate
+        spiny_hal_path: Relative path from output crate to spiny-hal crate
+
   litedram:
     interpreter: python3
     command: litedram_gen.py
