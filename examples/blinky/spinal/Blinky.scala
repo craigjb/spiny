@@ -64,7 +64,7 @@ class Blinky(
 
   val soc = sysClkDomain on new SpinySoC(
     cpuProfile = SpinyRv32iRustCpuProfile(),
-    ramSize = 4 kB,
+    ramSize = 8 kB,
     firmwarePath = firmwarePath
   ) {
     val timer = new SpinyTimer(

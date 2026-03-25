@@ -24,10 +24,27 @@ async fn main(_spawner: Spawner) {
     let peripherals = init();
     let gpio = &peripherals.gpio;
 
-    let mut led: u8 = 0x80;
+    let mut led_mask: u8 = 0x80;
     loop {
-        gpio.write().write(|w| unsafe { w.value().bits(led) });
         Timer::after_millis(200).await;
-        led = if led == 1 { 0x80 } else { led >> 1 };
+
+        let switches = gpio.read().read().value().bits();
+
+        // Rotate mask downward, wrapping from bit 0 back to bit 7
+        led_mask = led_mask.rotate_right(1);
+
+        // Find next enabled switch from current position
+        let mut i = 0u8;
+        while i < 8 {
+            if switches & led_mask != 0 {
+                break;
+            }
+            led_mask = led_mask.rotate_right(1);
+            i += 1;
+        }
+
+        // If no switches on, display nothing; otherwise light the LED
+        let output = if i >= 8 { 0 } else { led_mask };
+        gpio.write().write(|w| unsafe { w.value().bits(output) });
     }
 }
