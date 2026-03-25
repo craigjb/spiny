@@ -1,0 +1,10 @@
+[package]
+name = "spiny-hal"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+embassy-time-driver = "0.2"
+embassy-time-queue-utils = "0.3"
+critical-section = "1.2"
+riscv = "0.16"
