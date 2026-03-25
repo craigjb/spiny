@@ -63,7 +63,7 @@ generate:
   firmware:
     generator: cargo
     parameters:
-      project_dir: "fw"
+      project_dir: "rust"
 
   spinalhdl:
     generator: spinalhdl
@@ -109,7 +109,7 @@ targets:
           args:
             - "data/nexys_a7_100t/Ddr2Ctrl.yaml"
             - "target/litedram/Ddr2Ctrl.svd"
-            - "fw/target/release/ddrtest-fw.bin"
+            - "rust/target/release/ddrtest-fw.bin"
     toplevel: DdrTest
     flow: vivado
     flow_options:
@@ -141,7 +141,7 @@ targets:
           args:
             - "data/nexys_video/Ddr3Ctrl.yaml"
             - "target/litedram/Ddr3Ctrl.svd"
-            - "fw/target/release/ddrtest-fw.bin"
+            - "rust/target/release/ddrtest-fw.bin"
     toplevel: DdrTest
     flow: vivado
     flow_options:

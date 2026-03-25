@@ -241,7 +241,7 @@ generate:
   firmware:
     generator: cargo
     parameters:
-      project_dir: "fw" # Directory containing Cargo.toml
+      project_dir: "rust" # Directory containing Cargo.toml
       args:
         - "objcopy"
         - "--release"
@@ -318,7 +318,7 @@ spiny/
 ├── examples/
 │   └── blinky/          # Example SoC with firmware
 │       ├── spinal/      # Hardware description
-│       ├── fw/          # Rust firmware
+│       ├── rust/        # Rust firmware
 │       └── data/        # Constraints and settings
 ├── generators/          # FuseSoC generator scripts
 └── build.sbt           # Scala build configuration

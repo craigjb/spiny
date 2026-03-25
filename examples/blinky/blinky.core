@@ -57,7 +57,7 @@ generate:
   firmware:
     generator: cargo
     parameters:
-      project_dir: "fw"
+      project_dir: "rust"
       args:
         - "objcopy"
         - "--release"
@@ -99,7 +99,7 @@ targets:
             args:
               - "16"
               - "16"
-              - "fw/target/release/blinky.bin"
+              - "rust/target/release/blinky.bin"
     toplevel: Blinky
     flow: generic # dummy flow
     flow_options: # only lint, sim is done with SpinalHDL
@@ -122,7 +122,7 @@ targets:
           args:
             - "16"
             - "16"
-            - "fw/target/release/blinky.bin"
+            - "rust/target/release/blinky.bin"
     toplevel: Blinky
     flow: vivado
     flow_options:
@@ -142,7 +142,7 @@ targets:
           args:
             - "8"
             - "8"
-            - "fw/target/release/blinky.bin"
+            - "rust/target/release/blinky.bin"
     toplevel: Blinky
     flow: vivado
     flow_options:
