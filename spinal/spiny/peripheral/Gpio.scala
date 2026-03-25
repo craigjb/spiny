@@ -187,4 +187,22 @@ class SpinyGpio(
   }
 
   checkPeripheralMapping()
+
+  override def halDescription = {
+    val banks = bankConfigs.map { bankConf =>
+      scala.collection.mutable.LinkedHashMap[String, Any](
+        "name" -> bankConf.name,
+        "width" -> bankConf.width,
+        "direction" -> (bankConf.direction match {
+          case SpinyGpioDirection.Input => "input"
+          case SpinyGpioDirection.Output => "output"
+          case SpinyGpioDirection.InOut => "inout"
+        }),
+      )
+    }
+    scala.collection.mutable.LinkedHashMap[String, Any](
+      "type" -> "SpinyGpio",
+      "banks" -> banks,
+    )
+  }
 }

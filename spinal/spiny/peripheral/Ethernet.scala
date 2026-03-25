@@ -189,6 +189,14 @@ class SpinyEthernet(
 
   checkPeripheralMapping()
 
+  override def halDescription = {
+    scala.collection.mutable.LinkedHashMap[String, Any](
+      "type" -> "SpinyEthernet",
+      "rx_buffer_size" -> rxBufferSize,
+      "tx_buffer_size" -> txBufferSize,
+    )
+  }
+
   /** RMII clock output using ODDR primitive
    *
    *  Xilinx only

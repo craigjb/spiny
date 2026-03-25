@@ -95,4 +95,14 @@ trait SpinyPeripheral {
   def svdPeripherals(sizeMapping: SizeMapping): Seq[scala.xml.Elem] = {
     Seq(SpinySvd.peripheralXml(this, sizeMapping))
   }
+
+  /** Override to provide HAL generation metadata for this peripheral.
+   *
+   *  Return a LinkedHashMap of key-value pairs describing the peripheral's
+   *  configuration. Used by dumpHalJson to generate the HAL crate.
+   *  Default returns an empty map (peripheral will be skipped in HAL generation).
+   */
+  def halDescription: scala.collection.mutable.LinkedHashMap[String, Any] = {
+    scala.collection.mutable.LinkedHashMap[String, Any]()
+  }
 }

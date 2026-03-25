@@ -67,6 +67,8 @@ class SpinyTimer(
   assert(timerWidth <= 32, "timerWidth must be <= 32")
   assert(prescaleWidth <= 32, "prescaleWidth must be <= 32")
   assert(simSpeedUp > 0, "simSpeedUp must be > 0")
+  assert(!isMachineTimer || numCompares >= 2,
+    "Machine timer requires numCompares >= 2 (compare0 for half-period, compare1 for alarm)")
 
   val apb3Config = Apb3Config(
     addressWidth = addressWidth,
@@ -218,4 +220,14 @@ class SpinyTimer(
 
   override def machineTimerInterrupt: Option[Bool] =
     if (isMachineTimer) Some(io.interrupt) else None
+
+  override def halDescription = {
+    scala.collection.mutable.LinkedHashMap[String, Any](
+      "type" -> "SpinyTimer",
+      "timer_width" -> timerWidth,
+      "prescale_width" -> prescaleWidth,
+      "num_compares" -> numCompares,
+      "is_machine_timer" -> isMachineTimer,
+    )
+  }
 }

@@ -134,6 +134,54 @@ class SpinySoC(
     SpinySvd.dump(path, name, peripheralMappings)
   }
 
+  def dumpHalJson(path: String, name: String, sysClkFreqHz: Long) = {
+    val peripheralEntries = peripheralMappings.flatMap { case (p, sm) =>
+      val desc = p.halDescription
+      if (desc.isEmpty) None
+      else {
+        desc("name") = p.getName()
+        desc("base_address") = f"0x${sm.base}%x"
+        Some(desc)
+      }
+    }
+
+    def toJson(value: Any, indent: Int = 2): String = {
+      val pad = " " * indent
+      val innerPad = " " * (indent + 2)
+      value match {
+        case m: scala.collection.mutable.LinkedHashMap[_, _] =>
+          val entries = m.map { case (k, v) =>
+            f"""${innerPad}"${k}": ${toJson(v, indent + 2)}"""
+          }.mkString(",\n")
+          f"{\n${entries}\n${pad}}"
+        case s: Seq[_] =>
+          val entries = s.map(v => f"${innerPad}${toJson(v, indent + 2)}")
+            .mkString(",\n")
+          f"[\n${entries}\n${pad}]"
+        case s: String => f""""${s}""""
+        case b: Boolean => b.toString
+        case n: Number => n.toString
+        case other => f""""${other}""""
+      }
+    }
+
+    val soc = scala.collection.mutable.LinkedHashMap[String, Any](
+      "name" -> name,
+      "sys_clk_freq_hz" -> sysClkFreqHz
+    )
+    val root = scala.collection.mutable.LinkedHashMap[String, Any](
+      "soc" -> soc,
+      "peripherals" -> peripheralEntries
+    )
+
+    val json = toJson(root, 0)
+    val pw = new PrintWriter(path)
+    pw.write(json)
+    pw.write("\n")
+    pw.close()
+    SpinalInfo(s"HAL JSON dumped to: ${path}")
+  }
+
   def dumpLinkerScript(path: String) = {
     val linkerScript = 
       f"""|MEMORY
