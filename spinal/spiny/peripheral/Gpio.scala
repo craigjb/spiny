@@ -104,6 +104,7 @@ class SpinyGpio(
       case SpinyGpioDirection.Input => {
         val port = io.banks(bankConf.name).asInstanceOf[Bits]
         val read = busIf.newReg(s"Bank ${port.name} read")
+          .setName(s"${port.name}_read")
         val value = read.field(
           Bits(bankConf.width bits),
           AccessType.RO,
@@ -114,6 +115,7 @@ class SpinyGpio(
       case SpinyGpioDirection.Output => {
         val port = io.banks(bankConf.name).asInstanceOf[Bits]
         val write = busIf.newReg(s"Bank ${port.name} write")
+          .setName(s"${port.name}_write")
         val value = write.field(
           Bits(bankConf.width bits),
           AccessType.RW,
@@ -125,6 +127,7 @@ class SpinyGpio(
         val port = io.banks(bankConf.name).asInstanceOf[TriStateArray]
 
         val read = busIf.newReg(s"Bank ${port.name} read")
+          .setName(s"${port.name}_read")
         val readValue = read.field(
           Bits(bankConf.width bits),
           AccessType.RO,
@@ -133,6 +136,7 @@ class SpinyGpio(
         readValue := port.read
 
         val dir = busIf.newReg(s"Bank ${port.name} direction")
+          .setName(s"${port.name}_dir")
         val dirValue = dir.field(
           Bits(bankConf.width bits),
           AccessType.RW,
@@ -141,6 +145,7 @@ class SpinyGpio(
         port.writeEnable := dirValue
 
         val write = busIf.newReg(s"Bank ${port.name} write")
+          .setName(s"${port.name}_write")
         val writeValue = write.field(
           Bits(bankConf.width bits),
           AccessType.RW,
