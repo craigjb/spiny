@@ -44,6 +44,16 @@ generate:
       svd_path: "target/spinal/Blinky.svd"
       linker_script_path: "target/spinal/memory.x"
 
+  hal:
+    generator: spinyhal
+    parameters:
+      crate_name: blinky-hal
+      output_path: "target/rust/blinky-hal"
+      json_path: "target/spinal/Blinky.json"
+      pac_crate_name: blinky-pac
+      pac_crate_path: "../blinky-pac"
+      spiny_hal_path: "../../../../../rust/spiny-hal"
+
   firmware:
     generator: cargo
     parameters:
@@ -83,6 +93,7 @@ targets:
               - "16"
               - "16"
         - rustpac
+        - hal
         - firmware
         - spinalsim:
             args:
@@ -105,6 +116,7 @@ targets:
             - "16"
             - "16"
       - rustpac
+      - hal
       - firmware
       - spinalhdl:
           args:
@@ -124,6 +136,7 @@ targets:
             - "8"
             - "8"
       - rustpac
+      - hal
       - firmware
       - spinalhdl:
           args:

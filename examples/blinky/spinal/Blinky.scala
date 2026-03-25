@@ -70,7 +70,7 @@ class Blinky(
     val timer = new SpinyTimer(
       timerWidth = 32,
       prescaleWidth = 16,
-      numCompares = 1,
+      numCompares = 2,
       isMachineTimer = true,
     ).setName("Timer")
 
@@ -129,6 +129,7 @@ object TopLevelVerilog extends App {
 
   val soc = spinalReport.toplevel.soc
   soc.dumpSvd("target/spinal/Blinky.svd", "Blinky")
+  soc.dumpHalJson("target/spinal/Blinky.json", "Blinky", 100000000L)
   soc.dumpLinkerScript("target/spinal/memory.x")
 }
 
