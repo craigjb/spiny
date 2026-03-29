@@ -61,21 +61,28 @@ async fn main(_spawner: Spawner) {
 
         let switches = gpio.switches_read().read().value().bits() as usize;
 
-        // Rotate mask downward, wrapping from bit 0 back to bit 7
-        led_mask = led_mask.rotate_right(1);
-
         // Find next enabled switch from current position
-        let mut i = 0u8;
-        while i < 8 {
+        // If no switches on, display nothing; otherwise light the LED
+        let mut output = 0;
+        for _ in 0..8 {
             if switches & led_mask != 0 {
+                output = led_mask;
                 break;
+            } else {
+                led_mask = if led_mask == 1 {
+                    0x80
+                } else {
+                    led_mask.rotate_right(1)
+                };
             }
-            led_mask = led_mask.rotate_right(1);
-            i += 1;
         }
 
-        // If no switches on, display nothing; otherwise light the LED
-        let output = if i >= 8 { 0 } else { led_mask };
+        led_mask = if led_mask == 1 {
+            0x80
+        } else {
+            led_mask.rotate_right(1)
+        };
+
         gpio.leds_write()
             .write(|w| unsafe { w.value().bits(output as _) });
     }
