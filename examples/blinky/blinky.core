@@ -13,11 +13,6 @@ filesets:
       - data/nexys_video.xdc
     file_type: xdc
 
-  xdc:
-    files:
-      - data/nexys7-a100t.xdc
-    file_type: xdc
-
   vivado_settings:
     files:
       - data/vivado_settings.tcl
