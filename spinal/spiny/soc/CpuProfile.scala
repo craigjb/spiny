@@ -36,7 +36,6 @@ import scala.collection.mutable.ArrayBuffer
 import spinal.core._
 import spinal.lib._
 import spinal.lib.cpu.riscv.debug.DebugTransportModuleParameter
-import spinal.lib.bus.simple._
 import spinal.lib.bus.amba4.axi._
 import vexriscv._
 import vexriscv.plugin._
@@ -50,9 +49,9 @@ trait SpinyCpuProfile {
   def csrPlugin: CsrPlugin
   def debugPlugin: Option[EmbeddedRiscvJtag]
 
-  def busConfig: PipelinedMemoryBusConfig
-  def iBus: PipelinedMemoryBus
-  def dBus: PipelinedMemoryBus
+  def axiConfig: Axi4Config
+  def iBus: Axi4ReadOnly
+  def dBus: Axi4Shared
 
   def toPlugins: Seq[Plugin[VexRiscv]]
 }
@@ -62,6 +61,17 @@ abstract class SpinyRvRustCpuProfile(
   withCompressed: Boolean = false,
   withXilinxDebug: Boolean = false,
 ) extends SpinyCpuProfile {
+  def axiConfig = Axi4Config(
+    addressWidth = 32,
+    dataWidth = 32,
+    idWidth = 4,
+    useLock = false,
+    useRegion = false,
+    useCache = false,
+    useProt = false,
+    useQos = false
+  )
+
   val iBusPlugin = new IBusSimplePlugin(
     resetVector = resetVector,
     compressedGen = withCompressed,
@@ -69,10 +79,10 @@ abstract class SpinyRvRustCpuProfile(
     // required for AXI
     cmdForkPersistence = true,
   )
-  def busConfig = IBusSimpleBus.getPipelinedMemoryBusConfig()
-  def iBus = iBusPlugin.iBus.toPipelinedMemoryBus()
+  def iBus = iBusPlugin.iBus.toAxi4ReadOnly()
+
   val dBusPlugin = new DBusSimplePlugin()
-  def dBus = dBusPlugin.dBus.toPipelinedMemoryBus()
+  def dBus = dBusPlugin.dBus.toAxi4Shared()
 
   val csrPlugin = new CsrPlugin(
     config = CsrPluginConfig.smallest.copy(

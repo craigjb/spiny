@@ -35,7 +35,6 @@ import scala.collection.mutable.ArrayBuffer
 
 import spinal.core._
 import spinal.lib._
-import spinal.lib.bus.simple._
 import spinal.lib.blackbox.xilinx.s7.BSCANE2
 import spinal.lib.bus.amba4.axi._
 import vexriscv._
@@ -58,8 +57,8 @@ case class SpinyCpu(
   import SpinyCpu._
 
   val io = new Bundle {
-    val iBus = master(PipelinedMemoryBus(profile.busConfig))
-    val dBus = master(PipelinedMemoryBus(profile.busConfig))
+    val iBus = master(Axi4ReadOnly(profile.axiConfig))
+    val dBus = master(Axi4Shared(profile.axiConfig))
     val interrupts = in Vec(Bool(), interruptDescs.length)
     val machineTimerInterrupt = withMachineTimer generate (in Bool())
   }
@@ -87,8 +86,8 @@ case class SpinyCpu(
     val cpu = new VexRiscv(
       VexRiscvConfig(profile.toPlugins ++ interruptPlugins)
     )
-    profile.iBus <> io.iBus
-    profile.dBus <> io.dBus
+    profile.iBus >> io.iBus
+    profile.dBus >> io.dBus
 
     profile.csrPlugin.externalInterrupt := False
     if (withMachineTimer) {

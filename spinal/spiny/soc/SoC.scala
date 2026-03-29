@@ -35,7 +35,7 @@ import java.io.PrintWriter
 
 import spinal.core._
 import spinal.lib._
-import spinal.lib.bus.simple._
+import spinal.lib.bus.amba4.axi._
 import spinal.lib.bus.misc._
 
 import spiny.peripheral._
@@ -50,7 +50,7 @@ class SpinySoC(
 ) extends Area {
   val ram = new SpinyMainRam(
     size = ramSize,
-    cpuProfile.busConfig
+    cpuProfile.axiConfig
   ).setName("MainRam")
 
   if (firmwarePath != null) {
@@ -62,7 +62,7 @@ class SpinySoC(
 
   def build(
     peripherals: Seq[SpinyPeripheral],
-    mainBusSlaves: Seq[(SizeMapping, PipelinedMemoryBus)] = Seq()
+    mainBusSlaves: Seq[(SizeMapping, Axi4Shared)] = Seq()
   ) {
     // extract machine timer interrupt if present
     val machineTimerPeripherals = peripherals.filter(_.machineTimerInterrupt.isDefined)
@@ -83,7 +83,6 @@ class SpinySoC(
 
     // create CPU with interrupt descriptors
     cpu = SpinyCpu(cpuProfile, interrupts, withMachineTimer).setName("Cpu")
-    cpu.io.iBus >> ram.io.iBus
 
     // connect peripheral interrupts to CPU
     peripheralsWithInterrupts.zipWithIndex.foreach { case (peripheral, idx) =>
@@ -96,38 +95,33 @@ class SpinySoC(
     }
 
     apb = SpinyApb3Interconnect(
-      busConfig = cpuProfile.busConfig,
-      baseAddress = 0x10000000,
+      axiConfig = cpuProfile.axiConfig,
+      baseAddress = peripheralsBaseAddress,
       peripherals = peripherals
     ).setName("Apb")
 
-    val mainBusMappings = Seq(
-      SizeMapping(ramBaseAddress, ram.byteCount),
-      SizeMapping(apb.baseAddress, apb.mappedSize)
-    ) ++ mainBusSlaves.map(bs => bs._1)
-    assert(!AddressMapping.verifyOverlapping(mainBusMappings),
-      "Overlapping address mappings found on main bus")
+    // AXI4 crossbar: both iBus and dBus are masters
+    val crossbar = Axi4CrossbarFactory()
 
-    val decoder = PipelinedMemoryBusDecoder(
-      busConfig = cpuProfile.busConfig,
-      mappings = mainBusMappings
-    ).setName("Decoder")
-    cpu.io.dBus >> decoder.io.input
-
-    val decodedBuses = Seq(
-      ram.io.dBus,
-      apb.masterBus
-    ) ++ mainBusSlaves.map(bs => bs._2)
-    decoder.io.outputs.zip(decodedBuses).foreach {
-      case(output, bus) => output >> bus
+    // RAM has two slave ports (dual-port BRAM) at the same address range
+    crossbar.addSlave(ram.io.iBus, SizeMapping(ramBaseAddress, ram.byteCount))
+    crossbar.addSlave(ram.io.dBus, SizeMapping(ramBaseAddress, ram.byteCount))
+    crossbar.addSlave(apb.masterBus, SizeMapping(peripheralsBaseAddress, apb.mappedSize))
+    mainBusSlaves.foreach { case (mapping, bus) =>
+      crossbar.addSlave(bus, mapping)
     }
+
+    // iBus only accesses RAM iBus port; dBus accesses everything else
+    crossbar.addConnections(
+      cpu.io.iBus -> List(ram.io.iBus),
+      cpu.io.dBus -> (List(ram.io.dBus, apb.masterBus) ++ mainBusSlaves.map(_._2))
+    )
+    crossbar.build()
   }
 
   def peripheralMappings: Seq[(SpinyPeripheral, SizeMapping)] = {
     assert(apb != null, "Must call build() on SpinySoC first")
-    apb.mappings.map { case(p, sm) =>
-      (p, SizeMapping(sm.base + peripheralsBaseAddress, sm.size))
-    }.toSeq
+    apb.mappings
   }
 
   def dumpSvd(path: String, name: String) = {

@@ -33,60 +33,32 @@ package spiny.soc
 
 import spinal.core._
 import spinal.lib._
-import spinal.lib.bus.simple._
 import spinal.lib.bus.amba4.axi._
-
-import vexriscv.plugin._
 
 import spiny.Utils._
 
 class SpinyMainRam(
   size: BigInt,
-  busConfig: PipelinedMemoryBusConfig,
+  axiConfig: Axi4Config,
 ) extends Component {
-  val io = new Bundle {
-    val iBus = slave(PipelinedMemoryBus(busConfig))
-    val dBus = slave(PipelinedMemoryBus(busConfig))
-  }
-  assert(size % 4 == 0, "size must be an even multiple of words")
-  assert(busConfig.dataWidth == 32,
-    "SpinyMainRam only supports 32-bit iBus")
-
   val byteCount = size
-  val wordCount = byteCount / 4
-  val mem = Mem(Bits(32 bits), wordCount)
+  val wordCount = byteCount / (axiConfig.dataWidth / 8)
+  val ram = Mem(axiConfig.dataType, wordCount.toInt)
 
-  val iBusPort = new Area {
-    io.iBus.rsp.valid := RegNext(
-      io.iBus.cmd.fire && !io.iBus.cmd.write
-    ) init(False)
-    io.iBus.rsp.data := mem.readWriteSync(
-      address = (io.iBus.cmd.address >> 2).resized,
-      data = io.iBus.cmd.data,
-      enable  = io.iBus.cmd.valid,
-      write  = io.iBus.cmd.write,
-      mask  = io.iBus.cmd.mask
-    )
-    io.iBus.cmd.ready := True
+  val io = new Bundle {
+    val iBus = slave(Axi4Shared(axiConfig))
+    val dBus = slave(Axi4Shared(axiConfig))
   }
 
-  val dBusPort = new Area {
-    io.dBus.rsp.valid := RegNext(
-      io.dBus.cmd.fire && !io.dBus.cmd.write
-    ) init(False)
-    io.dBus.rsp.data := mem.readWriteSync(
-      address = (io.dBus.cmd.address >> 2).resized,
-      data = io.dBus.cmd.data,
-      enable  = io.dBus.cmd.valid,
-      write  = io.dBus.cmd.write,
-      mask  = io.dBus.cmd.mask
-    )
-    io.dBus.cmd.ready := True
-  }
+  val iBusPort = Axi4SharedOnChipRamPort(axiConfig, ram)
+  io.iBus >> iBusPort
+
+  val dBusPort = Axi4SharedOnChipRamPort(axiConfig, ram)
+  io.dBus >> dBusPort
 
   def initFromFile(path: String) = {
     val firmware = read32BitMemFromFile(path)
-    mem.init(
+    ram.init(
       firmware
         .padTo(wordCount.toInt, 0.toBigInt)
         .map(w => B(w, 32 bits))
