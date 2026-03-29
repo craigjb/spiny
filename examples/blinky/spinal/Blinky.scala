@@ -46,6 +46,8 @@ class Blinky(
   val io = new Bundle {
     val SYS_CLK = in(Bool())
     val CPU_RESET_N = in(Bool())
+    val LEDS = out(Bits(numLeds bits))
+    val SWITCHES = in(Bits(numSwitches bits))
   }
 
   noIoPrefix()
@@ -88,8 +90,8 @@ class Blinky(
         )
       )
     ).setName("Gpio")
-    gpio.getBankBits("leds").toIo().setName("LEDS")
-    gpio.getBankBits("switches").toIo().setName("SWITCHES")
+    io.LEDS := gpio.getBankBits("leds")
+    gpio.getBankBits("switches") := io.SWITCHES
 
     build(peripherals = Seq(
       timer,
@@ -153,6 +155,8 @@ object TopLevelSim extends App {
           resetActiveLevel = LOW
         )
       )
+
+      dut.io.SWITCHES #= 0xc3 
 
       clockDomain.forkStimulus()
       clockDomain.waitSampling(100000)

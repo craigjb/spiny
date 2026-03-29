@@ -83,17 +83,12 @@ targets:
   sim:
     filesets: [dep]
     generate:
-        - svd:
-            args:
-              - "16"
-              - "16"
+        - svd
         - rustpac
         - hal
         - firmware
         - spinalsim:
             args:
-              - "16"
-              - "16"
               - "rust/target/release/blinky.bin"
     toplevel: Blinky
     flow: generic # dummy flow
