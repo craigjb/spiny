@@ -55,11 +55,11 @@ async fn main(_spawner: Spawner) {
     let peripherals = init();
     let gpio = &peripherals.gpio;
 
-    let mut led_mask: u8 = 0x80;
+    let mut led_mask: usize = 0x80;
     loop {
-        Timer::after_millis(200).await;
+        Timer::after_micros(100).await;
 
-        let switches = gpio.switches_read().read().value().bits();
+        let switches = gpio.switches_read().read().value().bits() as usize;
 
         // Rotate mask downward, wrapping from bit 0 back to bit 7
         led_mask = led_mask.rotate_right(1);
@@ -77,6 +77,6 @@ async fn main(_spawner: Spawner) {
         // If no switches on, display nothing; otherwise light the LED
         let output = if i >= 8 { 0 } else { led_mask };
         gpio.leds_write()
-            .write(|w| unsafe { w.value().bits(output) });
+            .write(|w| unsafe { w.value().bits(output as _) });
     }
 }
