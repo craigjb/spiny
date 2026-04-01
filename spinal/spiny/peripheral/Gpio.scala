@@ -195,7 +195,7 @@ class SpinyGpio(
 
   override def halDescription = {
     val banks = bankConfigs.map { bankConf =>
-      scala.collection.mutable.LinkedHashMap[String, Any](
+      ujson.Obj(
         "name" -> bankConf.name,
         "width" -> bankConf.width,
         "direction" -> (bankConf.direction match {
@@ -205,9 +205,9 @@ class SpinyGpio(
         }),
       )
     }
-    scala.collection.mutable.LinkedHashMap[String, Any](
+    ujson.Obj(
       "type" -> "SpinyGpio",
-      "banks" -> banks,
+      "banks" -> ujson.Arr(banks: _*),
     )
   }
 }

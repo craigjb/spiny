@@ -21,7 +21,8 @@ lazy val spiny = (project in file("."))
       spinalLib,
       spinalIdslPlugin,
       "org.scala-lang.modules" %% "scala-xml" % "2.1.0",
-      "org.yaml" % "snakeyaml" % "2.0"
+      "org.yaml" % "snakeyaml" % "2.0",
+      "com.lihaoyi" %% "ujson" % "3.3.1"
     )
   )
 

@@ -221,13 +221,11 @@ class SpinyTimer(
   override def machineTimerInterrupt: Option[Bool] =
     if (isMachineTimer) Some(io.interrupt) else None
 
-  override def halDescription = {
-    scala.collection.mutable.LinkedHashMap[String, Any](
-      "type" -> "SpinyTimer",
-      "timer_width" -> timerWidth,
-      "prescale_width" -> prescaleWidth,
-      "num_compares" -> numCompares,
-      "is_machine_timer" -> isMachineTimer,
-    )
-  }
+  override def halDescription = ujson.Obj(
+    "type" -> "SpinyTimer",
+    "timer_width" -> timerWidth,
+    "prescale_width" -> prescaleWidth,
+    "num_compares" -> numCompares,
+    "is_machine_timer" -> isMachineTimer,
+  )
 }

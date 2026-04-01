@@ -98,11 +98,9 @@ trait SpinyPeripheral {
 
   /** Override to provide HAL generation metadata for this peripheral.
    *
-   *  Return a LinkedHashMap of key-value pairs describing the peripheral's
-   *  configuration. Used by dumpHalJson to generate the HAL crate.
-   *  Default returns an empty map (peripheral will be skipped in HAL generation).
+   *  Return a ujson.Obj describing the peripheral's configuration.
+   *  Used to generate HAL crate.
+   *  Default returns an empty object (peripheral will be skipped in HAL generation).
    */
-  def halDescription: scala.collection.mutable.LinkedHashMap[String, Any] = {
-    scala.collection.mutable.LinkedHashMap[String, Any]()
-  }
+  def halDescription: ujson.Obj = ujson.Obj()
 }

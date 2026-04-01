@@ -149,11 +149,9 @@ case class SpinyDram(
    */
   def userClockDomain: ClockDomain = liteDram.userClockDomain
 
-  override def halDescription = {
-    scala.collection.mutable.LinkedHashMap[String, Any](
-      "type" -> "SpinyDram",
-    )
-  }
+  override def halDescription = ujson.Obj(
+    "type" -> "SpinyDram",
+  )
 
   override def svdPeripherals(sizeMapping: SizeMapping): Seq[scala.xml.Elem] = {
     svdPath match {
