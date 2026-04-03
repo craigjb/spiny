@@ -97,7 +97,9 @@ fn main() -> ! {
                 defmt::info!("MEMTEST: chunk {} OK", chunk);
             }
         }
-        p.gpio.write().write(|w| unsafe { w.value().bits(leds) });
+        p.gpio
+            .leds_write()
+            .write(|w| unsafe { w.value().bits(leds) });
     }
 
     defmt::info!("MEMTEST: Done, LEDs = 0b{:08b}", leds);
