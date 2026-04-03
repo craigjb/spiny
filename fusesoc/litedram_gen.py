@@ -55,7 +55,8 @@ MODULE_BASE_CLASS_MAP = {
 }
 
 SUPPORTED_USER_PORT_TYPES = [
-    "native"
+    "native",
+    "axi",
 ]
 
 def err_req_param(param_name, container_name):
@@ -276,11 +277,15 @@ def translate_config(config):
 
     # check only supported port types are used
     invalid_port = False
-    for port in user_ports.values():
-        if port.get("type", None) not in SUPPORTED_USER_PORT_TYPES:
+    for port_name, port in user_ports.items():
+        port_type = port.get("type", None)
+        if port_type not in SUPPORTED_USER_PORT_TYPES:
             invalid_port = True
             print("ERROR: Only these types of user ports are currently "
                  f"supported: {SUPPORTED_USER_PORT_TYPES}")
+        if port_type == "axi" and port.get("id_width", None) is None:
+            invalid_port = True
+            print(f"ERROR: AXI port '{port_name}' requires `id_width`")
     if invalid_port:
         sys.exit(1)
 
