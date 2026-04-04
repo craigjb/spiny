@@ -29,7 +29,9 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use ddrtest_pac::{Ddrctrl, Ddrphy, Sdram};
+#[cfg(not(feature = "sim"))]
+use ddrtest_pac::Ddrphy;
+use ddrtest_pac::{Ddrctrl, Sdram};
 
 #[derive(Clone, Copy)]
 #[repr(u8)]
@@ -62,9 +64,24 @@ const ZQCAL_ADDR: u32 = 0x400;
 
 // Delay constants for riscv::asm::delay(), which runs ~2 cycles per count.
 // At 100MHz sys_clk: delay(50_000) ~ 1ms.
+#[cfg(feature = "sim")]
+const DELAY_SHORT: u32 = 10;
+#[cfg(not(feature = "sim"))]
 const DELAY_SHORT: u32 = 50;
+
+#[cfg(feature = "sim")]
+const DELAY_100US: u32 = 10;
+#[cfg(not(feature = "sim"))]
 const DELAY_100US: u32 = 5_000;
+
+#[cfg(feature = "sim")]
+const DELAY_1MS: u32 = 10;
+#[cfg(not(feature = "sim"))]
 const DELAY_1MS: u32 = 50_000;
+
+#[cfg(feature = "sim")]
+const DELAY_20MS: u32 = 10;
+#[cfg(not(feature = "sim"))]
 const DELAY_20MS: u32 = 1_000_000;
 
 /// Write data to the wrdata register for the given DFI phase.
@@ -231,6 +248,7 @@ fn run_test_pattern(sdram: &Sdram, lane: usize) -> u32 {
 /// Sweep all delay taps for the current bitslip and return a composite score.
 ///
 /// Higher scores indicate more working taps and fewer errors.
+#[cfg(not(feature = "sim"))]
 fn scan_lane(phy: &Ddrphy, sdram: &Sdram, lane: usize) -> i32 {
     let mut score = 0i32;
 
@@ -251,6 +269,7 @@ fn scan_lane(phy: &Ddrphy, sdram: &Sdram, lane: usize) -> i32 {
 ///
 /// Requires 2 consecutive working taps to establish the window start, then
 /// scans forward to find the end.
+#[cfg(not(feature = "sim"))]
 fn center_lane(phy: &Ddrphy, sdram: &Sdram, lane: usize) {
     phy.rdly_dq_rst().write(|w| unsafe { w.bits(1) });
 
@@ -306,6 +325,7 @@ fn center_lane(phy: &Ddrphy, sdram: &Sdram, lane: usize) {
 
 /// Configure PHY read/write phases, reset per-lane delays/bitslips, and
 /// toggle the PHY reset.
+#[cfg(not(feature = "sim"))]
 fn phy_init(phy: &Ddrphy) {
     defmt::info!("PHY INIT: Starting...");
 
@@ -442,6 +462,7 @@ fn init_sequence(sdram: &Sdram) {
 /// For each lane: sweeps all bitslip settings, scores each by scanning the
 /// full delay range, selects the best bitslip, then centers the delay within
 /// the working window.
+#[cfg(not(feature = "sim"))]
 fn read_leveling(phy: &Ddrphy, sdram: &Sdram) {
     defmt::info!("READ LEVELING: Starting...");
 
@@ -487,13 +508,15 @@ fn read_leveling(phy: &Ddrphy, sdram: &Sdram) {
 /// Runs the full DDR3 power-up and mode register programming sequence, then
 /// performs per-lane read leveling (bitslip sweep + delay centering) before
 /// handing control to the hardware memory controller.
-pub fn init_dram(ddrctrl: &Ddrctrl, phy: &Ddrphy, sdram: &Sdram) {
+pub fn init_dram(ddrctrl: &Ddrctrl, #[cfg(not(feature = "sim"))] phy: &Ddrphy, sdram: &Sdram) {
     ddrctrl.init_done().write(|w| unsafe { w.bits(0) });
     ddrctrl.init_error().write(|w| unsafe { w.bits(0) });
 
     dfii_sw_control(sdram);
+    #[cfg(not(feature = "sim"))]
     phy_init(phy);
     init_sequence(sdram);
+    #[cfg(not(feature = "sim"))]
     read_leveling(phy, sdram);
     dfii_hw_control(sdram);
 

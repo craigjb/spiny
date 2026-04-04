@@ -34,6 +34,7 @@ package spiny.dram
 import spinal.core._
 import spinal.lib._
 import spinal.lib.bus.amba3.apb._
+import spinal.lib.bus.amba4.axi._
 import spinal.lib.bus.simple._
 
 import spiny.peripheral.SpinyPeripheral
@@ -70,6 +71,11 @@ case class SpinyDram(
 
     // Native ports
     val nativePorts = LiteDram.createNativePorts(config).map {
+      case (name, port) => name -> slave(port)
+    }
+
+    // AXI ports
+    val axiPorts = LiteDram.createAxiPorts(config).map {
       case (name, port) => name -> slave(port)
     }
 
@@ -124,8 +130,12 @@ case class SpinyDram(
 
   // Connect native ports
   for ((portName, port) <- io.nativePorts) {
-    val liteDramPort = liteDram.io.userPorts(portName).asInstanceOf[NativePort]
-    liteDramPort <> port
+    liteDram.io.nativeUserPorts(portName) <> port
+  }
+
+  // Connect AXI ports
+  for ((portName, port) <- io.axiPorts) {
+    liteDram.io.axiUserPorts(portName) <> port
   }
 
   // Connect physical interface
@@ -161,6 +171,16 @@ case class SpinyDram(
         // Default: empty peripheral (no peripheralBusIf)
         super.svdPeripherals(sizeMapping)
     }
+  }
+
+  /**
+   * Type-safe accessor for an AXI port by name.
+   */
+  def axi4Port(name: String): Axi4 = {
+    io.axiPorts.getOrElse(name,
+      throw new IllegalArgumentException(
+        s"AXI port '$name' not found. Available: ${io.axiPorts.keys.mkString(", ")}"
+      ))
   }
 
   /**

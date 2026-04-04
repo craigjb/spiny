@@ -49,9 +49,24 @@ const CHUNK_SIZE: usize = DRAM_SIZE / NUM_CHUNKS;
 fn main() -> ! {
     let p = Peripherals::take().unwrap();
 
+    p.gpio
+        .leds_write()
+        .write(|w| unsafe { w.value().bits(0xff) });
+    p.gpio.leds_write().write(|w| unsafe { w.value().bits(0) });
+
     defmt::println!("Hello world!");
 
-    draminit::init_dram(&p.ddrctrl, &p.ddrphy, &p.sdram);
+    draminit::init_dram(
+        &p.ddrctrl,
+        #[cfg(not(feature = "sim"))]
+        &p.ddrphy,
+        &p.sdram,
+    );
+
+    p.gpio
+        .leds_write()
+        .write(|w| unsafe { w.value().bits(0xff) });
+    p.gpio.leds_write().write(|w| unsafe { w.value().bits(0) });
 
     defmt::info!("MEMTEST: Starting...");
     let mut leds = 0u8;

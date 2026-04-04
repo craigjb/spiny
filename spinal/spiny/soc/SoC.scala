@@ -62,7 +62,8 @@ class SpinySoC(
 
   def build(
     peripherals: Seq[SpinyPeripheral],
-    mainBusSlaves: Seq[(SizeMapping, Axi4Shared)] = Seq()
+    mainBusSlaves: Seq[(SizeMapping, Axi4Shared)] = Seq(),
+    mainBusAxi4Slaves: Seq[(SizeMapping, Axi4)] = Seq()
   ) {
     // extract machine timer interrupt if present
     val machineTimerPeripherals = peripherals.filter(_.machineTimerInterrupt.isDefined)
@@ -110,11 +111,16 @@ class SpinySoC(
     mainBusSlaves.foreach { case (mapping, bus) =>
       crossbar.addSlave(bus, mapping)
     }
+    mainBusAxi4Slaves.foreach { case (mapping, bus) =>
+      crossbar.addSlave(bus, mapping)
+    }
 
     // iBus only accesses RAM iBus port; dBus accesses everything else
     crossbar.addConnections(
       cpu.io.iBus -> List(ram.io.iBus),
-      cpu.io.dBus -> (List(ram.io.dBus, apb.masterBus) ++ mainBusSlaves.map(_._2))
+      cpu.io.dBus -> (List(ram.io.dBus, apb.masterBus)
+        ++ mainBusSlaves.map(_._2)
+        ++ mainBusAxi4Slaves.map(_._2))
     )
     crossbar.build()
   }

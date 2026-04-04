@@ -77,7 +77,8 @@ object UserPortType {
 /** User port configuration */
 case class UserPortConfig(
   portType: UserPortType,
-  dataWidth: Int
+  dataWidth: Int,
+  idWidth: Int = 0
 )
 
 /** DRAM geometry (required for all modules to determine IO widths) */
@@ -137,10 +138,25 @@ case class LiteDramConfig(
   }
 
   /**
+   * AXI port address width (byte-addressed, no word-size subtraction)
+   */
+  def axiPortAddressWidth: Int = {
+    log2Up(geometry.numRows) + log2Up(geometry.numCols) +
+      log2Up(geometry.numBanks) + log2Up(numByteGroups)
+  }
+
+  /**
    * Get only the native port configurations
    */
   def nativePortConfigs: Map[String, UserPortConfig] = {
     userPorts.filter(_._2.portType == UserPortType.Native)
+  }
+
+  /**
+   * Get only the AXI port configurations
+   */
+  def axiPortConfigs: Map[String, UserPortConfig] = {
+    userPorts.filter(_._2.portType == UserPortType.Axi)
   }
 }
 
@@ -223,7 +239,11 @@ object LiteDramConfig {
       val portMap = portData.asInstanceOf[java.util.Map[String, Any]]
       val portType = UserPortType.fromString(getString(portMap, "type"))
       val dataWidth = getInt(portMap, "data_width")
-      portName -> UserPortConfig(portType, dataWidth)
+      val idWidth = portType match {
+        case UserPortType.Axi => getInt(portMap, "id_width")
+        case _ => 0
+      }
+      portName -> UserPortConfig(portType, dataWidth, idWidth)
     }.toMap
 
     LiteDramConfig(

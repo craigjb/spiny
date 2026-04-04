@@ -26,18 +26,22 @@ generate:
   litedram_sim:
     generator: litedram
     parameters:
-      config_file: data/Ddr2Sim.yaml
+      config_file: data/nexys_video/Ddr3Ctrl.yaml
       sim: yes
-      verilog_output_path: "target/litedram/Ddr2Sim.v"
+      verilog_output_path: "target/litedram/Ddr3Ctrl.v"
+      svd_output_path: "target/litedram/Ddr3Ctrl.svd"
 
   spinalsim:
     generator: spinalhdl
     parameters:
       sbt_dir: "../../"
-      main: spiny.examples.ddrtest.DramSim
+      main: spiny.examples.ddrtest.TopLevelSim
       project: ddrtest
-      output_path: "target/spinal/DdrTest.v"
       file_type: verilogSource
+      args:
+        - "data/nexys_video/Ddr3Ctrl.yaml"
+        - "target/litedram/Ddr3Ctrl.v"
+        - "rust/target/release/ddrtest-fw.bin"
 
   litedram:
     generator: litedram
@@ -77,7 +81,24 @@ generate:
 targets:
   sim:
     filesets: [dep]
-    generate: [litedram_sim, spinalsim]
+    generate:
+      - litedram_sim
+      - svd:
+          args:
+            - "data/nexys_video/Ddr3Ctrl.yaml"
+            - "target/litedram/Ddr3Ctrl.svd"
+      - rustpac
+      - firmware:
+          args:
+            - "objcopy"
+            - "--release"
+            - "--features"
+            - "sim"
+            - "--"
+            - "-O"
+            - "binary"
+            - "target/release/ddrtest-fw.bin"
+      - spinalsim
     toplevel: DdrTest
     flow: generic # dummy flow
     flow_options:

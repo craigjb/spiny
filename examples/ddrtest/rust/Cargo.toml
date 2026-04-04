@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
+sim = []
 nexys_a7_100t = []
 nexys_video = []
 

@@ -34,6 +34,8 @@ package spiny.examples.ddrtest
 import spinal.core._
 import spinal.lib._
 import spinal.lib.bus.misc._
+import spinal.lib.bus.amba4.axi._
+import spinal.core.sim._
 
 import spiny.soc._
 import spiny.peripheral._
@@ -42,11 +44,13 @@ import spiny.dram._
 class DdrTest(
   dramConfigPath: String,
   dramSvdPath: String = null,
-  firmwarePath: String = null
+  firmwarePath: String = null,
+  sim: Boolean = false
 ) extends Component {
   val io = new Bundle {
     val SYS_CLK = in(Bool())
     val CPU_RESET_N = in(Bool())
+    val LEDS = out(Bits(8 bits))
   }
 
   noIoPrefix()
@@ -62,14 +66,17 @@ class DdrTest(
   val dramConfig = LiteDramConfig.fromYaml(dramConfigPath)
   val dram = inputClkDomain on SpinyDram(
     dramConfig,
-    svdPath = Option(dramSvdPath)
+    svdPath = Option(dramSvdPath),
+    sim = sim
   ).setName("Dram")
 
   // Expose DDR physical interface
-  dram.io.dram.toIo().setName("dram")
+  if (!sim) {
+    dram.io.dram.toIo().setName("dram")
+  }
 
   // SoC runs on user clock domain
-  val cpuProfile = SpinyRv32iRustCpuProfile(withXilinxDebug = true) 
+  val cpuProfile = SpinyRv32iRustCpuProfile() 
   val soc = dram.userClockDomain on new SpinySoC(
     cpuProfile = cpuProfile,
     ramSize = 16 kB,
@@ -84,18 +91,24 @@ class DdrTest(
         )
       )
     ).setName("Gpio")
-    gpio.getBankBits("leds").toIo().setName("LEDS")
+    io.LEDS := gpio.getBankBits("leds")
 
-    val dramPort = dram.pipelinedMemoryBusPort(
-      "port0",
-      cpuProfile.busConfig
+    val dramPort = dram.axi4Port("port0")
+
+    val upsizer = Axi4Upsizer(
+      inputConfig = cpuProfile.axiConfig,
+      outputConfig = cpuProfile.axiConfig.copy(
+        dataWidth = dramPort.config.dataWidth
+      ),
+      readPendingQueueSize = 4
     )
-    val dramBus = cloneOf(dramPort)
-    dramBus.cmdM2sPipe().rspPipe() >> dramPort
+    upsizer.io.output >> dramPort
+    val dramBus = cloneOf(upsizer.io.input)
+    dramBus.pipelined(StreamPipe.FULL) >> upsizer.io.input
 
     build(
       peripherals = Seq(gpio, dram),
-      mainBusSlaves = Seq(
+      mainBusAxi4Slaves = Seq(
         (SizeMapping(0x20000000, dram.ramSize), dramBus)
       )
     )
@@ -137,4 +150,46 @@ object TopLevelVerilog extends App {
   println(soc.peripheralMappings)
   soc.dumpSvd("target/spinal/DdrTest.svd", "DdrTest")
   soc.dumpLinkerScript("target/spinal/memory.x")
+}
+
+object TopLevelSim extends App {
+  if (args.length < 3) {
+    println("[DdrTest] usage: <dramConfigPath> <dramVerilogPath> <firmwarePath>")
+    throw new Exception("Missing arguments")
+  }
+  val dramConfigPath = args(0)
+  println(f"[DdrTest] using DRAM config: ${dramConfigPath}")
+  val dramVerilogPath = args(1)
+  println(f"[DdrTest] using DRAM verilog: ${dramVerilogPath}")
+  val firmwarePath = args(2)
+  println(f"[DdrTest] using firmware : ${firmwarePath}")
+
+  SimConfig
+    .withVerilator
+    .withWave
+    .addRtl(dramVerilogPath)
+    .addSimulatorFlag("-Wno-CASEINCOMPLETE")
+    .addSimulatorFlag("-Wno-COMBDLY")
+    .compile(new DdrTest(
+      dramConfigPath = dramConfigPath,
+      firmwarePath = firmwarePath,
+      sim = true
+    ))
+    .doSim { dut =>
+      val clockDomain = ClockDomain(
+        clock = dut.io.SYS_CLK,
+        reset = dut.io.CPU_RESET_N,
+        frequency = FixedFrequency(100 MHz),
+        config = ClockDomainConfig(
+          resetActiveLevel = LOW
+        )
+      )
+
+      clockDomain.forkStimulus()
+      clockDomain.waitSamplingWhere(dut.io.LEDS.toInt == 0xFF)
+      clockDomain.waitSampling(10)
+      clockDomain.waitSamplingWhere(dut.io.LEDS.toInt == 0xFF)
+      clockDomain.waitSampling(10)
+      clockDomain.waitSamplingWhere(dut.io.LEDS.toInt == 0xFF)
+    }
 }

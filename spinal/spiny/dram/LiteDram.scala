@@ -33,6 +33,7 @@ package spiny.dram
 
 import spinal.core._
 import spinal.lib._
+import spinal.lib.bus.amba4.axi._
 import spinal.lib.bus.wishbone._
 
 /**
@@ -142,19 +143,27 @@ case class LiteDram(
     wbCtrl.BTE.setName("wb_ctrl_bte")
     wbCtrl.CTI.setName("wb_ctrl_cti")
 
-    // User ports (dynamically created based on config)
-    val userPorts = config.userPorts.map { case (portName, portConfig) =>
-      portConfig.portType match {
-        case UserPortType.Native =>
-          val port = slave(NativePort(
-            addressWidth = config.nativePortAddressWidth(portConfig.dataWidth),
-            dataWidth = portConfig.dataWidth
-          ).setLiteDramNames(portName))
-          portName -> port
-        case _ =>
-          SpinalError(s"Unsupported user port type: ${portConfig.portType}")
-          portName -> null
-      }
+    // Native user ports
+    val nativeUserPorts = config.nativePortConfigs.map { case (portName, portConfig) =>
+      val port = slave(NativePort(
+        addressWidth = config.nativePortAddressWidth(portConfig.dataWidth),
+        dataWidth = portConfig.dataWidth
+      ).setLiteDramNames(portName))
+      portName -> port
+    }
+
+    // AXI user ports
+    val axiUserPorts = config.axiPortConfigs.map { case (portName, portConfig) =>
+      val axiConfig = Axi4Config(
+        addressWidth = config.axiPortAddressWidth,
+        dataWidth = portConfig.dataWidth,
+        idWidth = portConfig.idWidth,
+        useLock = false, useRegion = false,
+        useCache = false, useProt = false, useQos = false
+      )
+      val port = slave(Axi4(axiConfig))
+      LiteDram.setAxiLiteDramNames(port, portName)
+      portName -> port
     }
 
     // DDR physical interface
@@ -223,6 +232,47 @@ case class LiteDram(
 
 object LiteDram {
   /**
+   * Rename Axi4 sub-signals to match LiteDRAM's Verilog naming convention
+   */
+  private def setAxiLiteDramNames(port: Axi4, portName: String): Unit = {
+    val p = s"user_port_${portName}"
+    // AR
+    port.ar.valid.setName(s"${p}_arvalid")
+    port.ar.ready.setName(s"${p}_arready")
+    port.ar.addr.setName(s"${p}_araddr")
+    port.ar.id.setName(s"${p}_arid")
+    port.ar.len.setName(s"${p}_arlen")
+    port.ar.size.setName(s"${p}_arsize")
+    port.ar.burst.setName(s"${p}_arburst")
+    // AW
+    port.aw.valid.setName(s"${p}_awvalid")
+    port.aw.ready.setName(s"${p}_awready")
+    port.aw.addr.setName(s"${p}_awaddr")
+    port.aw.id.setName(s"${p}_awid")
+    port.aw.len.setName(s"${p}_awlen")
+    port.aw.size.setName(s"${p}_awsize")
+    port.aw.burst.setName(s"${p}_awburst")
+    // W
+    port.w.valid.setName(s"${p}_wvalid")
+    port.w.ready.setName(s"${p}_wready")
+    port.w.data.setName(s"${p}_wdata")
+    port.w.strb.setName(s"${p}_wstrb")
+    port.w.last.setName(s"${p}_wlast")
+    // R
+    port.r.valid.setName(s"${p}_rvalid")
+    port.r.ready.setName(s"${p}_rready")
+    port.r.data.setName(s"${p}_rdata")
+    port.r.id.setName(s"${p}_rid")
+    port.r.resp.setName(s"${p}_rresp")
+    port.r.last.setName(s"${p}_rlast")
+    // B
+    port.b.valid.setName(s"${p}_bvalid")
+    port.b.ready.setName(s"${p}_bready")
+    port.b.id.setName(s"${p}_bid")
+    port.b.resp.setName(s"${p}_bresp")
+  }
+
+  /**
    * Create NativePort instances for all native ports in the config
    */
   def createNativePorts(config: LiteDramConfig): Map[String, NativePort] = {
@@ -231,6 +281,21 @@ object LiteDram {
         addressWidth = config.nativePortAddressWidth(portConfig.dataWidth),
         dataWidth = portConfig.dataWidth
       )
+    }
+  }
+
+  /**
+   * Create Axi4 instances for all AXI ports in the config
+   */
+  def createAxiPorts(config: LiteDramConfig): Map[String, Axi4] = {
+    config.axiPortConfigs.map { case (portName, portConfig) =>
+      portName -> Axi4(Axi4Config(
+        addressWidth = config.axiPortAddressWidth,
+        dataWidth = portConfig.dataWidth,
+        idWidth = portConfig.idWidth,
+        useLock = false, useRegion = false,
+        useCache = false, useProt = false, useQos = false
+      ))
     }
   }
 

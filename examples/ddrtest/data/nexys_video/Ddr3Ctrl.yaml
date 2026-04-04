@@ -17,5 +17,6 @@ cmd_buffer_depth: 16
 with_chip_selects: no
 user_ports:
   port0:
-    type: native
-    data_width: 32
+    type: axi
+    data_width: 128
+    id_width: 4
