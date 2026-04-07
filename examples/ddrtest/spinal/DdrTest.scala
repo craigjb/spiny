@@ -41,6 +41,9 @@ import spiny.soc._
 import spiny.peripheral._
 import spiny.dram._
 
+import java.io.File
+import org.rogach.scallop._
+
 class DdrTest(
   dramConfigPath: String,
   dramSvdPath: String = null,
@@ -116,34 +119,33 @@ class DdrTest(
 }
 
 object TopLevelVerilog extends App {
-  if (args.length < 1) {
-    println("[DdrTest] usage: <dramConfigPath> [dramSvdPath] [firmwarePath]")
-    throw new Exception("Missing dramConfigPath")
-  }
-  val dramConfigPath = args(0)
-  println(f"[DdrTest] using DRAM config: ${dramConfigPath}")
+  object Conf extends ScallopConf(args) {
+    val sim = opt[Boolean]()
 
-  val dramSvdPath = if (args.length >= 2) {
-    println(f"[DdrTest] using DRAM SVD: ${args(1)}")
-    args(1)
-  } else {
-    null
-  }
+    val dramSvd = opt[File]()
+    validateFileExists(dramSvd)
+    validateFileIsFile(dramSvd)
 
-  val firmwarePath = if (args.length >= 3) {
-    println(f"[DdrTest] using firmware: ${args(2)}")
-    args(2)
-  } else {
-    null
+    val firmware= opt[File]()
+    validateFileExists(firmware)
+    validateFileIsFile(firmware)
+
+    val dramConfig = trailArg[File]()
+    validateFileExists(dramConfig)
+    validateFileIsFile(dramConfig)
+
+    verify()
   }
+  println(f"[DdrTest] TopLevelVerilog.Conf: ${Conf.summary}")
 
   val spinalReport = SpinalConfig(
     targetDirectory = "target/spinal",
     inlineRom = true
   ).generateVerilog(new DdrTest(
-    dramConfigPath = dramConfigPath,
-    dramSvdPath = dramSvdPath,
-    firmwarePath = firmwarePath
+    dramConfigPath = Conf.dramConfig().getAbsolutePath(),
+    dramSvdPath = Conf.dramSvd.map(f => f.getAbsolutePath()).getOrElse(null),
+    firmwarePath = Conf.firmware.map(f => f.getAbsolutePath()).getOrElse(null),
+    sim = Conf.sim()
   ))
 
   val soc = spinalReport.toplevel.soc
@@ -153,26 +155,32 @@ object TopLevelVerilog extends App {
 }
 
 object TopLevelSim extends App {
-  if (args.length < 3) {
-    println("[DdrTest] usage: <dramConfigPath> <dramVerilogPath> <firmwarePath>")
-    throw new Exception("Missing arguments")
+  object Conf extends ScallopConf(args) {
+    val dramConfig = trailArg[File]()
+    validateFileExists(dramConfig)
+    validateFileIsFile(dramConfig)
+
+    val dramRtl = trailArg[File]()
+    validateFileExists(dramRtl)
+    validateFileIsFile(dramRtl)
+
+    val firmware = trailArg[File]()
+    validateFileExists(firmware)
+    validateFileIsFile(firmware)
+
+    verify()
   }
-  val dramConfigPath = args(0)
-  println(f"[DdrTest] using DRAM config: ${dramConfigPath}")
-  val dramVerilogPath = args(1)
-  println(f"[DdrTest] using DRAM verilog: ${dramVerilogPath}")
-  val firmwarePath = args(2)
-  println(f"[DdrTest] using firmware : ${firmwarePath}")
+  println(f"[DdrTest] TopLevelSim.Conf: ${Conf.summary}")
 
   SimConfig
     .withVerilator
     .withWave
-    .addRtl(dramVerilogPath)
+    .addRtl(Conf.dramRtl().getAbsolutePath())
     .addSimulatorFlag("-Wno-CASEINCOMPLETE")
     .addSimulatorFlag("-Wno-COMBDLY")
     .compile(new DdrTest(
-      dramConfigPath = dramConfigPath,
-      firmwarePath = firmwarePath,
+      dramConfigPath = Conf.dramConfig().getAbsolutePath(),
+      firmwarePath = Conf.firmware().getAbsolutePath(),
       sim = true
     ))
     .doSim { dut =>
@@ -189,7 +197,6 @@ object TopLevelSim extends App {
       clockDomain.waitSamplingWhere(dut.io.LEDS.toInt == 0xFF)
       clockDomain.waitSampling(10)
       clockDomain.waitSamplingWhere(dut.io.LEDS.toInt == 0xFF)
-      clockDomain.waitSampling(10)
-      clockDomain.waitSamplingWhere(dut.io.LEDS.toInt == 0xFF)
+      clockDomain.waitSampling(10000)
     }
 }

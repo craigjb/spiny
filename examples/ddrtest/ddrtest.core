@@ -84,9 +84,13 @@ targets:
     generate:
       - litedram_sim
       - svd:
+          output_path: "target/spinal/DdrTest.v"
+          file_type: verilogSource
           args:
-            - "data/nexys_video/Ddr3Ctrl.yaml"
+            - "--sim"
+            - "--dram-svd"
             - "target/litedram/Ddr3Ctrl.svd"
+            - "data/nexys_video/Ddr3Ctrl.yaml"
       - rustpac
       - firmware:
           args:
@@ -103,6 +107,13 @@ targets:
     flow: generic # dummy flow
     flow_options:
       tool: verilator 
+      mode: lint-only
+      verilator_options:
+        - "-Wno-COMBDLY"
+        - "-Wno-CASEINCOMPLETE"
+        - "-Wno-WIDTHEXPAND"
+        - "-Wno-WIDTHTRUNC"
+        - "-Wno-WIDTHTRUNC"
 
   nexys_a7_100t:
     filesets: [nexys_a7_xdc, vivado_settings, dep]
@@ -113,8 +124,9 @@ targets:
           svd_output_path: "target/litedram/Ddr2Ctrl.svd"
       - svd:
           args:
-            - "data/nexys_a7_100t/Ddr2Ctrl.yaml"
+            - "--dram-svd"
             - "target/litedram/Ddr2Ctrl.svd"
+            - "data/nexys_a7_100t/Ddr2Ctrl.yaml"
       - rustpac
       - firmware:
           args:
@@ -128,9 +140,11 @@ targets:
             - "target/release/ddrtest-fw.bin"
       - spinalhdl:
           args:
-            - "data/nexys_a7_100t/Ddr2Ctrl.yaml"
+            - "--dram-svd"
             - "target/litedram/Ddr2Ctrl.svd"
+            - "--firmware"
             - "rust/target/release/ddrtest-fw.bin"
+            - "data/nexys_a7_100t/Ddr2Ctrl.yaml"
     toplevel: DdrTest
     flow: vivado
     flow_options:
@@ -145,8 +159,9 @@ targets:
           svd_output_path: "target/litedram/Ddr3Ctrl.svd"
       - svd:
           args:
-            - "data/nexys_video/Ddr3Ctrl.yaml"
+            - "--dram-svd"
             - "target/litedram/Ddr3Ctrl.svd"
+            - "data/nexys_video/Ddr3Ctrl.yaml"
       - rustpac
       - firmware:
           args:
@@ -160,9 +175,11 @@ targets:
             - "target/release/ddrtest-fw.bin"
       - spinalhdl:
           args:
-            - "data/nexys_video/Ddr3Ctrl.yaml"
+            - "--dram-svd"
             - "target/litedram/Ddr3Ctrl.svd"
+            - "--firmware"
             - "rust/target/release/ddrtest-fw.bin"
+            - "data/nexys_video/Ddr3Ctrl.yaml"
     toplevel: DdrTest
     flow: vivado
     flow_options:

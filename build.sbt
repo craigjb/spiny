@@ -8,6 +8,7 @@ val spinalVersion = "1.13.0"
 val spinalCore = "com.github.spinalhdl" %% "spinalhdl-core" % spinalVersion
 val spinalLib = "com.github.spinalhdl" %% "spinalhdl-lib" % spinalVersion
 val spinalIdslPlugin = compilerPlugin("com.github.spinalhdl" %% "spinalhdl-idsl-plugin" % spinalVersion)
+val scallop = "org.rogach" %% "scallop" % "6.0.0"
 
 lazy val vexRiscv = RootProject(uri("https://github.com/SpinalHDL/VexRiscv.git#master"))
 
@@ -44,5 +45,5 @@ lazy val ddrtest = (project in file("examples/ddrtest"))
     name := "ddrtest",
     Compile / scalaSource := baseDirectory.value / "spinal",
     publish / skip := true,
-    libraryDependencies ++= Seq(spinalIdslPlugin),
+    libraryDependencies ++= Seq(spinalIdslPlugin, scallop),
   )
