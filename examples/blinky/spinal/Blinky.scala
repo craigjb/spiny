@@ -38,6 +38,9 @@ import spinal.core.sim._
 import spiny.soc._
 import spiny.peripheral._
 
+import java.io.File
+import org.rogach.scallop._
+
 class Blinky(
   numLeds: Int = 16,
   numSwitches: Int = 16,
@@ -101,32 +104,25 @@ class Blinky(
 }
 
 object TopLevelVerilog extends App {
-  val numLeds = if (args.length >= 1) {
-    args(0).toInt
-  } else {
-    16
+  object Conf extends ScallopConf(args) {
+    val numLeds = opt[Int](default = Some(8))
+    val numSwitches = opt[Int](default = Some(8))
+
+    val firmware = opt[File]()
+    validateFileExists(firmware)
+    validateFileIsFile(firmware)
+
+    verify()
   }
-  println(f"[Blinky] numLeds: ${numLeds}")
-  val numSwitches = if (args.length >= 2) {
-    args(1).toInt
-  } else {
-    16
-  }
-  println(f"[Blinky] numSwitches: ${numSwitches}")
-  val firmwarePath = if (args.length >= 3) {
-    println(f"[Blinky] using firmware: ${args(2)}")
-    args(2)
-  } else {
-    null
-  }
+  println(f"[Blinky] TopLevelVerilog.Conf: ${Conf.summary}")
 
   val spinalReport = SpinalConfig(
     targetDirectory = "target/spinal",
     inlineRom = true
   ).generateVerilog(new Blinky(
-    numLeds = numLeds,
-    numSwitches = numSwitches,
-    firmwarePath = firmwarePath
+    numLeds = Conf.numLeds(),
+    numSwitches = Conf.numSwitches(),
+    firmwarePath = Conf.firmware.map(f => f.getAbsolutePath()).getOrElse(null)
   ))
 
   val soc = spinalReport.toplevel.soc
@@ -136,16 +132,19 @@ object TopLevelVerilog extends App {
 }
 
 object TopLevelSim extends App {
-  val firmwarePath = if (args.length == 1) {
-    println(f"[Blinky Sim] using firmware: ${args(0)}")
-    args(0)
-  } else {
-    null
+  object Conf extends ScallopConf(args) {
+    val firmware = trailArg[File]()
+    validateFileExists(firmware)
+    validateFileIsFile(firmware)
+    verify()
   }
+  println(f"[Blinky] TopLevelSim.Conf: ${Conf.summary}")
 
   SimConfig
     .withWave
-    .compile(new Blinky(firmwarePath = firmwarePath))
+    .compile(new Blinky(
+      firmwarePath = Conf.firmware.map(f => f.getAbsolutePath()).getOrElse(null)
+    ))
     .doSim { dut =>
       val clockDomain = ClockDomain(
         clock = dut.io.SYS_CLK,

@@ -35,7 +35,7 @@ lazy val blinky = (project in file("examples/blinky"))
     name := "blinky",
     Compile / scalaSource := baseDirectory.value / "spinal",
     publish / skip := true,
-    libraryDependencies ++= Seq(spinalIdslPlugin),
+    libraryDependencies ++= Seq(spinalIdslPlugin, scallop),
   )
 
 lazy val ddrtest = (project in file("examples/ddrtest"))
