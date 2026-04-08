@@ -31,22 +31,33 @@
 
 package spiny.dram
 
+import scala.collection.mutable
+
 import spinal.core._
 import spinal.lib._
 import spinal.lib.bus.amba3.apb._
 import spinal.lib.bus.amba4.axi._
-import spinal.lib.bus.simple._
 
 import spiny.peripheral.SpinyPeripheral
 import spiny.svd.SpinySvd
 import spinal.lib.bus.misc.SizeMapping
 
 /**
- * SpinyDram - Wrapper around LiteDram BlackBox
+ * SpinyDram - Wrapper around LiteDram BlackBox with dynamic port addition
  *
- * @param config LiteDRAM configuration
+ * User ports are registered via axi4Port() calls (with automatic width
+ * adaptation) and the LiteDram BlackBox is created in build().
+ *
+ * axi4Port() uses rework to create slave ports on SpinyDram's boundary,
+ * which is necessary for hierarchy: the upsizer (in the parent component)
+ * connects to SpinyDram's port, and build() connects the port to the
+ * BlackBox (inside SpinyDram). This is the same pattern used by
+ * Axi4CrossbarFactory.build() in SpinalHDL.
+ *
+ * @param config LiteDRAM configuration (without user ports)
  * @param sim LiteDRAM sim mode with internal DRAM model
  * @param ctrlAddressWidth Address width for APB3 control bus
+ * @param svdPath Optional path to LiteDRAM SVD for register descriptions
  */
 case class SpinyDram(
     config: LiteDramConfig,
@@ -61,25 +72,10 @@ case class SpinyDram(
   )
 
   val io = new Bundle {
-    // Status outputs
     val pllLocked = (!sim) generate (out Bool())
     val initDone = out Bool()
     val initError = out Bool()
-
-    // APB3 control bus
     val apb = slave(Apb3(apb3Config))
-
-    // Native ports
-    val nativePorts = LiteDram.createNativePorts(config).map {
-      case (name, port) => name -> slave(port)
-    }
-
-    // AXI ports
-    val axiPorts = LiteDram.createAxiPorts(config).map {
-      case (name, port) => name -> slave(port)
-    }
-
-    // DDR physical interface
     val dram = (!sim).generate {
       master(LiteDram.createDramIo(config))
     }
@@ -89,63 +85,17 @@ case class SpinyDram(
   peripheralBus = io.apb
   peripheralMappedSize = BigInt(1) << ctrlAddressWidth
 
-  val liteDram = LiteDram(config, sim = sim)
-  if (!sim) {
-    io.pllLocked := liteDram.io.pllLocked
-  }
-  io.initDone := liteDram.io.initDone
-  io.initError := liteDram.io.initError
+  // User clock domain (signals connected to BlackBox in build())
+  val userClk = Bool()
+  val userRst = Bool()
+  val userClockDomain = ClockDomain(
+    clock = userClk,
+    reset = userRst,
+    frequency = FixedFrequency(config.userClkFreq),
+    config = ClockDomainConfig(clockEdge = RISING, resetKind = SYNC)
+  )
 
-  if (sim) {
-    liteDram.io.simTrace := True
-  }
-
-  // APB3 to Wishbone bridge (internal, non-bursting)
-  val apbToWbBridge = new Area {
-    val wb = liteDram.io.wbCtrl
-    val apb = io.apb
-
-    // Address translation: APB (Byte) -> WB (Word)
-    // Drop bottom 2 bits for 32-bit word addressing
-    wb.ADR := apb.PADDR(ctrlAddressWidth - 1 downto 2).resized
-
-    wb.DAT_MOSI := apb.PWDATA
-    apb.PRDATA := wb.DAT_MISO
-    wb.CYC := apb.PSEL(0)
-    // Only assert STB during APB access phase (PENABLE high)
-    wb.STB := apb.PSEL(0) && apb.PENABLE
-    wb.WE := apb.PWRITE
-
-    // Full 32-bit word transfers
-    wb.SEL := B"1111"
-
-    // Classic (non-burst) cycle
-    wb.CTI := B"000"
-    wb.BTE := B"00"
-
-    // Handshaking
-    apb.PREADY := wb.ACK || wb.ERR
-    apb.PSLVERROR := wb.ERR
-  }
-
-  // Connect native ports
-  for ((portName, port) <- io.nativePorts) {
-    liteDram.io.nativeUserPorts(portName) <> port
-  }
-
-  // Connect AXI ports
-  for ((portName, port) <- io.axiPorts) {
-    liteDram.io.axiUserPorts(portName) <> port
-  }
-
-  // Connect physical interface
-  if (!sim) {
-    io.dram <> liteDram.io.dram
-  }
-
-  /**
-   * Total RAM size in bytes, based on DRAM geometry and byte groups.
-   */
+  /** Total RAM size in bytes, based on DRAM geometry and byte groups. */
   def ramSize: BigInt = {
     BigInt(config.geometry.numBanks) *
       config.geometry.numRows *
@@ -153,11 +103,106 @@ case class SpinyDram(
       config.numByteGroups
   }
 
+  // --- Dynamic port collection ---
+  private case class AxiPortDef(idWidth: Int, rawPort: Axi4)
+  private val axiPortDefs = mutable.LinkedHashMap[String, AxiPortDef]()
+
   /**
-   * User clock domain from LiteDram.
-   * Use this for logic that interfaces with the DRAM controller.
+   * Add an AXI port with automatic width adaptation.
+   *
+   * Uses rework to create a slave port on SpinyDram's boundary (required
+   * for hierarchy — the upsizer lives in the caller's component, and the
+   * BlackBox lives inside SpinyDram). Inserts an Axi4Upsizer/Downsizer
+   * in the caller's clock domain and returns the bus-width Axi4 for
+   * connection to the crossbar.
+   *
+   * Must be called before build() (i.e., during SoC body).
    */
-  def userClockDomain: ClockDomain = liteDram.userClockDomain
+  def axi4Port(name: String, idWidth: Int, busConfig: Axi4Config): Axi4 = {
+    require(!axiPortDefs.contains(name), s"AXI port '$name' already defined")
+
+    val rawAxiConfig = Axi4Config(
+      addressWidth = config.axiPortAddressWidth,
+      dataWidth = config.nativePortDataWidth,
+      idWidth = idWidth,
+      useLock = false, useRegion = false,
+      useCache = false, useProt = false, useQos = false
+    )
+
+    // Create slave port on SpinyDram's boundary
+    val rawPort = this.rework {
+      slave(Axi4(rawAxiConfig)).setName(name)
+    }
+    axiPortDefs(name) = AxiPortDef(idWidth, rawPort)
+
+    // Width adaptation (created in caller's Component/clock domain)
+    if (busConfig.dataWidth == config.nativePortDataWidth) {
+      rawPort
+    } else if (busConfig.dataWidth < config.nativePortDataWidth) {
+      val outputConfig = busConfig.copy(dataWidth = config.nativePortDataWidth)
+      val upsizer = Axi4Upsizer(busConfig, outputConfig, readPendingQueueSize = 4)
+      upsizer.io.output >> rawPort
+      upsizer.io.input
+    } else {
+      val outputConfig = busConfig.copy(dataWidth = config.nativePortDataWidth)
+      val downsizer = Axi4Downsizer(busConfig, outputConfig)
+      downsizer.io.output >> rawPort
+      downsizer.io.input
+    }
+  }
+
+  /**
+   * Finalize: create BlackBox, connect all ports.
+   * Call after all axi4Port() calls are complete.
+   */
+  def build(): Unit = this.rework {
+    val fullConfig = liteDramFullConfig
+    val liteDram = LiteDram(fullConfig, sim)
+
+    // Connect clocks
+    userClk := liteDram.io.userClk
+    userRst := liteDram.io.userRst
+
+    // Connect status
+    if (!sim) io.pllLocked := liteDram.io.pllLocked
+    io.initDone := liteDram.io.initDone
+    io.initError := liteDram.io.initError
+
+    if (sim) liteDram.io.simTrace := True
+
+    // APB3 to Wishbone bridge (internal, non-bursting)
+    val wb = liteDram.io.wbCtrl
+    val apb = io.apb
+    wb.ADR := apb.PADDR(ctrlAddressWidth - 1 downto 2).resized
+    wb.DAT_MOSI := apb.PWDATA
+    apb.PRDATA := wb.DAT_MISO
+    wb.CYC := apb.PSEL(0)
+    wb.STB := apb.PSEL(0) && apb.PENABLE
+    wb.WE := apb.PWRITE
+    wb.SEL := B"1111"
+    wb.CTI := B"000"
+    wb.BTE := B"00"
+    apb.PREADY := wb.ACK || wb.ERR
+    apb.PSLVERROR := wb.ERR
+
+    // Connect AXI ports to BlackBox
+    for ((portName, portDef) <- axiPortDefs) {
+      liteDram.io.axiUserPorts(portName) <> portDef.rawPort
+    }
+
+    // Connect physical DDR
+    if (!sim) io.dram <> liteDram.io.dram
+  }
+
+  /** Computed full config with ports (for BlackBox and YAML generation) */
+  private def liteDramFullConfig: LiteDramConfig = config.withPorts(
+    axiPortDefs.map { case (name, d) =>
+      name -> UserPortConfig(config.nativePortDataWidth, d.idWidth)
+    }.toMap
+  )
+
+  /** Dump LiteDRAM config YAML (call after build, e.g. post-elaboration) */
+  def dumpConfig(path: String): Unit = liteDramFullConfig.toYaml(path)
 
   override def halDescription = ujson.Obj(
     "type" -> "SpinyDram",
@@ -168,94 +213,7 @@ case class SpinyDram(
       case Some(path) =>
         SpinySvd.parseAndRebasePeripherals(path, sizeMapping.base)
       case None =>
-        // Default: empty peripheral (no peripheralBusIf)
         super.svdPeripherals(sizeMapping)
     }
   }
-
-  /**
-   * Type-safe accessor for an AXI port by name.
-   */
-  def axi4Port(name: String): Axi4 = {
-    io.axiPorts.getOrElse(name,
-      throw new IllegalArgumentException(
-        s"AXI port '$name' not found. Available: ${io.axiPorts.keys.mkString(", ")}"
-      ))
-  }
-
-  /**
-   * Type-safe accessor for a native port by name.
-   */
-  def nativePort(name: String): NativePort = {
-    io.nativePorts.getOrElse(name,
-      throw new IllegalArgumentException(
-        s"Native port '$name' not found. Available: ${io.nativePorts.keys.mkString(", ")}"
-      ))
-  }
-
-  /**
-   * Create a PipelinedMemoryBus port using a bridge
-   *
-   * @param portName Name of the native port to bridge
-   * @param busConfig PipelinedMemoryBus configuration (must match port data width)
-   */
-  def pipelinedMemoryBusPort(
-    portName: String,
-    busConfig: PipelinedMemoryBusConfig
-  ): PipelinedMemoryBus = {
-    val port = nativePort(portName)
-    val bridge = PipelinedMemoryBusToNativePortBridge(port, busConfig)
-    bridge.bus
-  }
-}
-
-/**
- * Bridge from PipelinedMemoryBus to LiteDRAM NativePort.
- */
-case class PipelinedMemoryBusToNativePortBridge(
-    nativePort: NativePort,
-    busConfig: PipelinedMemoryBusConfig
-) extends Area {
-  assert(nativePort.dataWidth == busConfig.dataWidth,
-    "PipelinedMemoryBus port width must match native port width")
-
-  val bus = PipelinedMemoryBus(busConfig)
-  val addrOffset = log2Up(nativePort.dataWidth / 8)
-
-  // Input stream only fires once both outputs have fired
-  val (cmdStream, writeStreamFork) = StreamFork2(bus.cmd)
-
-  // Only wait on writeStream when it's a write
-  val writeStream = writeStreamFork.throwWhen(!writeStreamFork.payload.write)
-
-  // Native port command channel
-  nativePort.cmd.valid := cmdStream.valid
-  nativePort.cmd.payload.we := cmdStream.payload.write
-
-  val addrSize = nativePort.cmd.addr.getBitsWidth
-  val resizedAddr = (cmdStream.payload.address >> addrOffset).resize(addrSize)
-  
-  // Workaround for LiteDRAM batching
-  val dirtyBit = RegNextWhen(!resizedAddr.msb, cmdStream.valid)
-  when (cmdStream.valid) {
-    nativePort.cmd.payload.addr := resizedAddr
-  } otherwise {
-    nativePort.cmd.payload.addr := B(
-      addrSize bits,
-      (addrSize - 1) -> dirtyBit,
-      default -> false
-    ).asUInt
-  }
-  cmdStream.ready := nativePort.cmd.ready
-
-  // Native port write channel (active during writes)
-  nativePort.write.valid := writeStream.valid && writeStream.payload.write
-  nativePort.write.payload.data := writeStream.payload.data
-  nativePort.write.payload.we := writeStream.payload.mask
-  writeStream.ready := nativePort.write.ready
-
-  // Native port read channel
-  nativePort.read.ready := True
-  bus.rsp.valid := nativePort.read.valid
-  bus.rsp.data := nativePort.read.payload
 }

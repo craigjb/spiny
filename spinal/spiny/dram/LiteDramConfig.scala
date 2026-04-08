@@ -31,20 +31,23 @@
 
 package spiny.dram
 
-import java.io.FileInputStream
+import java.io.{FileInputStream, FileWriter}
 import scala.collection.JavaConverters._
 
-import org.yaml.snakeyaml.Yaml
+import org.yaml.snakeyaml.{Yaml, DumperOptions}
 
 import spinal.core._
 
 /** DDR memory types supported by LiteDRAM */
-sealed trait DramMemType
+sealed trait DramMemType {
+  def yamlName: String
+  def dataRate: Int // 1 for SDR, 2 for DDR
+}
 object DramMemType {
-  case object Sdr extends DramMemType
-  case object Ddr2 extends DramMemType
-  case object Ddr3 extends DramMemType
-  case object Ddr4 extends DramMemType
+  case object Sdr extends DramMemType { val yamlName = "SDR"; val dataRate = 1 }
+  case object Ddr2 extends DramMemType { val yamlName = "DDR2"; val dataRate = 2 }
+  case object Ddr3 extends DramMemType { val yamlName = "DDR3"; val dataRate = 2 }
+  case object Ddr4 extends DramMemType { val yamlName = "DDR4"; val dataRate = 2 }
 
   def fromString(s: String): DramMemType = s match {
     case "SDR" => Sdr
@@ -55,30 +58,26 @@ object DramMemType {
   }
 }
 
-/** User port interface types */
-sealed trait UserPortType
-object UserPortType {
-  case object Native extends UserPortType
-  case object Axi extends UserPortType
-  case object Wishbone extends UserPortType
-  case object Avalon extends UserPortType
-  case object Fifo extends UserPortType
+/** PHY type for LiteDRAM */
+sealed trait DramPhy {
+  def name: String
+  def nphases: Int
+}
+object DramPhy {
+  case object A7DDRPHY extends DramPhy { val name = "A7DDRPHY"; val nphases = 4 }
+  case class Custom(name: String, nphases: Int) extends DramPhy
 
-  def fromString(s: String): UserPortType = s match {
-    case "native" => Native
-    case "axi" => Axi
-    case "wishbone" => Wishbone
-    case "avalon" => Avalon
-    case "fifo" => Fifo
-    case _ => throw new IllegalArgumentException(s"Unknown port type: $s")
+  def fromString(s: String): DramPhy = s match {
+    case "A7DDRPHY" => A7DDRPHY
+    case _ => throw new IllegalArgumentException(
+      s"Unknown PHY: $s (use DramPhy.Custom for non-standard PHYs)")
   }
 }
 
-/** User port configuration */
+/** AXI user port configuration */
 case class UserPortConfig(
-  portType: UserPortType,
   dataWidth: Int,
-  idWidth: Int = 0
+  idWidth: Int
 )
 
 /** DRAM geometry (required for all modules to determine IO widths) */
@@ -99,64 +98,98 @@ case class DramGeometry(
 /**
  * LiteDRAM configuration
  *
- * Only includes parameters needed to determine IO ports for blackbox generation.
- * Full parameters are in the FuseSoC generator (see fusesoc/litedram_gen.py).
+ * Defines all parameters needed for blackbox IO generation and YAML config
+ * output for litedram_gen.py. User ports default to empty; they are populated
+ * dynamically by SpinyDram.axi4Port() and passed to the BlackBox at build time.
  */
 case class LiteDramConfig(
-  name: String = "litedram_core",  // Module name (from YAML root)
+  name: String = "litedram_core",
   memType: DramMemType,
+  moduleName: String = "",
+  geometry: DramGeometry,
   numByteGroups: Int,
   numRanks: Int,
-  geometry: DramGeometry,          // Always required (even for built-in modules)
+  phy: DramPhy = DramPhy.A7DDRPHY,
+  fpgaSpeedgrade: Int = 0,
+  inputClkFreq: HertzNumber = 100e6 Hz,
   userClkFreq: HertzNumber,
-  userPorts: Map[String, UserPortConfig],
-  withChipSelects: Boolean = true  // Some boards tie CS to ground
+  iodelayClkFreq: HertzNumber = 200e6 Hz,
+  extraCmdLatency: Int = 0,
+  cmdBufferDepth: Int = 16,
+  withChipSelects: Boolean = true,
+  userPorts: Map[String, UserPortConfig] = Map.empty
 ) {
 
-  /**
-   * DDR data width in bits (number of DQ pins)
-   */
+  /** Controller internal data width = DDR bus width * PHY phases */
+  def controllerDataWidth: Int = numByteGroups * 8 * phy.nphases
+
+  /** DDR data width in bits (number of DQ pins) */
   def ddrDataWidth: Int = numByteGroups * 8
 
-  /**
-   * Address width (bits needed to address rows)
+  /** Native crossbar data width inside LiteDRAM.
+   *  Equals dfi_databits * nphases = dq_width * dataRate * nphases.
+   *  User port data_width should equal this to avoid internal converters.
    */
+  def nativePortDataWidth: Int = ddrDataWidth * memType.dataRate * phy.nphases
+
+  /** Address width (bits needed to address rows) */
   def addressWidth: Int = geometry.addressWidth
 
-  /**
-   * Bank address width (bits needed to address banks)
-   */
+  /** Bank address width (bits needed to address banks) */
   def bankAddressWidth: Int = geometry.bankAddressWidth
 
-  /**
-   * Calculate native port address width based on port data width
-   */
-  def nativePortAddressWidth(portDataWidth: Int): Int = {
-    log2Up(geometry.numRows) + log2Up(geometry.numCols) +
-      log2Up(geometry.numBanks) + log2Up(numByteGroups) -
-      log2Up(portDataWidth / 8)
-  }
-
-  /**
-   * AXI port address width (byte-addressed, no word-size subtraction)
-   */
+  /** AXI port address width (byte-addressed, no word-size subtraction) */
   def axiPortAddressWidth: Int = {
     log2Up(geometry.numRows) + log2Up(geometry.numCols) +
       log2Up(geometry.numBanks) + log2Up(numByteGroups)
   }
 
-  /**
-   * Get only the native port configurations
-   */
-  def nativePortConfigs: Map[String, UserPortConfig] = {
-    userPorts.filter(_._2.portType == UserPortType.Native)
-  }
+  /** Return a copy with user ports populated */
+  def withPorts(ports: Map[String, UserPortConfig]): LiteDramConfig =
+    copy(userPorts = ports)
 
-  /**
-   * Get only the AXI port configurations
-   */
-  def axiPortConfigs: Map[String, UserPortConfig] = {
-    userPorts.filter(_._2.portType == UserPortType.Axi)
+  /** Write config as YAML in the format litedram_gen.py expects */
+  def toYaml(path: String): Unit = {
+    val options = new DumperOptions()
+    options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK)
+    val yaml = new Yaml(options)
+
+    val data = new java.util.LinkedHashMap[String, Any]()
+    data.put("name", name)
+    data.put("fpga_speedgrade", Int.box(fpgaSpeedgrade))
+    data.put("type", memType.yamlName)
+    data.put("dram_module", moduleName)
+
+    val geom = new java.util.LinkedHashMap[String, Any]()
+    geom.put("num_banks", Int.box(geometry.numBanks))
+    geom.put("num_rows", Int.box(geometry.numRows))
+    geom.put("num_cols", Int.box(geometry.numCols))
+    data.put("dram_geometry", geom)
+
+    data.put("extra_cmd_latency", Int.box(extraCmdLatency))
+    data.put("num_byte_groups", Int.box(numByteGroups))
+    data.put("num_ranks", Int.box(numRanks))
+    data.put("phy", phy.name)
+    data.put("input_clk_freq", Double.box(inputClkFreq.toDouble))
+    data.put("user_clk_freq", Double.box(userClkFreq.toDouble))
+    data.put("iodelay_clk_freq", Double.box(iodelayClkFreq.toDouble))
+    data.put("cmd_buffer_depth", Int.box(cmdBufferDepth))
+    data.put("with_chip_selects", Boolean.box(withChipSelects))
+
+    val ports = new java.util.LinkedHashMap[String, Any]()
+    for ((portName, portConfig) <- userPorts) {
+      val port = new java.util.LinkedHashMap[String, Any]()
+      port.put("type", "axi")
+      port.put("data_width", Int.box(portConfig.dataWidth))
+      port.put("id_width", Int.box(portConfig.idWidth))
+      ports.put(portName, port)
+    }
+    data.put("user_ports", ports)
+
+    val writer = new FileWriter(path)
+    yaml.dump(data, writer)
+    writer.close()
+    SpinalInfo(s"LiteDRAM config dumped to: $path")
   }
 }
 
@@ -169,6 +202,16 @@ object LiteDramConfig {
       case s: String => s.toInt
       case null => throw new IllegalArgumentException(s"Missing required field: $key")
       case x => throw new IllegalArgumentException(s"Invalid type for $key: ${x.getClass}")
+    }
+  }
+
+  private def getOptInt(map: java.util.Map[String, Any], key: String, default: Int): Int = {
+    Option(map.get(key)) match {
+      case Some(i: java.lang.Integer) => i.intValue()
+      case Some(d: java.lang.Double) => d.intValue()
+      case Some(s: String) => s.toInt
+      case Some(x) => throw new IllegalArgumentException(s"Invalid type for $key: ${x.getClass}")
+      case None => default
     }
   }
 
@@ -198,6 +241,16 @@ object LiteDramConfig {
     }
   }
 
+  private def getOptDouble(map: java.util.Map[String, Any], key: String, default: Double): Double = {
+    Option(map.get(key)) match {
+      case Some(d: java.lang.Double) => d.doubleValue()
+      case Some(i: java.lang.Integer) => i.doubleValue()
+      case Some(s: String) => s.toDouble
+      case Some(x) => throw new IllegalArgumentException(s"Invalid type for $key: ${x.getClass}")
+      case None => default
+    }
+  }
+
   private def getOptBool(map: java.util.Map[String, Any], key: String, default: Boolean): Boolean = {
     Option(map.get(key)) match {
       case Some(b: java.lang.Boolean) => b.booleanValue()
@@ -209,7 +262,6 @@ object LiteDramConfig {
   /**
    * Load configuration from YAML file.
    *
-   * Only parses fields needed to determine IO ports.
    * Reads the same YAML format that fusesoc/litedram_gen.py expects.
    */
   def fromYaml(path: String): LiteDramConfig = {
@@ -220,10 +272,19 @@ object LiteDramConfig {
 
     val name = getOptString(data, "name", "litedram_core")
     val memType = DramMemType.fromString(getString(data, "type"))
+    val moduleName = getOptString(data, "dram_module", "")
     val numByteGroups = getInt(data, "num_byte_groups")
     val numRanks = getInt(data, "num_ranks")
     val userClkFreq = getDouble(data, "user_clk_freq") Hz
     val withChipSelects = getOptBool(data, "with_chip_selects", default = true)
+
+    val phyStr = getOptString(data, "phy", "A7DDRPHY")
+    val phy = DramPhy.fromString(phyStr)
+    val fpgaSpeedgrade = getOptInt(data, "fpga_speedgrade", 0)
+    val inputClkFreq = getOptDouble(data, "input_clk_freq", 100e6) Hz
+    val iodelayClkFreq = getOptDouble(data, "iodelay_clk_freq", 200e6) Hz
+    val extraCmdLatency = getOptInt(data, "extra_cmd_latency", 0)
+    val cmdBufferDepth = getOptInt(data, "cmd_buffer_depth", 16)
 
     // Parse geometry (always required)
     val geomMap = data.get("dram_geometry").asInstanceOf[java.util.Map[String, Any]]
@@ -233,28 +294,33 @@ object LiteDramConfig {
       numCols = getInt(geomMap, "num_cols")
     )
 
-    // Parse user ports
+    // Parse user ports (AXI only)
     val portsMap = data.get("user_ports").asInstanceOf[java.util.Map[String, Any]]
-    val userPorts = portsMap.asScala.map { case (portName, portData) =>
+    val userPorts = portsMap.asScala.collect { case (portName, portData) =>
       val portMap = portData.asInstanceOf[java.util.Map[String, Any]]
-      val portType = UserPortType.fromString(getString(portMap, "type"))
+      val portType = getString(portMap, "type")
+      require(portType == "axi", s"Only AXI user ports are supported, got: $portType")
       val dataWidth = getInt(portMap, "data_width")
-      val idWidth = portType match {
-        case UserPortType.Axi => getInt(portMap, "id_width")
-        case _ => 0
-      }
-      portName -> UserPortConfig(portType, dataWidth, idWidth)
+      val idWidth = getInt(portMap, "id_width")
+      portName -> UserPortConfig(dataWidth, idWidth)
     }.toMap
 
     LiteDramConfig(
       name = name,
       memType = memType,
+      moduleName = moduleName,
+      geometry = geometry,
       numByteGroups = numByteGroups,
       numRanks = numRanks,
-      geometry = geometry,
+      phy = phy,
+      fpgaSpeedgrade = fpgaSpeedgrade,
+      inputClkFreq = inputClkFreq,
       userClkFreq = userClkFreq,
-      userPorts = userPorts,
-      withChipSelects = withChipSelects
+      iodelayClkFreq = iodelayClkFreq,
+      extraCmdLatency = extraCmdLatency,
+      cmdBufferDepth = cmdBufferDepth,
+      withChipSelects = withChipSelects,
+      userPorts = userPorts
     )
   }
 }

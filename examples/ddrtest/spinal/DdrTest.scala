@@ -44,10 +44,50 @@ import spiny.dram._
 import java.io.File
 import org.rogach.scallop._
 
+object DdrTestConfigs {
+  val nexysVideo = LiteDramConfig(
+    name = "Ddr3Ctrl",
+    memType = DramMemType.Ddr3,
+    moduleName = "MT41K256M16",
+    geometry = DramGeometry(numBanks = 8, numRows = 32768, numCols = 1024),
+    numByteGroups = 2,
+    numRanks = 1,
+    phy = DramPhy.A7DDRPHY,
+    fpgaSpeedgrade = -1,
+    inputClkFreq = 100e6 Hz,
+    userClkFreq = 100e6 Hz,
+    iodelayClkFreq = 200e6 Hz,
+    cmdBufferDepth = 16,
+    withChipSelects = false,
+  )
+
+  val nexysA7 = LiteDramConfig(
+    name = "Ddr2Ctrl",
+    memType = DramMemType.Ddr2,
+    moduleName = "MT47H64M16",
+    geometry = DramGeometry(numBanks = 8, numRows = 8192, numCols = 1024),
+    numByteGroups = 2,
+    numRanks = 1,
+    phy = DramPhy.A7DDRPHY,
+    fpgaSpeedgrade = -1,
+    inputClkFreq = 100e6 Hz,
+    userClkFreq = 80e6 Hz,
+    iodelayClkFreq = 200e6 Hz,
+    cmdBufferDepth = 16,
+  )
+
+  def fromTarget(target: String): LiteDramConfig = target match {
+    case "nexys_video" => nexysVideo
+    case "nexys_a7" => nexysA7
+    case _ => throw new IllegalArgumentException(
+      s"Unknown target: $target. Available: nexys_video, nexys_a7")
+  }
+}
+
 class DdrTest(
-  dramConfigPath: String,
-  dramSvdPath: String = null,
+  dramConfig: LiteDramConfig,
   firmwarePath: String = null,
+  dramSvdPath: Option[String] = None,
   sim: Boolean = false
 ) extends Component {
   val io = new Bundle {
@@ -66,11 +106,10 @@ class DdrTest(
   )
 
   // Instantiate SpinyDram in input clock domain
-  val dramConfig = LiteDramConfig.fromYaml(dramConfigPath)
   val dram = inputClkDomain on SpinyDram(
     dramConfig,
-    svdPath = Option(dramSvdPath),
-    sim = sim
+    sim = sim,
+    svdPath = dramSvdPath
   ).setName("Dram")
 
   // Expose DDR physical interface
@@ -79,7 +118,7 @@ class DdrTest(
   }
 
   // SoC runs on user clock domain
-  val cpuProfile = SpinyRv32iRustCpuProfile() 
+  val cpuProfile = SpinyRv32iRustCpuProfile()
   val soc = dram.userClockDomain on new SpinySoC(
     cpuProfile = cpuProfile,
     ramSize = 16 kB,
@@ -96,57 +135,46 @@ class DdrTest(
     ).setName("Gpio")
     io.LEDS := gpio.getBankBits("leds")
 
-    val dramPort = dram.axi4Port("port0")
-
-    val upsizer = Axi4Upsizer(
-      inputConfig = cpuProfile.axiConfig,
-      outputConfig = cpuProfile.axiConfig.copy(
-        dataWidth = dramPort.config.dataWidth
-      ),
-      readPendingQueueSize = 4
-    )
-    upsizer.io.output >> dramPort
-    val dramBus = cloneOf(upsizer.io.input)
-    dramBus.pipelined(StreamPipe.FULL) >> upsizer.io.input
+    val dramPort = dram.axi4Port("port0", idWidth = 4, cpuProfile.axiConfig)
 
     build(
       peripherals = Seq(gpio, dram),
       mainBusAxi4Slaves = Seq(
-        (SizeMapping(0x20000000, dram.ramSize), dramBus)
+        (SizeMapping(0x20000000, dram.ramSize), dramPort)
       )
     )
   }
+
+  dram.build()
 }
 
 object TopLevelVerilog extends App {
   object Conf extends ScallopConf(args) {
+    val target = trailArg[String]()
     val sim = opt[Boolean]()
-
+    val firmware = opt[File]()
+    validateFileExists(firmware)
+    validateFileIsFile(firmware)
     val dramSvd = opt[File]()
     validateFileExists(dramSvd)
     validateFileIsFile(dramSvd)
-
-    val firmware= opt[File]()
-    validateFileExists(firmware)
-    validateFileIsFile(firmware)
-
-    val dramConfig = trailArg[File]()
-    validateFileExists(dramConfig)
-    validateFileIsFile(dramConfig)
-
     verify()
   }
   println(f"[DdrTest] TopLevelVerilog.Conf: ${Conf.summary}")
+
+  val dramConfig = DdrTestConfigs.fromTarget(Conf.target())
 
   val spinalReport = SpinalConfig(
     targetDirectory = "target/spinal",
     inlineRom = true
   ).generateVerilog(new DdrTest(
-    dramConfigPath = Conf.dramConfig().getAbsolutePath(),
-    dramSvdPath = Conf.dramSvd.map(f => f.getAbsolutePath()).getOrElse(null),
+    dramConfig = dramConfig,
     firmwarePath = Conf.firmware.map(f => f.getAbsolutePath()).getOrElse(null),
+    dramSvdPath = Conf.dramSvd.map(f => f.getAbsolutePath()).toOption,
     sim = Conf.sim()
   ))
+
+  spinalReport.toplevel.dram.dumpConfig("target/spinal/litedram_config.yaml")
 
   val soc = spinalReport.toplevel.soc
   println(soc.peripheralMappings)
@@ -156,21 +184,18 @@ object TopLevelVerilog extends App {
 
 object TopLevelSim extends App {
   object Conf extends ScallopConf(args) {
-    val dramConfig = trailArg[File]()
-    validateFileExists(dramConfig)
-    validateFileIsFile(dramConfig)
-
+    val target = trailArg[String]()
     val dramRtl = trailArg[File]()
     validateFileExists(dramRtl)
     validateFileIsFile(dramRtl)
-
     val firmware = trailArg[File]()
     validateFileExists(firmware)
     validateFileIsFile(firmware)
-
     verify()
   }
   println(f"[DdrTest] TopLevelSim.Conf: ${Conf.summary}")
+
+  val dramConfig = DdrTestConfigs.fromTarget(Conf.target())
 
   SimConfig
     .withVerilator
@@ -179,7 +204,7 @@ object TopLevelSim extends App {
     .addSimulatorFlag("-Wno-CASEINCOMPLETE")
     .addSimulatorFlag("-Wno-COMBDLY")
     .compile(new DdrTest(
-      dramConfigPath = Conf.dramConfig().getAbsolutePath(),
+      dramConfig = dramConfig,
       firmwarePath = Conf.firmware().getAbsolutePath(),
       sim = true
     ))

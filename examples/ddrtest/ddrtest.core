@@ -26,7 +26,6 @@ generate:
   litedram_sim:
     generator: litedram
     parameters:
-      config_file: data/nexys_video/Ddr3Ctrl.yaml
       sim: yes
       verilog_output_path: "target/litedram/Ddr3Ctrl.v"
       svd_output_path: "target/litedram/Ddr3Ctrl.svd"
@@ -39,14 +38,22 @@ generate:
       project: ddrtest
       file_type: verilogSource
       args:
-        - "data/nexys_video/Ddr3Ctrl.yaml"
+        - "nexys_video"
         - "target/litedram/Ddr3Ctrl.v"
         - "rust/target/release/ddrtest-fw.bin"
 
   litedram:
     generator: litedram
     parameters:
+      config_file: target/spinal/litedram_config.yaml
       verilog_output_path: "target/litedram/litedram.v"
+
+  litedram-config:
+    generator: spinalhdl
+    parameters:
+      sbt_dir: "../../"
+      main: spiny.examples.ddrtest.TopLevelVerilog
+      project: ddrtest
 
   svd:
     generator: spinalhdl
@@ -82,7 +89,12 @@ targets:
   sim:
     filesets: [dep]
     generate:
-      - litedram_sim
+      - litedram-config:
+          args:
+            - "--sim"
+            - "nexys_video"
+      - litedram_sim:
+          config_file: target/spinal/litedram_config.yaml
       - svd:
           output_path: "target/spinal/DdrTest.v"
           file_type: verilogSource
@@ -90,7 +102,7 @@ targets:
             - "--sim"
             - "--dram-svd"
             - "target/litedram/Ddr3Ctrl.svd"
-            - "data/nexys_video/Ddr3Ctrl.yaml"
+            - "nexys_video"
       - rustpac
       - firmware:
           args:
@@ -106,7 +118,7 @@ targets:
     toplevel: DdrTest
     flow: generic # dummy flow
     flow_options:
-      tool: verilator 
+      tool: verilator
       mode: lint-only
       verilator_options:
         - "-Wno-COMBDLY"
@@ -118,15 +130,18 @@ targets:
   nexys_a7_100t:
     filesets: [nexys_a7_xdc, vivado_settings, dep]
     generate:
+      - litedram-config:
+          args:
+            - "nexys_a7"
       - litedram:
-          config_file: data/nexys_a7_100t/Ddr2Ctrl.yaml
+          config_file: target/spinal/litedram_config.yaml
           verilog_output_path: "target/litedram/Ddr2Ctrl.v"
           svd_output_path: "target/litedram/Ddr2Ctrl.svd"
       - svd:
           args:
             - "--dram-svd"
             - "target/litedram/Ddr2Ctrl.svd"
-            - "data/nexys_a7_100t/Ddr2Ctrl.yaml"
+            - "nexys_a7"
       - rustpac
       - firmware:
           args:
@@ -140,11 +155,11 @@ targets:
             - "target/release/ddrtest-fw.bin"
       - spinalhdl:
           args:
-            - "--dram-svd"
-            - "target/litedram/Ddr2Ctrl.svd"
             - "--firmware"
             - "rust/target/release/ddrtest-fw.bin"
-            - "data/nexys_a7_100t/Ddr2Ctrl.yaml"
+            - "--dram-svd"
+            - "target/litedram/Ddr2Ctrl.svd"
+            - "nexys_a7"
     toplevel: DdrTest
     flow: vivado
     flow_options:
@@ -153,15 +168,18 @@ targets:
   nexys_video:
     filesets: [nexys_video_xdc, vivado_settings, dep]
     generate:
+      - litedram-config:
+          args:
+            - "nexys_video"
       - litedram:
-          config_file: data/nexys_video/Ddr3Ctrl.yaml
+          config_file: target/spinal/litedram_config.yaml
           verilog_output_path: "target/litedram/Ddr3Ctrl.v"
           svd_output_path: "target/litedram/Ddr3Ctrl.svd"
       - svd:
           args:
             - "--dram-svd"
             - "target/litedram/Ddr3Ctrl.svd"
-            - "data/nexys_video/Ddr3Ctrl.yaml"
+            - "nexys_video"
       - rustpac
       - firmware:
           args:
@@ -175,11 +193,11 @@ targets:
             - "target/release/ddrtest-fw.bin"
       - spinalhdl:
           args:
-            - "--dram-svd"
-            - "target/litedram/Ddr3Ctrl.svd"
             - "--firmware"
             - "rust/target/release/ddrtest-fw.bin"
-            - "data/nexys_video/Ddr3Ctrl.yaml"
+            - "--dram-svd"
+            - "target/litedram/Ddr3Ctrl.svd"
+            - "nexys_video"
     toplevel: DdrTest
     flow: vivado
     flow_options:
