@@ -54,9 +54,9 @@ object DdrTestConfigs {
     numRanks = 1,
     phy = DramPhy.A7DDRPHY,
     fpgaSpeedgrade = -1,
-    inputClkFreq = 100e6 Hz,
-    userClkFreq = 100e6 Hz,
-    iodelayClkFreq = 200e6 Hz,
+    inputClkFreq = 100 MHz,
+    userClkFreq = 80 MHz,
+    iodelayClkFreq = 200 MHz,
     cmdBufferDepth = 16,
     withChipSelects = false,
   )
@@ -70,9 +70,9 @@ object DdrTestConfigs {
     numRanks = 1,
     phy = DramPhy.A7DDRPHY,
     fpgaSpeedgrade = -1,
-    inputClkFreq = 100e6 Hz,
-    userClkFreq = 80e6 Hz,
-    iodelayClkFreq = 200e6 Hz,
+    inputClkFreq = 100 MHz,
+    userClkFreq = 80 MHz,
+    iodelayClkFreq = 200 MHz,
     cmdBufferDepth = 16,
   )
 
@@ -136,11 +136,18 @@ class DdrTest(
     io.LEDS := gpio.getBankBits("leds")
 
     val dramPort = dram.axi4Port("port0", idWidth = 4, cpuProfile.axiConfig)
+    val dramBus = Axi4Shared(cpuProfile.axiConfig)
+    dramBus.pipelined(
+      arw = StreamPipe.FULL,
+      w = StreamPipe.FULL,
+      b = StreamPipe.FULL,
+      r = StreamPipe.FULL
+    ).toAxi4() >> dramPort
 
     build(
       peripherals = Seq(gpio, dram),
-      mainBusAxi4Slaves = Seq(
-        (SizeMapping(0x20000000, dram.ramSize), dramPort)
+      mainBusSlaves = Seq(
+        (SizeMapping(0x20000000, dram.ramSize), dramBus)
       )
     )
   }
