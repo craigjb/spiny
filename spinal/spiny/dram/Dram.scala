@@ -86,6 +86,8 @@ case class SpinyDram(
   peripheralBus = io.apb
   peripheralMappedSize = BigInt(1) << ctrlAddressWidth
 
+  val inputClockDomain = ClockDomain.current
+
   // User clock domain (signals connected to BlackBox in build())
   val userClk = Bool()
   val userRst = Bool()
@@ -157,7 +159,7 @@ case class SpinyDram(
    */
   def build(): Unit = this.rework {
     val fullConfig = liteDramFullConfig
-    val liteDram = LiteDram(fullConfig, sim)
+    val liteDram = inputClockDomain on LiteDram(fullConfig, sim)
 
     // Connect clocks
     userClk := liteDram.io.userClk
@@ -187,7 +189,7 @@ case class SpinyDram(
 
     // Connect AXI ports to BlackBox
     for ((portName, rawPort) <- axiPorts) {
-      liteDram.io.axiUserPorts(portName) <> rawPort
+      rawPort >> liteDram.io.axiUserPorts(portName)
     }
 
     // Connect physical DDR
