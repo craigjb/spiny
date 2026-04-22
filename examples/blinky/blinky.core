@@ -103,15 +103,20 @@ targets:
     generate:
       - svd:
           args:
+            - "--num-leds"
             - "16"
+            - "--num-switches"
             - "16"
       - rustpac
       - hal
       - firmware
       - spinalhdl:
           args:
+            - "--num-leds"
             - "16"
+            - "--num-switches"
             - "16"
+            - "--firmware"
             - "rust/target/release/blinky.bin"
     toplevel: Blinky
     flow: vivado
@@ -123,15 +128,20 @@ targets:
     generate:
       - svd:
           args:
+            - "--num-leds"
             - "8"
+            - "--num-switches"
             - "8"
       - rustpac
       - hal
       - firmware
       - spinalhdl:
           args:
+            - "--num-leds"
             - "8"
+            - "--num-switches"
             - "8"
+            - "--firmware"
             - "rust/target/release/blinky.bin"
     toplevel: Blinky
     flow: vivado
