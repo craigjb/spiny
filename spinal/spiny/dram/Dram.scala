@@ -121,13 +121,13 @@ case class SpinyDram(
    *
    * Must be called before build() (i.e., during SoC body).
    */
-  def axi4Port(name: String, idWidth: Int, busConfig: Axi4Config): Axi4 = {
+  def axi4Port(name: String, busConfig: Axi4Config): Axi4 = {
     require(!axiPortDefs.contains(name), s"AXI port '$name' already defined")
 
     val rawAxiConfig = Axi4Config(
       addressWidth = config.axiPortAddressWidth,
       dataWidth = config.nativePortDataWidth,
-      idWidth = idWidth,
+      idWidth = busConfig.idWidth,
       useLock = false, useRegion = false,
       useCache = false, useProt = false, useQos = false
     )
@@ -136,7 +136,7 @@ case class SpinyDram(
     val rawPort = this.rework {
       slave(Axi4(rawAxiConfig)).setName(name)
     }
-    axiPortDefs(name) = AxiPortDef(idWidth, rawPort)
+    axiPortDefs(name) = AxiPortDef(busConfig.idWidth, rawPort)
 
     // Width adaptation (created in caller's Component/clock domain)
     if (busConfig.dataWidth == config.nativePortDataWidth) {

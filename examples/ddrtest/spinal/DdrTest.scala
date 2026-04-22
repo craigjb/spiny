@@ -187,7 +187,7 @@ class DdrTest(
     ).setName("Gpio")
     io.LEDS := gpio.getBankBits("leds")
 
-    val dramPort = dram.axi4Port("port0", idWidth = 4, cpuProfile.axiConfig)
+    val dramPort = dram.axi4Port("port0", cpuProfile.axiConfig)
     val dramBus = Axi4Shared(cpuProfile.axiConfig)
     dramBus.pipelined(
       arw = StreamPipe.FULL,
