@@ -161,7 +161,8 @@ class DdrTest(
   val dram = inputClkDomain on SpinyDram(
     dramConfig,
     sim = sim,
-    svdPath = dramSvdPath
+    svdPath = dramSvdPath,
+    baseAddress = BigInt(0x20000000)
   ).setName("Dram")
 
   // Expose DDR physical interface
@@ -196,13 +197,10 @@ class DdrTest(
       r = StreamPipe.FULL
     ).toAxi4() >> dramPort
 
-    val dramDataBase = BigInt(0x20000000)
-    dram.dataBaseAddress = Some(dramDataBase)
-
     build(
       peripherals = Seq(gpio, dram),
       mainBusSlaves = Seq(
-        (SizeMapping(dramDataBase, dram.ramSize), dramBus)
+        (SizeMapping(dram.baseAddress, dram.ramSize), dramBus)
       )
     )
   }

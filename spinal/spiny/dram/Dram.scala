@@ -63,7 +63,8 @@ case class SpinyDram(
     config: LiteDramConfig,
     sim: Boolean = false,
     ctrlAddressWidth: Int = 16,
-    svdPath: Option[String] = None
+    svdPath: Option[String] = None,
+    baseAddress: BigInt
 ) extends Component with SpinyPeripheral {
 
   val apb3Config = Apb3Config(
@@ -94,9 +95,6 @@ case class SpinyDram(
     frequency = FixedFrequency(config.userClkFreq),
     config = ClockDomainConfig(clockEdge = RISING, resetKind = SYNC)
   )
-
-  /** Set by the SoC to the AXI data port base address (for HAL generation). */
-  var dataBaseAddress: Option[BigInt] = None
 
   /** Total RAM size in bytes, based on DRAM geometry and byte groups. */
   def ramSize: BigInt = {
@@ -214,13 +212,10 @@ case class SpinyDram(
     val modName = name.toLowerCase
     val freqHz = config.userClkFreq.toLong
     val simStr = if (sim) "true" else "false"
-    val addrConsts = dataBaseAddress match {
-      case Some(base) =>
-        s"""|
-            |    pub const BASE_ADDRESS: usize = 0x${base.toString(16)};
-            |    pub const SIZE: usize = 0x${ramSize.toString(16)};""".stripMargin
-      case None => ""
-    }
+    val addrConsts =
+      s"""|
+          |    pub const BASE_ADDRESS: usize = 0x${baseAddress.toString(16)};
+          |    pub const SIZE: usize = 0x${ramSize.toString(16)};""".stripMargin
     config.memType match {
       case DramMemType.Ddr3 =>
         val rttNomOhms = config.rttNom.map(parseOhms).getOrElse(60)
