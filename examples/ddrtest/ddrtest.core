@@ -5,12 +5,12 @@ description: DDR memory example
 filesets:
   nexys_a7_xdc:
     files:
-      - data/nexys_a7_100t/nexys_a7_100t.xdc
+      - data/nexys_a7_100t.xdc
     file_type: xdc
 
   nexys_video_xdc:
     files:
-      - data/nexys_video/nexys_video.xdc
+      - data/nexys_video.xdc
     file_type: xdc
 
   vivado_settings:
