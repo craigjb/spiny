@@ -107,8 +107,7 @@ case class SpinyDram(
   }
 
   // --- Dynamic port collection ---
-  private case class AxiPortDef(idWidth: Int, rawPort: Axi4)
-  private val axiPortDefs = mutable.LinkedHashMap[String, AxiPortDef]()
+  private val axiPorts = mutable.LinkedHashMap[String, Axi4]()
 
   /**
    * Add an AXI port with automatic width adaptation.
@@ -122,7 +121,7 @@ case class SpinyDram(
    * Must be called before build() (i.e., during SoC body).
    */
   def axi4Port(name: String, busConfig: Axi4Config): Axi4 = {
-    require(!axiPortDefs.contains(name), s"AXI port '$name' already defined")
+    require(!axiPorts.contains(name), s"AXI port '$name' already defined")
 
     val rawAxiConfig = Axi4Config(
       addressWidth = config.axiPortAddressWidth,
@@ -136,7 +135,7 @@ case class SpinyDram(
     val rawPort = this.rework {
       slave(Axi4(rawAxiConfig)).setName(name)
     }
-    axiPortDefs(name) = AxiPortDef(busConfig.idWidth, rawPort)
+    axiPorts(name) = rawPort
 
     // Width adaptation (created in caller's Component/clock domain)
     if (busConfig.dataWidth == config.nativePortDataWidth) {
@@ -189,8 +188,8 @@ case class SpinyDram(
     apb.PSLVERROR := wb.ERR
 
     // Connect AXI ports to BlackBox
-    for ((portName, portDef) <- axiPortDefs) {
-      liteDram.io.axiUserPorts(portName) <> portDef.rawPort
+    for ((portName, rawPort) <- axiPorts) {
+      liteDram.io.axiUserPorts(portName) <> rawPort
     }
 
     // Connect physical DDR
@@ -199,8 +198,8 @@ case class SpinyDram(
 
   /** Computed full config with ports (for BlackBox and YAML generation) */
   private def liteDramFullConfig: LiteDramConfig = config.withPorts(
-    axiPortDefs.map { case (name, d) =>
-      name -> UserPortConfig(config.nativePortDataWidth, d.idWidth)
+    axiPorts.map { case (name, port) =>
+      name -> UserPortConfig(config.nativePortDataWidth, port.config.idWidth)
     }.toMap
   )
 
