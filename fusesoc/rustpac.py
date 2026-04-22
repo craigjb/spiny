@@ -181,7 +181,10 @@ class RustPacGen(Generator):
         crate_version = self.config.get("crate_version")
         output_path = self.config.get("output_path")
         svd_path = self.config.get("svd_path", "target/spinal/SpinySoC.svd")
-        linker_script_path = self.config.get("linker_script_path")
+        linker_script_path = self.config.get(
+            "linker_script_path",
+            "target/spinal/SpinySoC.x"
+        )
 
         missing_parameter = False
         if not crate_name:
@@ -199,10 +202,7 @@ class RustPacGen(Generator):
         files_root = Path(self.files_root)
         output_path = files_root / output_path
         svd_src_path = files_root / svd_path
-        if linker_script_path:
-            linker_script_src = files_root / linker_script_path
-        else:
-            linker_script_src = None
+        linker_script_src = files_root / linker_script_path
 
         current_hashes = {
             "svd": self.get_file_hash(svd_src_path),
@@ -245,7 +245,7 @@ class RustPacGen(Generator):
         shutil.copy2(device_x_path, output_path / "device.x")
 
         # optional linker script
-        if linker_script_src:
+        if linker_script_src.is_file():
             shutil.copy2(linker_script_src, output_path / "pac.x")
 
         (output_path / "Cargo.toml").write_text(

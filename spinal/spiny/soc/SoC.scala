@@ -190,7 +190,7 @@ class SpinySoC(
     SpinalInfo(s"HAL crate dumped to: $path")
   }
 
-  def dumpLinkerScript(path: String) = {
+  def dumpLinkerScript(path: String = "target/spinal/SpinySoC.x") = {
     val linkerScript = 
       f"""|MEMORY
           |{

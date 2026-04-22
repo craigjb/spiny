@@ -134,7 +134,7 @@ object TopLevelVerilog extends App {
     pacCratePath = "../blinky-pac",
     spinyHalPath = "../../../../../rust/spiny-hal"
   )
-  soc.dumpLinkerScript("target/spinal/memory.x")
+  soc.dumpLinkerScript()
 }
 
 object TopLevelSim extends App {
