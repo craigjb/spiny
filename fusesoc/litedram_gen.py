@@ -31,13 +31,13 @@
 
 import sys
 import yaml
-import subprocess
 import shutil
 from pathlib import Path
 from collections.abc import Iterable
 
 from fusesoc.capi2.generator import Generator
 
+from litedram.gen import main as litedram_main
 from litedram import modules as litedram_modules
 from litedram.modules import (
     SDRModule, DDR2Module, DDR3Module, DDR4Module,
@@ -372,32 +372,28 @@ class LiteDramGen(Generator):
         if svd_output_path is not None:
             svd_path = Path(self.files_root) / svd_output_path
             svd_path.parent.mkdir(parents=True, exist_ok=True)
-            command.extend(["--soc-svd", svd_path])
+            command.extend(["--soc-svd", str(svd_path)])
 
-        log_file = output_dir / "litedram_gen.log"
         output_dir.mkdir(parents=True, exist_ok=True)
-        with open(log_file, "w") as f:
-            try:
-                subprocess.check_call(command, stdout=f, stderr=subprocess.STDOUT)
-            except subprocess.CalledProcessError:
+        old_argv = sys.argv
+        sys.argv = command
+        try:
+            litedram_main()
+        except SystemExit as e:
+            if e.code != 0 and e.code is not None:
                 print("ERROR: litedram_gen failed")
-                print(f"See log: {log_file.resolve().as_posix()}")
                 sys.exit(1)
-            except FileNotFoundError:
-                print("ERROR: litedram_gen command not found. "
-                        "Is litex installed and on PATH?")
-                sys.exit(1)
+        finally:
+            sys.argv = old_argv
 
         if not verilog_path.is_file():
             print("ERROR: litedram_gen failed, output verilog not found:")
             print(f"       {verilog_path.resolve().as_posix()}")
-            print(f"See log: {log_file.resolve().as_posix()}")
             sys.exit(1)
 
         if not sim and not xdc_path.is_file():
             print("ERROR: litedram_gen failed, output constraints not found:")
             print(f"       {xdc_path.resolve().as_posix()}")
-            print(f"See log: {log_file.resolve().as_posix()}")
             sys.exit(1)
 
         self.add_files(
