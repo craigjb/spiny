@@ -103,7 +103,7 @@ trait SpinyPeripheral {
    *
    *  Clock frequency is available via ClockDomain.current.frequency.getValue.
    */
-  def halModuleCode(pacCrate: String, name: String, baseAddress: BigInt): Option[String] = None
+  def halModuleCode(pacCrate: String, name: String): Option[String] = None
 
   /** Override to declare Rust crate dependencies needed by halModuleCode output.
    *  Returns Cargo.toml dependency lines: crateName -> versionSpec.

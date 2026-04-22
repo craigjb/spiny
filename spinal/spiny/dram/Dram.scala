@@ -210,7 +210,7 @@ case class SpinyDram(
   private def parseOhms(s: String): Int =
     s.toLowerCase.replace("ohm", "").trim.toInt
 
-  override def halModuleCode(pacCrate: String, name: String, baseAddress: BigInt): Option[String] = {
+  override def halModuleCode(pacCrate: String, name: String): Option[String] = {
     val modName = name.toLowerCase
     val freqHz = config.userClkFreq.toLong
     val simStr = if (sim) "true" else "false"

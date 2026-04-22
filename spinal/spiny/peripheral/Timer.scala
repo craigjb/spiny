@@ -223,7 +223,7 @@ class SpinyTimer(
 
   val clkFreqHz = ClockDomain.current.frequency.getValue.toLong
 
-  override def halModuleCode(pacCrate: String, name: String, baseAddress: BigInt): Option[String] = {
+  override def halModuleCode(pacCrate: String, name: String): Option[String] = {
     if (!isMachineTimer) return None
     val modName = name.toLowerCase
     Some(

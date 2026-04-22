@@ -143,7 +143,7 @@ class SpinySoC(
     // Collect lib.rs modules from all peripherals
     val pacCrateRust = pacCrateName.replace("-", "_")
     val modules = peripheralMappings.flatMap { case (p, sm) =>
-      p.halModuleCode(pacCrateRust, p.getName(), sm.base)
+      p.halModuleCode(pacCrateRust, p.getName())
     }
     val libRs = "#![no_std]\n\n" + modules.mkString("\n\n") + "\n"
 
