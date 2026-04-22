@@ -127,7 +127,13 @@ object TopLevelVerilog extends App {
 
   val soc = spinalReport.toplevel.soc
   soc.dumpSvd("target/spinal/Blinky.svd", "Blinky")
-  soc.dumpHalJson("target/spinal/Blinky.json", "Blinky", 100000000L)
+  soc.dumpHalCrate(
+    path = "target/rust/blinky-hal",
+    crateName = "blinky-hal",
+    pacCrateName = "blinky-pac",
+    pacCratePath = "../blinky-pac",
+    spinyHalPath = "../../../../../rust/spiny-hal"
+  )
   soc.dumpLinkerScript("target/spinal/memory.x")
 }
 

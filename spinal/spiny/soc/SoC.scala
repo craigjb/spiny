@@ -131,30 +131,63 @@ class SpinySoC(
     SpinySvd.dump(path, name, peripheralMappings)
   }
 
-  def dumpHalJson(path: String, name: String, sysClkFreqHz: Long) = {
-    val peripheralEntries = peripheralMappings.flatMap { case (p, sm) =>
-      val desc = p.halDescription
-      if (desc.value.isEmpty) None
-      else {
-        desc("name") = p.getName()
-        desc("base_address") = f"0x${sm.base}%x"
-        Some(desc)
+  def dumpHalCrate(
+    path: String,
+    crateName: String,
+    pacCrateName: String,
+    pacCratePath: String,
+    spinyHalPath: String
+  ): Unit = {
+    assert(apb != null, "Must call build() on SpinySoC first")
+
+    // Collect lib.rs modules from all peripherals
+    val pacCrateRust = pacCrateName.replace("-", "_")
+    val modules = peripheralMappings.flatMap { case (p, sm) =>
+      p.halModuleCode(pacCrateRust, p.getName(), sm.base)
+    }
+    val libRs = "#![no_std]\n\n" + modules.mkString("\n\n") + "\n"
+
+    // Merge dependencies from all peripherals, checking for conflicts
+    val allDeps = peripheralMappings.flatMap { case (p, _) =>
+      p.halDependencies.map { case (k, v) => (k, v, p.getName()) }
+    }
+    val deps = allDeps.groupBy(_._1).map { case (crate, entries) =>
+      val versions = entries.map(_._2).distinct
+      if (versions.size > 1) {
+        val conflicts = entries.map { case (_, v, p) => s"$p: $v" }.mkString(", ")
+        SpinalError(s"HAL dependency conflict for '$crate': $conflicts")
       }
+      crate -> versions.head
     }
 
-    val root = ujson.Obj(
-      "soc" -> ujson.Obj(
-        "name" -> name,
-        "sys_clk_freq_hz" -> sysClkFreqHz.toDouble
-      ),
-      "peripherals" -> ujson.Arr(peripheralEntries: _*)
-    )
+    // Generate Cargo.toml
+    val pacDepKey = pacCrateName.replace("_", "-")
+    val depsSection = deps.map { case (k, v) => s"""$k = $v""" }.mkString("\n")
+    val cargoToml = s"""|[package]
+                        |name = "$crateName"
+                        |version = "0.1.0"
+                        |edition = "2021"
+                        |
+                        |[dependencies]
+                        |spiny-hal = { path = "$spinyHalPath" }
+                        |$pacDepKey = { path = "$pacCratePath" }
+                        |$depsSection
+                        |""".stripMargin
 
-    val pw = new PrintWriter(path)
-    pw.write(ujson.write(root, indent = 2))
-    pw.write("\n")
-    pw.close()
-    SpinalInfo(s"HAL JSON dumped to: ${path}")
+    // Write crate
+    val dir = new java.io.File(path)
+    val srcDir = new java.io.File(dir, "src")
+    srcDir.mkdirs()
+
+    val libPw = new PrintWriter(new java.io.File(srcDir, "lib.rs"))
+    libPw.write(libRs)
+    libPw.close()
+
+    val cargoPw = new PrintWriter(new java.io.File(dir, "Cargo.toml"))
+    cargoPw.write(cargoToml)
+    cargoPw.close()
+
+    SpinalInfo(s"HAL crate dumped to: $path")
   }
 
   def dumpLinkerScript(path: String) = {

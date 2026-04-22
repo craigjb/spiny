@@ -189,12 +189,6 @@ class SpinyEthernet(
 
   checkPeripheralMapping()
 
-  override def halDescription = ujson.Obj(
-    "type" -> "SpinyEthernet",
-    "rx_buffer_size" -> rxBufferSize,
-    "tx_buffer_size" -> txBufferSize,
-  )
-
   /** RMII clock output using ODDR primitive
    *
    *  Xilinx only

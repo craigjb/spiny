@@ -96,11 +96,18 @@ trait SpinyPeripheral {
     Seq(SpinySvd.peripheralXml(this, sizeMapping))
   }
 
-  /** Override to provide HAL generation metadata for this peripheral.
+  /** Override to provide Rust HAL module source for this peripheral.
    *
-   *  Return a ujson.Obj describing the peripheral's configuration.
-   *  Used to generate HAL crate.
-   *  Default returns an empty object (peripheral will be skipped in HAL generation).
+   *  Return Some(rustSource) with a complete `pub mod name { ... }` block,
+   *  or None to skip HAL generation for this peripheral.
+   *
+   *  Clock frequency is available via ClockDomain.current.frequency.getValue.
    */
-  def halDescription: ujson.Obj = ujson.Obj()
+  def halModuleCode(pacCrate: String, name: String, baseAddress: BigInt): Option[String] = None
+
+  /** Override to declare Rust crate dependencies needed by halModuleCode output.
+   *  Returns Cargo.toml dependency lines: crateName -> versionSpec.
+   *  These are merged across all peripherals into the HAL crate's Cargo.toml.
+   */
+  def halDependencies: Map[String, String] = Map.empty
 }

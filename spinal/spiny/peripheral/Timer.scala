@@ -221,11 +221,28 @@ class SpinyTimer(
   override def machineTimerInterrupt: Option[Bool] =
     if (isMachineTimer) Some(io.interrupt) else None
 
-  override def halDescription = ujson.Obj(
-    "type" -> "SpinyTimer",
-    "timer_width" -> timerWidth,
-    "prescale_width" -> prescaleWidth,
-    "num_compares" -> numCompares,
-    "is_machine_timer" -> isMachineTimer,
+  val clkFreqHz = ClockDomain.current.frequency.getValue.toLong
+
+  override def halModuleCode(pacCrate: String, name: String, baseAddress: BigInt): Option[String] = {
+    if (!isMachineTimer) return None
+    val modName = name.toLowerCase
+    Some(
+      s"""|pub mod $modName {
+          |    spiny_hal::timer_hal! {
+          |        pac: $pacCrate,
+          |        peripheral: $name,
+          |        timer_width: $timerWidth,
+          |        num_compares: $numCompares,
+          |        cpu_freq_hz: $clkFreqHz,
+          |    }
+          |}""".stripMargin
+    )
+  }
+
+  override def halDependencies = Map(
+    "embassy-time-driver" -> """{ version = "0.2", features = ["tick-hz-32_768"] }""",
+    "embassy-time-queue-utils" -> """"0.3"""",
+    "critical-section" -> """"1.2"""",
+    "riscv" -> """"0.16"""",
   )
 }

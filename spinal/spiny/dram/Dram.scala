@@ -204,10 +204,6 @@ case class SpinyDram(
   /** Dump LiteDRAM config YAML (call after build, e.g. post-elaboration) */
   def dumpConfig(path: String): Unit = liteDramFullConfig.toYaml(path)
 
-  override def halDescription = ujson.Obj(
-    "type" -> "SpinyDram",
-  )
-
   override def svdPeripherals(sizeMapping: SizeMapping): Seq[scala.xml.Elem] = {
     svdPath match {
       case Some(path) =>

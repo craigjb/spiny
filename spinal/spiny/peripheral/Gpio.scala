@@ -193,21 +193,4 @@ class SpinyGpio(
 
   checkPeripheralMapping()
 
-  override def halDescription = {
-    val banks = bankConfigs.map { bankConf =>
-      ujson.Obj(
-        "name" -> bankConf.name,
-        "width" -> bankConf.width,
-        "direction" -> (bankConf.direction match {
-          case SpinyGpioDirection.Input => "input"
-          case SpinyGpioDirection.Output => "output"
-          case SpinyGpioDirection.InOut => "inout"
-        }),
-      )
-    }
-    ujson.Obj(
-      "type" -> "SpinyGpio",
-      "banks" -> ujson.Arr(banks: _*),
-    )
-  }
 }
