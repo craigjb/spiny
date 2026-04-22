@@ -67,7 +67,6 @@ generate:
       crate_name: ddrtest-pac
       crate_version: 0.1.0
       output_path: "target/rust/ddrtest-pac"
-      svd_path: "target/spinal/DdrTest.svd"
       linker_script_path: "target/spinal/memory.x"
 
   firmware:

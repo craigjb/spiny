@@ -180,7 +180,7 @@ class RustPacGen(Generator):
         crate_name = self.config.get("crate_name")
         crate_version = self.config.get("crate_version")
         output_path = self.config.get("output_path")
-        svd_path = self.config.get("svd_path")
+        svd_path = self.config.get("svd_path", "target/spinal/SpinySoC.svd")
         linker_script_path = self.config.get("linker_script_path")
 
         missing_parameter = False
@@ -192,9 +192,6 @@ class RustPacGen(Generator):
             missing_parameter = True
         if not output_path:
             print("ERROR: 'output_path' is a required parameter")
-            missing_parameter = True
-        if not svd_path:
-            print("ERROR: 'svd_path' is a required parameter")
             missing_parameter = True
         if missing_parameter:
             sys.exit(1)

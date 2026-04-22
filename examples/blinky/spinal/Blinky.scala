@@ -126,7 +126,7 @@ object TopLevelVerilog extends App {
   ))
 
   val soc = spinalReport.toplevel.soc
-  soc.dumpSvd("target/spinal/Blinky.svd", "Blinky")
+  soc.dumpSvd("Blinky")
   soc.dumpHalCrate(
     path = "target/rust/blinky-hal",
     crateName = "blinky-hal",

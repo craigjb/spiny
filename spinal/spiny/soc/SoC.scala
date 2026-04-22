@@ -127,7 +127,7 @@ class SpinySoC(
     apb.mappings
   }
 
-  def dumpSvd(path: String, name: String) = {
+  def dumpSvd(name: String, path: String = "target/spinal/SpinySoC.svd") = {
     SpinySvd.dump(path, name, peripheralMappings)
   }
 

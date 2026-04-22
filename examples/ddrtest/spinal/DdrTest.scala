@@ -239,7 +239,7 @@ object TopLevelVerilog extends App {
 
   val soc = spinalReport.toplevel.soc
   println(soc.peripheralMappings)
-  soc.dumpSvd("target/spinal/DdrTest.svd", "DdrTest")
+  soc.dumpSvd("DdrTest")
   soc.dumpLinkerScript("target/spinal/memory.x")
   soc.dumpHalCrate(
     "target/rust/ddrtest-hal", "ddrtest-hal",
