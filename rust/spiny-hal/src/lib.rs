@@ -31,4 +31,5 @@
 
 #![no_std]
 
+pub mod dram;
 pub mod timer;

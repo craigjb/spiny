@@ -38,7 +38,6 @@ generate:
       project: ddrtest
       file_type: verilogSource
       args:
-        - "nexys_video"
         - "target/litedram/Ddr3Ctrl.v"
         - "rust/target/release/ddrtest-fw.bin"
 
@@ -91,18 +90,16 @@ targets:
     generate:
       - litedram-config:
           args:
-            - "--sim"
-            - "nexys_video"
+            - "sim"
       - litedram_sim:
           config_file: target/spinal/litedram_config.yaml
       - svd:
           output_path: "target/spinal/DdrTest.v"
           file_type: verilogSource
           args:
-            - "--sim"
             - "--dram-svd"
             - "target/litedram/Ddr3Ctrl.svd"
-            - "nexys_video"
+            - "sim"
       - rustpac
       - firmware:
           args:

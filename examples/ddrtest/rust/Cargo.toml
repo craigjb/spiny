@@ -15,6 +15,7 @@ panic-halt = "1.0.0"
 defmt = "1.0"
 defmt-rtt = { version = "0.4", features = ["disable-blocking-mode"] }
 ddrtest-pac = { path = "../target/rust/ddrtest-pac", features = ["rt", "critical-section"] }
+ddrtest-hal = { path = "../target/rust/ddrtest-hal" }
 
 [profile.release]
 codegen-units = 1

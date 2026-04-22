@@ -61,10 +61,9 @@ object DramMemType {
 /** PHY type for LiteDRAM */
 sealed trait DramPhy {
   def name: String
-  def nphases: Int
 }
 object DramPhy {
-  case object A7DDRPHY extends DramPhy { val name = "A7DDRPHY"; val nphases = 4 }
+  case object A7DDRPHY extends DramPhy { val name = "A7DDRPHY" }
   case class Custom(name: String, nphases: Int) extends DramPhy
 
   def fromString(s: String): DramPhy = s match {
@@ -138,11 +137,85 @@ case class LiteDramConfig(
   extraCmdLatency: Int = 0,
   cmdBufferDepth: Int = 16,
   withChipSelects: Boolean = true,
+  rttNom: Option[String] = None,
+  rttWr: Option[String] = None,
+  ron: Option[String] = None,
   userPorts: Map[String, UserPortConfig] = Map.empty
 ) {
 
+  /** Number of PHY phases, derived from (phy, memType) */
+  def nphases: Int = phy match {
+    case DramPhy.A7DDRPHY => memType match {
+      case DramMemType.Ddr2 => 2
+      case DramMemType.Ddr3 | DramMemType.Ddr4 => 4
+      case _ => 4
+    }
+    case c: DramPhy.Custom => c.nphases
+  }
+
+  /** DDR clock period in seconds */
+  def tck: Double = 1.0 / (nphases * userClkFreq.toDouble)
+
+  /** CAS latency and CAS write latency, derived from lookup tables matching LiteDRAM */
+  def cl: Int = {
+    val (baseCl, _) = clCwlLookup
+    val fixup = phy match {
+      case DramPhy.A7DDRPHY if memType == DramMemType.Ddr3 => 1
+      case _ => 0
+    }
+    baseCl + fixup
+  }
+
+  def cwl: Int = clCwlLookup._2
+
+  private def clCwlLookup: (Int, Int) = {
+    val tckNs = tck * 1e9
+    memType match {
+      case DramMemType.Ddr2 =>
+        // DDR2 table: (max tck in ns, CL, CWL)
+        val table = Seq(
+          (5.0, 3, 2),   // 400 MHz DDR
+          (3.75, 4, 3),  // 533 MHz
+          (2.95, 5, 4),  // 677 MHz
+          (2.5, 6, 5),   // 800 MHz
+          (1.875, 7, 5), // 1066 MHz
+        )
+        table.find { case (maxTck, _, _) => tckNs >= maxTck }
+          .map { case (_, cl, cwl) => (cl, cwl) }
+          .getOrElse(throw new IllegalArgumentException(
+            f"DDR2 tck=${tckNs}%.3fns too fast for lookup table"))
+
+      case DramMemType.Ddr3 =>
+        // DDR3 table: (max tck in ns, CL, CWL)
+        val table = Seq(
+          (2.5, 6, 5),   // 800 MHz DDR
+          (1.875, 7, 6), // 1066 MHz
+          (1.5, 10, 7),  // 1333 MHz
+          (1.25, 11, 8), // 1600 MHz
+          (1.07, 13, 9), // 1866 MHz
+        )
+        table.find { case (maxTck, _, _) => tckNs >= maxTck }
+          .map { case (_, cl, cwl) => (cl, cwl) }
+          .getOrElse(throw new IllegalArgumentException(
+            f"DDR3 tck=${tckNs}%.3fns too fast for lookup table"))
+
+      case _ => throw new IllegalArgumentException(
+        s"CL/CWL lookup not supported for $memType")
+    }
+  }
+
+  /** Write recovery for MR0, matching LiteDRAM's init.py:
+   *  wr = max(timing_settings.tWR * nphases, 5)
+   *  where timing_settings.tWR is tWR (ns) converted to sys_clk cycles.
+   */
+  def wr: Int = {
+    val sysClkPeriodNs = 1e9 / userClkFreq.toDouble
+    val tWrSysClk = math.ceil(timings.tWR / sysClkPeriodNs).toInt
+    math.max(tWrSysClk * nphases, 5)
+  }
+
   /** Controller internal data width = DDR bus width * PHY phases */
-  def controllerDataWidth: Int = numByteGroups * 8 * phy.nphases
+  def controllerDataWidth: Int = numByteGroups * 8 * nphases
 
   /** DDR data width in bits (number of DQ pins) */
   def ddrDataWidth: Int = numByteGroups * 8
@@ -151,7 +224,7 @@ case class LiteDramConfig(
    *  Equals dfi_databits * nphases = dq_width * dataRate * nphases.
    *  User port data_width should equal this to avoid internal converters.
    */
-  def nativePortDataWidth: Int = ddrDataWidth * memType.dataRate * phy.nphases
+  def nativePortDataWidth: Int = ddrDataWidth * memType.dataRate * nphases
 
   /** Address width (bits needed to address rows) */
   def addressWidth: Int = geometry.addressWidth
@@ -220,6 +293,9 @@ case class LiteDramConfig(
     data.put("iodelay_clk_freq", Double.box(iodelayClkFreq.toDouble))
     data.put("cmd_buffer_depth", Int.box(cmdBufferDepth))
     data.put("with_chip_selects", Boolean.box(withChipSelects))
+    rttNom.foreach(v => data.put("rtt_nom", v))
+    rttWr.foreach(v => data.put("rtt_wr", v))
+    ron.foreach(v => data.put("ron", v))
 
     val ports = new java.util.LinkedHashMap[String, Any]()
     for ((portName, portConfig) <- userPorts) {
@@ -359,6 +435,9 @@ object LiteDramConfig {
     val numRanks = getInt(data, "num_ranks")
     val userClkFreq = getDouble(data, "user_clk_freq") Hz
     val withChipSelects = getOptBool(data, "with_chip_selects", default = true)
+    val rttNom = Option(data.get("rtt_nom")).map(_.toString)
+    val rttWr = Option(data.get("rtt_wr")).map(_.toString)
+    val ron = Option(data.get("ron")).map(_.toString)
 
     val phyStr = getOptString(data, "phy", "A7DDRPHY")
     val phy = DramPhy.fromString(phyStr)
@@ -403,6 +482,9 @@ object LiteDramConfig {
       extraCmdLatency = extraCmdLatency,
       cmdBufferDepth = cmdBufferDepth,
       withChipSelects = withChipSelects,
+      rttNom = rttNom,
+      rttWr = rttWr,
+      ron = ron,
       userPorts = userPorts
     )
   }

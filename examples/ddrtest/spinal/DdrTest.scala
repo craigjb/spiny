@@ -45,6 +45,36 @@ import java.io.File
 import org.rogach.scallop._
 
 object DdrTestConfigs {
+  val sim = LiteDramConfig(
+    name = "Ddr3Ctrl",
+    memType = DramMemType.Ddr3,
+    moduleName = "SimModule",
+    geometry = DramGeometry(numBanks = 2, numRows = 2048, numCols = 16),
+    timings = DramTimings(
+      tREFI = 64e6 / 8192,
+      tWTR = DramTiming(cycles = Some(4), timeNs = Some(7.5)),
+      tCCD = DramTiming(cycles = Some(4)),
+      tRRD = Some(DramTiming(cycles = Some(4), timeNs = Some(10))),
+      tZQCS = Some(DramTiming(cycles = Some(64), timeNs = Some(80))),
+      tRP = 13.75, tRCD = 13.75, tWR = 13.75,
+      tRFC = DramTiming(cycles = Some(208)),
+      tFAW = Some(DramTiming(timeNs = Some(40))),
+      tRAS = Some(35),
+    ),
+    numByteGroups = 1,
+    numRanks = 1,
+    phy = DramPhy.A7DDRPHY,
+    fpgaSpeedgrade = -1,
+    inputClkFreq = 100 MHz,
+    userClkFreq = 80 MHz,
+    iodelayClkFreq = 200 MHz,
+    cmdBufferDepth = 16,
+    withChipSelects = false,
+    rttNom = Some("60ohm"),
+    rttWr = Some("60ohm"),
+    ron = Some("34ohm"),
+  )
+
   val nexysVideo = LiteDramConfig(
     name = "Ddr3Ctrl",
     memType = DramMemType.Ddr3,
@@ -70,6 +100,9 @@ object DdrTestConfigs {
     iodelayClkFreq = 200 MHz,
     cmdBufferDepth = 16,
     withChipSelects = false,
+    rttNom = Some("60ohm"),
+    rttWr = Some("60ohm"),
+    ron = Some("34ohm"),
   )
 
   val nexysA7 = LiteDramConfig(
@@ -95,6 +128,7 @@ object DdrTestConfigs {
   )
 
   def fromTarget(target: String): LiteDramConfig = target match {
+    case "sim" => sim
     case "nexys_video" => nexysVideo
     case "nexys_a7" => nexysA7
     case _ => throw new IllegalArgumentException(
@@ -162,10 +196,13 @@ class DdrTest(
       r = StreamPipe.FULL
     ).toAxi4() >> dramPort
 
+    val dramDataBase = BigInt(0x20000000)
+    dram.dataBaseAddress = Some(dramDataBase)
+
     build(
       peripherals = Seq(gpio, dram),
       mainBusSlaves = Seq(
-        (SizeMapping(0x20000000, dram.ramSize), dramBus)
+        (SizeMapping(dramDataBase, dram.ramSize), dramBus)
       )
     )
   }
@@ -176,7 +213,6 @@ class DdrTest(
 object TopLevelVerilog extends App {
   object Conf extends ScallopConf(args) {
     val target = trailArg[String]()
-    val sim = opt[Boolean]()
     val firmware = opt[File]()
     validateFileExists(firmware)
     validateFileIsFile(firmware)
@@ -196,7 +232,7 @@ object TopLevelVerilog extends App {
     dramConfig = dramConfig,
     firmwarePath = Conf.firmware.map(f => f.getAbsolutePath()).getOrElse(null),
     dramSvdPath = Conf.dramSvd.map(f => f.getAbsolutePath()).toOption,
-    sim = Conf.sim()
+    sim = Conf.target() == "sim"
   ))
 
   spinalReport.toplevel.dram.dumpConfig("target/spinal/litedram_config.yaml")
@@ -205,11 +241,14 @@ object TopLevelVerilog extends App {
   println(soc.peripheralMappings)
   soc.dumpSvd("target/spinal/DdrTest.svd", "DdrTest")
   soc.dumpLinkerScript("target/spinal/memory.x")
+  soc.dumpHalCrate(
+    "target/rust/ddrtest-hal", "ddrtest-hal",
+    "ddrtest-pac", "../ddrtest-pac", "../../../../../rust/spiny-hal"
+  )
 }
 
 object TopLevelSim extends App {
   object Conf extends ScallopConf(args) {
-    val target = trailArg[String]()
     val dramRtl = trailArg[File]()
     validateFileExists(dramRtl)
     validateFileIsFile(dramRtl)
@@ -220,8 +259,6 @@ object TopLevelSim extends App {
   }
   println(f"[DdrTest] TopLevelSim.Conf: ${Conf.summary}")
 
-  val dramConfig = DdrTestConfigs.fromTarget(Conf.target())
-
   SimConfig
     .withVerilator
     .withWave
@@ -229,7 +266,7 @@ object TopLevelSim extends App {
     .addSimulatorFlag("-Wno-CASEINCOMPLETE")
     .addSimulatorFlag("-Wno-COMBDLY")
     .compile(new DdrTest(
-      dramConfig = dramConfig,
+      dramConfig = DdrTestConfigs.sim,
       firmwarePath = Conf.firmware().getAbsolutePath(),
       sim = true
     ))
@@ -244,9 +281,19 @@ object TopLevelSim extends App {
       )
 
       clockDomain.forkStimulus()
-      clockDomain.waitSamplingWhere(dut.io.LEDS.toInt == 0xFF)
+      clockDomain.waitSamplingWhere(dut.io.LEDS.toInt == 0xAA)
       clockDomain.waitSampling(10)
-      clockDomain.waitSamplingWhere(dut.io.LEDS.toInt == 0xFF)
-      clockDomain.waitSampling(10000)
+      clockDomain.waitSamplingWhere(dut.io.LEDS.toInt == 0xBB)
+
+      // wait for mem test
+      val memSize = dut.dram.ramSize
+      println(s"Waiting on DDR mem test. Memory size: ${memSize}")
+      SimTimeout(6 ms)
+      val numChunks = 8
+      for (i <- 1 to numChunks) {
+        val expected = (1 << i) - 1
+        clockDomain.waitSamplingWhere(dut.io.LEDS.toInt == expected)
+        println(s"$i of $numChunks chunks done")
+      }
     }
 }

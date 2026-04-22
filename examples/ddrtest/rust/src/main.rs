@@ -35,13 +35,11 @@
 extern crate defmt_rtt;
 extern crate panic_halt;
 
-mod draminit;
-
 use core::ptr;
 use ddrtest_pac::Peripherals;
 
-const DRAM_BASE: usize = 0x2000_0000;
-const DRAM_SIZE: usize = 512 * 1024 * 1024;
+const DRAM_BASE: usize = ddrtest_hal::dram::BASE_ADDRESS;
+const DRAM_SIZE: usize = ddrtest_hal::dram::SIZE;
 const NUM_CHUNKS: usize = 8;
 const CHUNK_SIZE: usize = DRAM_SIZE / NUM_CHUNKS;
 
@@ -49,23 +47,25 @@ const CHUNK_SIZE: usize = DRAM_SIZE / NUM_CHUNKS;
 fn main() -> ! {
     let p = Peripherals::take().unwrap();
 
+    // Convenient marker for simulation asserts
     p.gpio
         .leds_write()
-        .write(|w| unsafe { w.value().bits(0xff) });
+        .write(|w| unsafe { w.value().bits(0xaa) });
     p.gpio.leds_write().write(|w| unsafe { w.value().bits(0) });
 
     defmt::println!("Hello world!");
 
-    draminit::init_dram(
+    ddrtest_hal::dram::init(
         &p.ddrctrl,
         #[cfg(not(feature = "sim"))]
         &p.ddrphy,
         &p.sdram,
     );
 
+    // Convenient marker for simulation asserts
     p.gpio
         .leds_write()
-        .write(|w| unsafe { w.value().bits(0xff) });
+        .write(|w| unsafe { w.value().bits(0xbb) });
     p.gpio.leds_write().write(|w| unsafe { w.value().bits(0) });
 
     defmt::info!("MEMTEST: Starting...");

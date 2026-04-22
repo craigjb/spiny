@@ -95,6 +95,9 @@ case class SpinyDram(
     config = ClockDomainConfig(clockEdge = RISING, resetKind = SYNC)
   )
 
+  /** Set by the SoC to the AXI data port base address (for HAL generation). */
+  var dataBaseAddress: Option[BigInt] = None
+
   /** Total RAM size in bytes, based on DRAM geometry and byte groups. */
   def ramSize: BigInt = {
     BigInt(config.geometry.numBanks) *
@@ -203,6 +206,66 @@ case class SpinyDram(
 
   /** Dump LiteDRAM config YAML (call after build, e.g. post-elaboration) */
   def dumpConfig(path: String): Unit = liteDramFullConfig.toYaml(path)
+
+  /** Parse impedance string like "60ohm" to integer 60 */
+  private def parseOhms(s: String): Int =
+    s.toLowerCase.replace("ohm", "").trim.toInt
+
+  override def halModuleCode(pacCrate: String, name: String, baseAddress: BigInt): Option[String] = {
+    val modName = name.toLowerCase
+    val freqHz = config.userClkFreq.toLong
+    val simStr = if (sim) "true" else "false"
+    val addrConsts = dataBaseAddress match {
+      case Some(base) =>
+        s"""|
+            |    pub const BASE_ADDRESS: usize = 0x${base.toString(16)};
+            |    pub const SIZE: usize = 0x${ramSize.toString(16)};""".stripMargin
+      case None => ""
+    }
+    config.memType match {
+      case DramMemType.Ddr3 =>
+        val rttNomOhms = config.rttNom.map(parseOhms).getOrElse(60)
+        val rttWrOhms = config.rttWr.map(parseOhms).getOrElse(60)
+        val ronOhms = config.ron.map(parseOhms).getOrElse(34)
+        Some(
+          s"""|pub mod $modName {
+              |    spiny_hal::ddr3_hal! {
+              |        pac: $pacCrate,
+              |        cl: ${config.cl},
+              |        cwl: ${config.cwl},
+              |        wr: ${config.wr},
+              |        nphases: ${config.nphases},
+              |        num_byte_groups: ${config.numByteGroups},
+              |        user_clk_freq_hz: ${freqHz},
+              |        sim: $simStr,
+              |        rtt_nom_ohms: $rttNomOhms,
+              |        rtt_wr_ohms: $rttWrOhms,
+              |        ron_ohms: $ronOhms,
+              |    }
+              |$addrConsts
+              |}""".stripMargin
+        )
+      case DramMemType.Ddr2 =>
+        Some(
+          s"""|pub mod $modName {
+              |    spiny_hal::ddr2_hal! {
+              |        pac: $pacCrate,
+              |        cl: ${config.cl},
+              |        nphases: ${config.nphases},
+              |        num_byte_groups: ${config.numByteGroups},
+              |        user_clk_freq_hz: ${freqHz},
+              |        sim: $simStr,
+              |    }
+              |$addrConsts
+              |}""".stripMargin
+        )
+      case _ => None
+    }
+  }
+
+  override def halDependencies = Map(
+    "riscv" -> """"0.16"""",
+  )
 
   override def svdPeripherals(sizeMapping: SizeMapping): Seq[scala.xml.Elem] = {
     svdPath match {
