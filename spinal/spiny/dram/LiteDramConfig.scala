@@ -95,6 +95,26 @@ case class DramGeometry(
   def bankAddressWidth: Int = log2Up(numBanks)
 }
 
+/** Timing specified as cycles, nanoseconds, or both.
+ *  LiteDRAM takes the more restrictive of the two when both are given.
+ */
+case class DramTiming(cycles: Option[Int] = None, timeNs: Option[Double] = None)
+
+/** DRAM timing parameters (flat — LiteDRAM's tech/speedgrade split is handled in toYaml) */
+case class DramTimings(
+  tREFI: Double,                         // Refresh interval (ns)
+  tWTR: DramTiming,                      // Write-to-Read
+  tCCD: DramTiming,                      // Column-to-Column
+  tRRD: Option[DramTiming] = None,       // Row-to-Row
+  tZQCS: Option[DramTiming] = None,      // ZQ Calibration Short
+  tRP: Double,                           // Row Precharge (ns)
+  tRCD: Double,                          // RAS-to-CAS Delay (ns)
+  tWR: Double,                           // Write Recovery (ns)
+  tRFC: DramTiming,                      // Refresh-to-Activate
+  tFAW: Option[DramTiming] = None,       // Four Activate Window
+  tRAS: Option[Double] = None,           // Row Active Strobe (ns)
+)
+
 /**
  * LiteDRAM configuration
  *
@@ -107,6 +127,7 @@ case class LiteDramConfig(
   memType: DramMemType,
   moduleName: String = "",
   geometry: DramGeometry,
+  timings: DramTimings,
   numByteGroups: Int,
   numRanks: Int,
   phy: DramPhy = DramPhy.A7DDRPHY,
@@ -148,6 +169,13 @@ case class LiteDramConfig(
   def withPorts(ports: Map[String, UserPortConfig]): LiteDramConfig =
     copy(userPorts = ports)
 
+  private def dramTimingToYaml(t: DramTiming): java.util.List[Any] = {
+    val list = new java.util.ArrayList[Any](2)
+    list.add(t.cycles.map(Int.box).orNull)
+    list.add(t.timeNs.map(Double.box).orNull)
+    list
+  }
+
   /** Write config as YAML in the format litedram_gen.py expects */
   def toYaml(path: String): Unit = {
     val options = new DumperOptions()
@@ -158,7 +186,24 @@ case class LiteDramConfig(
     data.put("name", name)
     data.put("fpga_speedgrade", Int.box(fpgaSpeedgrade))
     data.put("type", memType.yamlName)
-    data.put("dram_module", moduleName)
+    val moduleMap = new java.util.LinkedHashMap[String, Any]()
+    moduleMap.put("name", moduleName)
+
+    val timingsMap = new java.util.LinkedHashMap[String, Any]()
+    timingsMap.put("tREFI", Double.box(timings.tREFI))
+    timingsMap.put("tWTR", dramTimingToYaml(timings.tWTR))
+    timingsMap.put("tCCD", dramTimingToYaml(timings.tCCD))
+    timings.tRRD.foreach(t => timingsMap.put("tRRD", dramTimingToYaml(t)))
+    timings.tZQCS.foreach(t => timingsMap.put("tZQCS", dramTimingToYaml(t)))
+    timingsMap.put("tRP", Double.box(timings.tRP))
+    timingsMap.put("tRCD", Double.box(timings.tRCD))
+    timingsMap.put("tWR", Double.box(timings.tWR))
+    timingsMap.put("tRFC", dramTimingToYaml(timings.tRFC))
+    timings.tFAW.foreach(t => timingsMap.put("tFAW", dramTimingToYaml(t)))
+    timings.tRAS.foreach(v => timingsMap.put("tRAS", Double.box(v)))
+
+    moduleMap.put("timings", timingsMap)
+    data.put("dram_module", moduleMap)
 
     val geom = new java.util.LinkedHashMap[String, Any]()
     geom.put("num_banks", Int.box(geometry.numBanks))
@@ -259,6 +304,27 @@ object LiteDramConfig {
     }
   }
 
+  private def parseDramTimingList(list: java.util.List[Any]): DramTiming = {
+    val cycles = Option(list.get(0)).map(v => v.asInstanceOf[java.lang.Number].intValue())
+    val timeNs = Option(list.get(1)).map(v => v.asInstanceOf[java.lang.Number].doubleValue())
+    DramTiming(cycles, timeNs)
+  }
+
+  private def getDramTiming(map: java.util.Map[String, Any], key: String): DramTiming = {
+    map.get(key) match {
+      case list: java.util.List[_] => parseDramTimingList(list.asInstanceOf[java.util.List[Any]])
+      case null => throw new IllegalArgumentException(s"Missing required field: $key")
+      case x => throw new IllegalArgumentException(s"Invalid type for $key: ${x.getClass}")
+    }
+  }
+
+  private def getOptDramTiming(map: java.util.Map[String, Any], key: String): Option[DramTiming] = {
+    Option(map.get(key)).map {
+      case list: java.util.List[_] => parseDramTimingList(list.asInstanceOf[java.util.List[Any]])
+      case x => throw new IllegalArgumentException(s"Invalid type for $key: ${x.getClass}")
+    }
+  }
+
   /**
    * Load configuration from YAML file.
    *
@@ -272,7 +338,23 @@ object LiteDramConfig {
 
     val name = getOptString(data, "name", "litedram_core")
     val memType = DramMemType.fromString(getString(data, "type"))
-    val moduleName = getOptString(data, "dram_module", "")
+    val moduleData = data.get("dram_module").asInstanceOf[java.util.Map[String, Any]]
+    val moduleName = getString(moduleData, "name")
+    val timingsData = moduleData.get("timings").asInstanceOf[java.util.Map[String, Any]]
+
+    val timings = DramTimings(
+      tREFI = getDouble(timingsData, "tREFI"),
+      tWTR = getDramTiming(timingsData, "tWTR"),
+      tCCD = getDramTiming(timingsData, "tCCD"),
+      tRRD = getOptDramTiming(timingsData, "tRRD"),
+      tZQCS = getOptDramTiming(timingsData, "tZQCS"),
+      tRP = getDouble(timingsData, "tRP"),
+      tRCD = getDouble(timingsData, "tRCD"),
+      tWR = getDouble(timingsData, "tWR"),
+      tRFC = getDramTiming(timingsData, "tRFC"),
+      tFAW = getOptDramTiming(timingsData, "tFAW"),
+      tRAS = Option(timingsData.get("tRAS")).map(v => v.asInstanceOf[java.lang.Number].doubleValue()),
+    )
     val numByteGroups = getInt(data, "num_byte_groups")
     val numRanks = getInt(data, "num_ranks")
     val userClkFreq = getDouble(data, "user_clk_freq") Hz
@@ -310,6 +392,7 @@ object LiteDramConfig {
       memType = memType,
       moduleName = moduleName,
       geometry = geometry,
+      timings = timings,
       numByteGroups = numByteGroups,
       numRanks = numRanks,
       phy = phy,

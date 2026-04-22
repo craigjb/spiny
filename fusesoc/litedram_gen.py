@@ -101,8 +101,7 @@ def validate_float(input, param_name, container_name):
 
 def validate_tuple_cycles_time(input, param_name, container_name):
     raw_value = input.get(param_name, None)
-    if value is None:
-        err_req_param(param_name, container_name)
+    if raw_value is None:
         return None
 
     if not isinstance(raw_value, Iterable) or len(raw_value) != 2:
@@ -151,12 +150,13 @@ def validate_geometry(geom_def):
 
 def validate_tech_timings(timings_def):
     tREFI = validate_float(timings_def, "tREFI", "timings")
-    tWTR = validate_tuple_cycles_time("tWTR", "timings")
-    tCCD = validate_tuple_cycles_time("tCCD", "timings")
-    tRRD = validate_tuple_cycles_time("tRRD", "timings")
-    tZQCS = validate_tuple_cycles_time("tZQCS", "timings")
+    tWTR = validate_tuple_cycles_time(timings_def, "tWTR", "timings")
+    tCCD = validate_tuple_cycles_time(timings_def, "tCCD", "timings")
+    tRRD = validate_tuple_cycles_time(timings_def, "tRRD", "timings")
+    tZQCS = validate_tuple_cycles_time(timings_def, "tZQCS", "timings")
 
-    if None in [tREFI, tWTR, tCCD, tRRD, tZQCS]:
+    # tREFI, tWTR, tCCD are required; tRRD, tZQCS are optional
+    if None in [tREFI, tWTR, tCCD]:
         sys.exit(1)
 
     return _TechnologyTimings(
@@ -171,11 +171,12 @@ def validate_speedgrade_timings(timings_def):
     tRP = validate_float(timings_def, "tRP", "timings")
     tRCD = validate_float(timings_def, "tRCD", "timings")
     tWR = validate_float(timings_def, "tWR", "timings")
-    tRFC = validate_tuple_cycles_time("tRFC", "timings")
-    tFAW = validate_tuple_cycles_time("tFAW", "timings")
+    tRFC = validate_tuple_cycles_time(timings_def, "tRFC", "timings")
+    tFAW = validate_tuple_cycles_time(timings_def, "tFAW", "timings")
     tRAS = validate_float(timings_def, "tRAS", "timings")
 
-    if None in [tRP, tRCD, tWR, tRFC, tFAW, tRAS]:
+    # tRP, tRCD, tWR, tRFC are required; tFAW, tRAS are optional
+    if None in [tRP, tRCD, tWR, tRFC]:
         sys.exit(1)
 
     return _SpeedgradeTimings(
