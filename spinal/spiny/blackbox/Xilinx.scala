@@ -60,3 +60,82 @@ case class ODDR(
   val R  = in Bool()
   val S  = in Bool()
 }
+
+object DataRate extends Enumeration {
+  type DataRate = Value
+  val BUF, SDR, DDR = Value
+}
+
+object SerDesMode extends Enumeration {
+  type SerDesMode = Value
+  val MASTER, SLAVE = Value
+}
+
+case class OSERDES2(
+  dataRateOQ: DataRate.Value = DataRate.DDR,
+  dataRateTQ: DataRate.Value = DataRate.SDR,
+  dataWidth: Int = 4,
+  serDesMode: SerDesMode.Value = SerDesMode.MASTER,
+  triStateWidth: Int = 4
+) extends BlackBox {
+  dataRateOQ match {
+    case DataRate.SDR => assert(Set(2, 3, 4, 5, 6, 7, 8).contains(dataWidth),
+      "For SDR, dataWidth must be 2, 3, 4, 5, 6, 7, or 8")
+    case DataRate.DDR => assert(Set(2, 4, 6, 8, 10, 14).contains(dataWidth),
+      "For DDR, dataWidth must be 2, 4, 6, 8, 10, or 14")
+    case _ => SpinalError("dataRateOQ must be SDR or DDR")
+  }
+  assert(Set(1, 4).contains(triStateWidth), "triStateWidth must be 1 or 4")
+
+  addGeneric("DATA_RATE_OQ", dataRateOQ.toString)
+  addGeneric("DATA_RATE_TQ", dataRateTQ.toString)
+  addGeneric("DATA_WIDTH", dataWidth)
+  addGeneric("SERDES_MODE", serDesMode.toString)
+  addGeneric("TRISTATE_WIDTH", triStateWidth)
+
+  val CLK = in Bool()
+  val CLKDIV = in Bool()
+  val D1 = in Bool()
+  val D2 = in.Bool()
+  val D3 = in.Bool()
+  val D4 = in.Bool()
+  val D5 = in.Bool()
+  val D6 = in.Bool()
+  val D7 = in.Bool()
+  val D8 = in.Bool()
+  val T1 = in Bool()
+  val T2 = in.Bool()
+  val T3 = in.Bool()
+  val T4 = in.Bool()
+  val TCE = in Bool()
+  val OCE = in Bool()
+  val TBYTEIN = in Bool() default(False)
+  val RST = in Bool()
+  val SHIFTIN1 = in Bool() default(False)
+  val SHIFTIN2 = in Bool() default(False)
+  val OQ = out Bool()
+  val OFB = out Bool()
+  val TQ = out Bool()
+  val TFB = out Bool()
+  val TBYTEOUT = out Bool()
+  val SHIFTOUT1 = out Bool()
+  val SHIFTOUT2 = out Bool()
+
+  def D(i : Int) = i match {
+    case 0 => D1
+    case 1 => D2
+    case 2 => D3
+    case 3 => D4
+    case 4 => D5
+    case 5 => D6
+    case 6 => D7
+    case 7 => D8
+  }
+
+  def T(i : Int) = i match {
+    case 0 => T1
+    case 1 => T2
+    case 2 => T3
+    case 3 => T4
+  }
+}
