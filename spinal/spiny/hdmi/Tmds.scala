@@ -136,10 +136,10 @@ object Tmds {
 case class TmdsVideoEncoder() extends Component {
   val io = new Bundle {
     val input = in(Bits(8 bits))
-    val output = out(TmdsChar)
+    val output = out(TmdsChar())
     val resetDisparity = in(Bool())
   }
-  val Latency = 1
+  val Latency = 2
 
   // ==================================
   //  STAGE 0 
@@ -178,7 +178,7 @@ case class TmdsVideoEncoder() extends Component {
   }
 
   val dataBits = Mux(invert, ~qM(7 downto 0), qM(7 downto 0))
-  io.output := invert ## qM(8) ## dataBits
+  io.output := RegNext(invert ## qM(8) ## dataBits)
 
   val disparityDelta = SInt(5 bits)
   when(disparityCount === 0 || numQOnes === numQZeros) {
@@ -205,11 +205,11 @@ case class TmdsVideoEncoder() extends Component {
 
 case class TmdsVideoDecoder() extends Component {
   val io = new Bundle {
-    val input = in(TmdsChar)
+    val input = in(TmdsChar())
     val output = out(Bits(8 bits))
   }
 
-  val Latency = 0
+  val Latency = 1
 
   val flippedOrNot = Bits(8 bits)
   when(io.input(9)) {
@@ -217,35 +217,41 @@ case class TmdsVideoDecoder() extends Component {
   } otherwise {
     flippedOrNot := io.input(7 downto 0)
   }
+  val output = Bits(8 bits)
   when(io.input(8)) {
     // XOR
-    io.output(0) := flippedOrNot(0)
+    output(0) := flippedOrNot(0)
     for (i <- 1 to 7) {
-      io.output(i) := flippedOrNot(i) ^ flippedOrNot(i - 1)
+      output(i) := flippedOrNot(i) ^ flippedOrNot(i - 1)
     }
   } otherwise {
     // XNOR
-    io.output(0) := flippedOrNot(0)
+    output(0) := flippedOrNot(0)
     for (i <- 1 to 7) {
-      io.output(i) := ~(flippedOrNot(i) ^ flippedOrNot(i - 1))
+      output(i) := ~(flippedOrNot(i) ^ flippedOrNot(i - 1))
     }
   }
+
+  io.output := RegNext(output)
 }
 
 case class TmdsControlEncoder() extends Component {
   val io = new Bundle {
     val input = in(Bits(2 bits))
-    val output = out(TmdsChar)
+    val output = out(TmdsChar())
   }
 
-  val Latency = 0
+  val Latency = 2
 
+  val output = TmdsChar()
   switch(io.input) {
-    is(B"00") { io.output := B"1101010100" }
-    is(B"01") { io.output := B"0010101011" }
-    is(B"10") { io.output := B"0101010100" }
-    is(B"11") { io.output := B"1010101011" }
+    is(B"00") { output := B"1101010100" }
+    is(B"01") { output := B"0010101011" }
+    is(B"10") { output := B"0101010100" }
+    is(B"11") { output := B"1010101011" }
   }
+
+  io.output := Delay(output, Latency)
 }
 
 case class TmdsControlDecoder() extends Component {
@@ -255,17 +261,21 @@ case class TmdsControlDecoder() extends Component {
     val error = out(Bool())
   }
 
-  val Latency = 0
+  val Latency = 1
 
-  io.error := False
+  val output = Bits(2 bits)
+  val error = False
   switch(io.input) {
-    is(B"1101010100") { io.output := B"00" }
-    is(B"0010101011") { io.output := B"01" }
-    is(B"0101010100") { io.output := B"10" }
-    is(B"1010101011") { io.output := B"11" }
+    is(B"1101010100") { output := B"00" }
+    is(B"0010101011") { output := B"01" }
+    is(B"0101010100") { output := B"10" }
+    is(B"1010101011") { output := B"11" }
     default {
-      io.output := B"00"
-      io.error := True
+      output := B"00"
+      error := True
     }
   }
+
+  io.output := Delay(output, Latency)
+  io.error := Delay(error, Latency)
 }
