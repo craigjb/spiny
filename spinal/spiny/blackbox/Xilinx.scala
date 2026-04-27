@@ -71,7 +71,7 @@ object SerDesMode extends Enumeration {
   val MASTER, SLAVE = Value
 }
 
-case class OSERDES2(
+case class OSERDESE2(
   dataRateOQ: DataRate.Value = DataRate.DDR,
   dataRateTQ: DataRate.Value = DataRate.SDR,
   dataWidth: Int = 4,

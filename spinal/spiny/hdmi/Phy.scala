@@ -48,7 +48,7 @@ case class HdmiLink() extends Bundle {
   val data = Vec(TmdsDiffPair(), 3)
 }
 
-/** HDMI TX PHY using Xilinx OSERDES2
+/** HDMI TX PHY using Xilinx OSERDESE2
  *
  *  serialClk must be 5X pixel clock (component's clock domain)
  */
@@ -88,8 +88,8 @@ case class XilinxSerDesHdmiChannel(serialClk: ClockDomain) extends Component {
   val serialClkFreq = serialClk.frequency.getValue
   assert(serialClkFreq == pixelClkFreq * 5.0, "serialClk must be 5X pixel clk")
 
-  // cascaded OSERDES2 blocks for 10-bit parallel to serial
-  val masterSerial = OSERDES2(
+  // cascaded OSERDESE2 blocks for 10-bit parallel to serial
+  val masterSerial = OSERDESE2(
     dataWidth = 10,
     dataRateOQ = DataRate.DDR,
     serDesMode = SerDesMode.MASTER
@@ -106,7 +106,7 @@ case class XilinxSerDesHdmiChannel(serialClk: ClockDomain) extends Component {
     masterSerial.T(i) := False
   }
 
-  val slaveSerial = OSERDES2(
+  val slaveSerial = OSERDESE2(
     dataWidth = 10,
     dataRateOQ = DataRate.DDR,
     serDesMode = SerDesMode.SLAVE
