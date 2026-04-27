@@ -105,8 +105,8 @@ case class StaticVideoTimingGen(mode: VideoMode) extends Component {
     val hSync = out(Bool())
     val vSync = out(Bool())
     val videoActive = out(Bool())
-    val x = out(UInt(log2Up(mode.hActive) bits))
-    val y = out(UInt(log2Up(mode.vActive) bits))
+    val x = out(UInt(log2Up(mode.hTotal) bits))
+    val y = out(UInt(log2Up(mode.vTotal) bits))
   }
 
   val hCount = CounterFreeRun(mode.hTotal)
@@ -134,6 +134,6 @@ case class StaticVideoTimingGen(mode: VideoMode) extends Component {
     mode.vSyncPolarity.sync(vSync),
     init = mode.vSyncPolarity.sync(False)
   )
-  io.x := RegNext(hCount.resized)
-  io.y := RegNext(vCount.resized)
+  io.x := RegNext(hCount.value)
+  io.y := RegNext(vCount.value)
 }
