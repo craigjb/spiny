@@ -197,7 +197,7 @@ case class TmdsVideoEncoder() extends Component {
     }
   }
 
-  when(resetDisparity) {
+  when(!resetDisparity) {
     disparityCount := disparityCount + disparityDelta
   } otherwise {
     disparityCount := S(0)
