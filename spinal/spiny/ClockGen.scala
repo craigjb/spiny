@@ -299,9 +299,12 @@ case class ClockGen(
     for ((out, i) <- solution.outputs.zipWithIndex) {
       val bufgOut = BUFG.on(clkouts(out.mmcmIndex))
       pending(i).clk := bufgOut
-      val cd = ClockDomain(bufgOut)
-      val syncReset = cd(BufferCC(!mmcm.LOCKED, init = True))
-      pending(i).rst := syncReset
+      val bufgCd = ClockDomain(
+        clock = bufgOut,
+        reset = !mmcm.LOCKED,
+        config = ClockDomainConfig(resetKind = ASYNC)
+      )
+      pending(i).rst := bufgCd(BufferCC(False, init = True))
     }
   }
 }
