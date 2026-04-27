@@ -91,8 +91,10 @@ case class ClockGen(
       s"Requested frequency ${req.freq.toDouble / 1e6} MHz outside allowed range " +
       s"[${outputFreqMin.toDouble / 1e6}, ${outputFreqMax.toDouble / 1e6}] MHz"
     )
-    val clk = Bool()
-    val rst = Bool()
+    val idx = pending.size
+    val (clk, rst) = rework {
+      (out(Bool()).setName(s"clk_$idx"), out(Bool()).setName(s"rst_$idx"))
+    }
     val cd = ClockDomain(
       clock = clk,
       reset = rst,
@@ -116,8 +118,10 @@ case class ClockGen(
       s"Divided frequency ${freq.toDouble / 1e6} MHz outside allowed range " +
       s"[${outputFreqMin.toDouble / 1e6}, ${outputFreqMax.toDouble / 1e6}] MHz"
     )
-    val clk = Bool()
-    val rst = Bool()
+    val idx = pending.size
+    val (clk, rst) = rework {
+      (out(Bool()).setName(s"clk_$idx"), out(Bool()).setName(s"rst_$idx"))
+    }
     val cd = ClockDomain(
       clock = clk,
       reset = rst,
@@ -235,7 +239,7 @@ case class ClockGen(
     }
   }
 
-  def build(): Unit = {
+  def build(): Unit = rework {
     assert(!built, "build() already called")
     assert(pending.nonEmpty, "No clock requests registered")
     built = true
