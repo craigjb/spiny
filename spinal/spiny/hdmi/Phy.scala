@@ -92,7 +92,8 @@ case class XilinxSerDesHdmiChannel(serialClk: ClockDomain) extends Component {
   val masterSerial = OSERDESE2(
     dataWidth = 10,
     dataRateOQ = DataRate.DDR,
-    serDesMode = SerDesMode.MASTER
+    serDesMode = SerDesMode.MASTER,
+    triStateWidth = 1
   )
   masterSerial.CLK := serialClk.readClockWire
   masterSerial.CLKDIV := ClockDomain.current.readClockWire
@@ -109,7 +110,8 @@ case class XilinxSerDesHdmiChannel(serialClk: ClockDomain) extends Component {
   val slaveSerial = OSERDESE2(
     dataWidth = 10,
     dataRateOQ = DataRate.DDR,
-    serDesMode = SerDesMode.SLAVE
+    serDesMode = SerDesMode.SLAVE,
+    triStateWidth = 1
   )
   slaveSerial.CLK := serialClk.readClockWire
   slaveSerial.CLKDIV := ClockDomain.current.readClockWire
