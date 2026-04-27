@@ -73,6 +73,16 @@ case class ClockGen(
   private val pending = ArrayBuffer[PendingOutput]()
   private var built = false
 
+  def request(
+    freq: HertzNumber,
+    tolerance: Double = 0.0,
+    phase: Double = 0.0
+  ): ClockDomain = request(ClockRequest(
+    freq = freq,
+    tolerance = tolerance,
+    phase = phase
+  ))
+
   def request(req: ClockRequest): ClockDomain = {
     assert(!built, "Cannot call request() after build()")
     assert(pending.size < 6, "MMCM supports at most 6 clock outputs")
