@@ -47,3 +47,12 @@ lazy val ddrtest = (project in file("examples/ddrtest"))
     publish / skip := true,
     libraryDependencies ++= Seq(spinalIdslPlugin, scallop),
   )
+
+lazy val hdmitest = (project in file("examples/hdmitest"))
+  .dependsOn(spiny)
+  .settings(
+    name := "hdmitest",
+    Compile / scalaSource := baseDirectory.value / "spinal",
+    publish / skip := true,
+    libraryDependencies ++= Seq(spinalIdslPlugin, scallop),
+  )

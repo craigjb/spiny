@@ -1,0 +1,38 @@
+CAPI=2:
+name: craigjb:spiny:hdmitest:0
+description: HDMI video example
+
+filesets:
+  nexys_video_xdc:
+    files:
+      - data/nexys_video.xdc
+    file_type: xdc
+
+  vivado_settings:
+    files:
+      - data/vivado_settings.tcl
+    file_type: tclSource
+
+  dep:
+    depend:
+      - craigjb:spiny:generators:0.1.0
+
+generate:
+  spinalhdl:
+    generator: spinalhdl
+    parameters:
+      sbt_dir: "../../"
+      output_path: "target/spinal/HdmiTest.v"
+      main: spiny.examples.hdmitest.TopLevelVerilog
+      project: hdmitest
+      file_type: verilogSource
+
+targets:
+  nexys_video:
+    filesets: [nexys_video_xdc, vivado_settings, dep]
+    generate:
+      - spinalhdl
+    toplevel: HdmiTest
+    flow: vivado
+    flow_options:
+      part: xc7a200t-sbg484-1
