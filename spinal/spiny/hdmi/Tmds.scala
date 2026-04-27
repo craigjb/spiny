@@ -147,25 +147,24 @@ case class TmdsVideoEncoder() extends Component {
   //  STAGE 0 
   // ==================================
   val numDataOnes = CountOne(io.input)
-  val qMNext = Bits(9 bits)
+  val qMBits = Vec(Bool(), 9)
+  qMBits(0) := io.input(0)
   when(numDataOnes > 4 || (numDataOnes === 4 && !io.input(0))) {
-    qMNext(0) := io.input(0)
     for (i <- 1 to 7) {
-      qMNext(i) := !(qMNext(i -1) ^ io.input(i))
+      qMBits(i) := !(qMBits(i - 1) ^ io.input(i))
     }
-    qMNext(8) := False
+    qMBits(8) := False
   } otherwise {
-    qMNext(0) := io.input(0)
     for (i <- 1 to 7) {
-      qMNext(i) := qMNext(i -1) ^ io.input(i)
+      qMBits(i) := qMBits(i - 1) ^ io.input(i)
     }
-    qMNext(8) := True
+    qMBits(8) := True
   }
 
   // ==================================
   //  STAGE 1
   // ==================================
-  val qM = RegNext(qMNext)
+  val qM = RegNext(qMBits.asBits)
   val disparityCount = RegInit(S(0, 5 bits))
   val resetDisparity = RegNext(io.resetDisparity)
 
@@ -182,7 +181,7 @@ case class TmdsVideoEncoder() extends Component {
   val dataBits = Mux(invert, ~qM(7 downto 0), qM(7 downto 0))
   io.output := RegNext(invert ## qM(8) ## dataBits)
 
-  val disparityDelta = SInt(5 bits)
+  val disparityDelta = SInt(4 bits)
   when(disparityCount === 0 || numQOnes === numQZeros) {
     disparityDelta := Mux(invert,
       (numQZeros - numQOnes).asSInt,
