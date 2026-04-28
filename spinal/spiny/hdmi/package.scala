@@ -35,4 +35,29 @@ import spinal.core._
 
 package object hdmi {
    val TmdsChar = HardType(Bits(10 bits))
+
+   object Pixel {
+      def apply(r: Int, g: Int, b: Int): Pixel = {
+         val pixel = Pixel()
+         pixel.r := r
+         pixel.g := r
+         pixel.b := b
+         pixel
+      }
+   }
+
+   case class Pixel() extends Bundle {
+      val r = UInt(8 bits)
+      val g = UInt(8 bits)
+      val b = UInt(8 bits)
+
+      def channel(i: Int): UInt = {
+         i match {
+            case 0 => b
+            case 1 => g
+            case 2 => r
+            case default => SpinalError("Pixel only has channels 0-2")
+         }
+      }
+   }
 }
