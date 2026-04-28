@@ -34,16 +34,14 @@ package spiny.hdmi
 import spinal.core._
 import spinal.lib._
 
-sealed trait SyncPolarity extends AreaObject {
-  def sync(asserted: Bool): Bool
-}
+sealed trait SyncPolarity extends ImplicitArea[Bool]
 
 object POSITIVE extends SyncPolarity {
-  override def sync(asserted: Bool): Bool = asserted
+  override def implicitValue: Bool = True
 }
 
 object NEGATIVE extends SyncPolarity {
-  override def sync(asserted: Bool): Bool = ~asserted
+  override def implicitValue: Bool = False
 }
 
 case class VideoMode(
@@ -60,10 +58,16 @@ case class VideoMode(
   vSyncPolarity: SyncPolarity,
   pixelClkTolerance: Double = 0.005
 ) {
-  def vBlank: Int = vFrontPorch + vSync + vBackPorch
-  def vTotal: Int = vActive + vBlank
   def hBlank: Int = hFrontPorch + hSync + hBackPorch
   def hTotal: Int = hActive + hBlank
+  def hLast: Int = hTotal - 1
+  def hSyncStart: Int = hActive + hFrontPorch
+  def hSyncEnd: Int = hActive + hFrontPorch + hSync
+  def vBlank: Int = vFrontPorch + vSync + vBackPorch
+  def vTotal: Int = vActive + vBlank
+  def vLast: Int = vTotal - 1
+  def vSyncStart: Int = vActive + vFrontPorch
+  def vSyncEnd: Int = vActive + vFrontPorch + vSync
 }
 
 object VideoMode {
@@ -100,39 +104,84 @@ object VideoMode {
   }
 }
 
-case class StaticVideoTimingGen(mode: VideoMode) extends Component {
+object VideoTimingGen {
+  def apply(highestMode: VideoMode): VideoTimingGen = 
+    VideoTimingGen(hMax = highestMode.hTotal, vMax = highestMode.vTotal)
+
+  def static(mode: VideoMode): VideoTimingGen = {
+    val timingGen = VideoTimingGen(hMax = mode.hTotal, vMax = mode.vTotal)
+
+    timingGen.io.videoMode.hActive := mode.hActive
+    timingGen.io.videoMode.hSyncStart := mode.hSyncStart
+    timingGen.io.videoMode.hSyncEnd := mode.hSyncEnd
+    timingGen.io.videoMode.hLast := mode.hLast
+    timingGen.io.videoMode.hSyncPolarity := mode.hSyncPolarity
+
+    timingGen.io.videoMode.vActive := mode.vActive
+    timingGen.io.videoMode.vSyncStart := mode.vSyncStart
+    timingGen.io.videoMode.vSyncEnd := mode.vSyncEnd
+    timingGen.io.videoMode.vLast := mode.vLast
+    timingGen.io.videoMode.vSyncPolarity := mode.vSyncPolarity
+
+    timingGen
+  }
+}
+
+case class VideoTimingGen(hMax: Int, vMax: Int) extends Component {
+  val HCount = HardType(UInt(log2Up(hMax) bits))
+  val VCount = HardType(UInt(log2Up(vMax) bits))
+
   val io = new Bundle() {
+    val videoMode = new Bundle {
+      val hActive = in(HCount())
+      val hSyncStart = in(HCount())
+      val hSyncEnd = in(HCount())
+      val hLast = in(HCount())
+      val hSyncPolarity = in(Bool())
+      val vActive = in(VCount())
+      val vSyncStart = in(VCount())
+      val vSyncEnd = in(VCount())
+      val vLast = in(VCount())
+      val vSyncPolarity = in(Bool())
+    }
+
     val hSync = out(Bool())
     val vSync = out(Bool())
     val videoActive = out(Bool())
-    val x = out(UInt(log2Up(mode.hTotal) bits))
-    val y = out(UInt(log2Up(mode.vTotal) bits))
+    val x = out(HCount())
+    val y = out(VCount())
   }
 
-  val hCount = CounterFreeRun(mode.hTotal)
-  val vCount = Counter(mode.vTotal)
-  when(hCount.willOverflow) {
-    vCount.increment()
+  val hCount = CounterFreeRun(hMax)
+  val hDone = hCount === io.videoMode.hLast
+  when(hDone) {
+    hCount.clear()
   }
 
-  val active  = hCount < mode.hActive && vCount < mode.vActive
+  val vCount = Counter(vMax)
+  when(hDone) {
+    when(vCount === io.videoMode.vLast) {
+      vCount.clear()
+    } otherwise {
+      vCount.increment()
+    }
+  }
 
-  val hSyncStart = mode.hActive + mode.hFrontPorch
-  val hSyncEnd = hSyncStart + mode.hSync
-  val hSync = hCount >= hSyncStart && hCount < hSyncEnd
+  val inActive = (hCount < io.videoMode.hActive &&
+                  vCount < io.videoMode.vActive)
+  val inHSync = (hCount >= io.videoMode.hSyncStart &&
+                 hCount < io.videoMode.hSyncEnd)
+  val inVSync = (vCount >= io.videoMode.vSyncStart &&
+                 vCount < io.videoMode.vSyncEnd)
 
-  val vSyncStart = mode.vActive + mode.vFrontPorch
-  val vSyncEnd = vSyncStart + mode.vSync
-  val vSync = vCount >= vSyncStart && vCount < vSyncEnd
-
-  io.videoActive := RegNext(active, init = False)
+  io.videoActive := RegNext(inActive, init = False)
   io.hSync := RegNext(
-    mode.hSyncPolarity.sync(hSync),
-    init = mode.hSyncPolarity.sync(False)
+    Mux(io.videoMode.hSyncPolarity, inHSync, ~inHSync),
+    init = False
   )
   io.vSync := RegNext(
-    mode.vSyncPolarity.sync(vSync),
-    init = mode.vSyncPolarity.sync(False)
+    Mux(io.videoMode.vSyncPolarity, inVSync, ~inVSync),
+    init = False
   )
   io.x := RegNext(hCount.value)
   io.y := RegNext(vCount.value)

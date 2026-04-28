@@ -62,7 +62,7 @@ class HdmiTest extends Component {
   clockGen.build()
 
   pixelClkDomain on {
-    val timingGen = StaticVideoTimingGen(videoMode)
+    val timingGen = VideoTimingGen.static(videoMode)
 
     val videoEncoders = Seq.fill(3) {
        val encoder = TmdsVideoEncoder()
