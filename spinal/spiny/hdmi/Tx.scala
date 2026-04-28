@@ -29,55 +29,43 @@
 ** OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE **
 ** USE OR OTHER DEALINGS IN THE SOFTWARE.                                    */
 
-package spiny.examples.hdmitest
+package spiny.hdmi
 
 import spinal.core._
 import spinal.lib._
 
-import spiny.ClockGen
-import spiny.hdmi._
-
-class HdmiTest extends Component {
+case class HdmiTx(pixelClk5XDomain: ClockDomain) extends Component {
   val io = new Bundle {
-    val SYS_CLK = in(Bool())
-    val CPU_RESET_N = in(Bool())
-    val HDMI = out(HdmiLink())
+    val timing = in(VideoTiming())
+    val pixel = in(Pixel())
+    val hdmi = out(HdmiLink())
   }
-  noIoPrefix()
 
-  val inputClkDomain = ClockDomain(
-    clock = io.SYS_CLK,
-    reset = !io.CPU_RESET_N,
-    config = ClockDomainConfig(resetActiveLevel = HIGH),
-    frequency = FixedFrequency(100 MHz)
-  )
-
-  val videoMode = VideoMode.Dmt.Hdmi720p60Hz
-
-  val clockGen = inputClkDomain on ClockGen()
-  val pixelClk5XDomain = clockGen.request(
-    videoMode.pixelClkFreq * 5,
-    tolerance = videoMode.pixelClkTolerance
-  )
-  val pixelClkDomain = clockGen.requestDivided(pixelClk5XDomain, divisor = 5)
-  clockGen.build()
-
-  pixelClkDomain on {
-    val timingGen = VideoTimingGen.static(videoMode)
-
-    val hdmiTx = HdmiTx(pixelClk5XDomain)
-    hdmiTx.io.timing := timingGen.io.timing
-    hdmiTx.io.pixel.r := timingGen.io.y.resized
-    hdmiTx.io.pixel.g := (timingGen.io.y.asBits(3 downto 0) ##
-                          timingGen.io.x.asBits(3 downto 0)).asUInt
-    hdmiTx.io.pixel.b := timingGen.io.x.resized
-    io.HDMI := hdmiTx.io.hdmi
+  val videoEncoders = (0 to 2).map { i =>
+    val encoder = TmdsVideoEncoder()
+    encoder.io.resetDisparity := io.timing.videoActive
+    encoder.io.input := io.pixel.channel(i).asBits
+    encoder
   }
-}
 
-object TopLevelVerilog extends App {
-  val spinalReport = SpinalConfig(
-    targetDirectory = "target/spinal",
-    inlineRom = true
-  ).generateVerilog(new HdmiTest())
+  val ctrlEncoders = Seq.fill(3)(TmdsControlEncoder())
+  ctrlEncoders(0).io.input := io.timing.vSync ## io.timing.hSync
+  ctrlEncoders(1).io.input := B"00"
+  ctrlEncoders(2).io.input := B"00"
+
+  val encoded = videoEncoders.zip(ctrlEncoders).map {
+    case (videoEnc, ctrlEnc) => Mux(
+      Delay(io.timing.videoActive, Tmds.EncoderLatency),
+      videoEnc.io.output,
+      ctrlEnc.io.output
+    )
+  }
+
+  val phy = XilinxSerDesHdmiPhy(pixelClk5XDomain)
+  phy.io.enable := True
+  phy.io.input.zip(encoded).foreach {
+    case (input, data) => input := data
+  }
+  io.hdmi := phy.io.output
+
 }
