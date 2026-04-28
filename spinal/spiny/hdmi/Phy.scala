@@ -36,7 +36,6 @@ import spinal.lib._
 import spinal.lib.blackbox.xilinx.s7.OBUFDS
 
 import spiny.blackbox.xilinx._
-import hdmi.TmdsChar
 
 case class TmdsDiffPair() extends Bundle {
   val p = Bool()
