@@ -36,8 +36,6 @@ import scala.collection.mutable
 import spinal.core._
 import spinal.lib._
 
-import hdmi.TmdsChar
-
 object Tmds {
   implicit class IntToBitSeq(val value: Int) extends AnyVal {
     def toBitSeq(len: Int): Seq[Boolean] =
