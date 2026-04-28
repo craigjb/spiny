@@ -104,6 +104,12 @@ object VideoMode {
   }
 }
 
+case class VideoTiming() extends Bundle {
+  val hSync = Bool()
+  val vSync = Bool()
+  val videoActive = Bool()
+}
+
 object VideoTimingGen {
   def apply(highestMode: VideoMode): VideoTimingGen = 
     VideoTimingGen(hMax = highestMode.hTotal, vMax = highestMode.vTotal)
@@ -145,9 +151,7 @@ case class VideoTimingGen(hMax: Int, vMax: Int) extends Component {
       val vSyncPolarity = in(Bool())
     }
 
-    val hSync = out(Bool())
-    val vSync = out(Bool())
-    val videoActive = out(Bool())
+    val timing = out(VideoTiming())
     val x = out(HCount())
     val y = out(VCount())
   }
@@ -174,12 +178,12 @@ case class VideoTimingGen(hMax: Int, vMax: Int) extends Component {
   val inVSync = (vCount >= io.videoMode.vSyncStart &&
                  vCount < io.videoMode.vSyncEnd)
 
-  io.videoActive := RegNext(inActive, init = False)
-  io.hSync := RegNext(
+  io.timing.videoActive := RegNext(inActive, init = False)
+  io.timing.hSync := RegNext(
     Mux(io.videoMode.hSyncPolarity, inHSync, ~inHSync),
     init = False
   )
-  io.vSync := RegNext(
+  io.timing.vSync := RegNext(
     Mux(io.videoMode.vSyncPolarity, inVSync, ~inVSync),
     init = False
   )

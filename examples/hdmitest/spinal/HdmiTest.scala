@@ -66,7 +66,7 @@ class HdmiTest extends Component {
 
     val videoEncoders = Seq.fill(3) {
        val encoder = TmdsVideoEncoder()
-       encoder.io.resetDisparity := ~timingGen.io.videoActive
+       encoder.io.resetDisparity := ~timingGen.io.timing.videoActive
        encoder
     }
     videoEncoders(0).io.input := timingGen.io.x.asBits.resized
@@ -76,13 +76,14 @@ class HdmiTest extends Component {
     videoEncoders(2).io.input := timingGen.io.y.asBits.resized
 
     val ctrlEncoders = Seq.fill(3)(TmdsControlEncoder())
-    ctrlEncoders(0).io.input := timingGen.io.vSync ## timingGen.io.hSync
+    ctrlEncoders(0).io.input :=
+      timingGen.io.timing.vSync ## timingGen.io.timing.hSync
     ctrlEncoders(1).io.input := B"00"
     ctrlEncoders(2).io.input := B"00"
 
     val encoded = videoEncoders.zip(ctrlEncoders).map {
       case (videoEnc, ctrlEnc) => Mux(
-        Delay(timingGen.io.videoActive, Tmds.EncoderLatency),
+        Delay(timingGen.io.timing.videoActive, Tmds.EncoderLatency),
         videoEnc.io.output,
         ctrlEnc.io.output
       )
