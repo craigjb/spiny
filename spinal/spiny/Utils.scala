@@ -34,6 +34,18 @@ package spiny
 import java.nio.file.{Files, Paths}
 
 import spinal.core._
+import spinal.lib._
+
+object Pulse {
+  def apply(period: TimeNumber): Pulse = Pulse(period.toHertz)
+}
+
+case class Pulse(frequency: HertzNumber) extends ImplicitArea[Bool] {
+  val timer = Timeout(frequency)
+  timer.clearWhen(timer)
+
+  override def implicitValue: Bool = timer.implicitValue
+}
 
 object Utils {
   def nextPowerOfTwo(n: BigInt): BigInt = {
