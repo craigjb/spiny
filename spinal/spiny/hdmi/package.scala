@@ -40,7 +40,15 @@ package object hdmi {
       def apply(r: Int, g: Int, b: Int): Pixel = {
          val pixel = Pixel()
          pixel.r := r
-         pixel.g := r
+         pixel.g := g
+         pixel.b := b
+         pixel
+      }
+
+      def apply(r: UInt, g: UInt, b: UInt): Pixel = {
+         val pixel = Pixel()
+         pixel.r := r
+         pixel.g := g
          pixel.b := b
          pixel
       }
