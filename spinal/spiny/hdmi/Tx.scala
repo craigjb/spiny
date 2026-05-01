@@ -43,7 +43,7 @@ case class HdmiTx(pixelClk5XDomain: ClockDomain) extends Component {
 
   val videoEncoders = (0 to 2).map { i =>
     val encoder = TmdsVideoEncoder()
-    encoder.io.resetDisparity := io.timing.videoActive
+    encoder.io.resetDisparity := !io.timing.videoActive
     encoder.io.input := io.pixel.channel(i).asBits
     encoder
   }
