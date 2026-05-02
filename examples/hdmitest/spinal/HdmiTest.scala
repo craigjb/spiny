@@ -35,6 +35,7 @@ import spinal.core._
 import spinal.lib._
 
 import spiny.ClockGen
+import spiny.Pulse
 import spiny.hdmi._
 
 class HdmiTest extends Component {
@@ -64,13 +65,22 @@ class HdmiTest extends Component {
 
   pixelClkDomain on {
     val timingGen = VideoTimingGen.static(videoMode)
+    val vSyncPulse = timingGen.io.timing.vSyncActive.rise()
+
+    val xCounter = Counter(videoMode.hActive, vSyncPulse)
+    val yCounter = Counter(videoMode.hActive, Counter(2, vSyncPulse).willOverflow)
+    val greenCounter = Counter(0xff, Counter(6, vSyncPulse).willOverflow)
+    
+    val pixel = RegNext(Pixel(
+      r = (timingGen.io.x + xCounter).resized,
+      g = greenCounter.resized,
+      b = (timingGen.io.y + yCounter).resized
+    ))
+    val timing = RegNext(timingGen.io.timing)
 
     val hdmiTx = HdmiTx(pixelClk5XDomain)
-    hdmiTx.io.timing := timingGen.io.timing
-    hdmiTx.io.pixel.r := timingGen.io.y.resized
-    hdmiTx.io.pixel.g := (timingGen.io.y.asBits(3 downto 0) ##
-                          timingGen.io.x.asBits(3 downto 0)).asUInt
-    hdmiTx.io.pixel.b := timingGen.io.x.resized
+    hdmiTx.io.timing := timing
+    hdmiTx.io.pixel := pixel
     io.HDMI := hdmiTx.io.hdmi
   }
 }
