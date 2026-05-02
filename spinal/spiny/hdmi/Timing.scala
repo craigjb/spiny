@@ -106,7 +106,9 @@ object VideoMode {
 
 case class VideoTiming() extends Bundle {
   val hSync = Bool()
+  val hSyncActive = Bool()
   val vSync = Bool()
+  val vSyncActive = Bool()
   val videoActive = Bool()
 }
 
@@ -183,10 +185,12 @@ case class VideoTimingGen(hMax: Int, vMax: Int) extends Component {
     Mux(io.videoMode.hSyncPolarity, inHSync, ~inHSync),
     init = False
   )
+  io.timing.hSyncActive := RegNext(inHSync, init = False)
   io.timing.vSync := RegNext(
     Mux(io.videoMode.vSyncPolarity, inVSync, ~inVSync),
     init = False
   )
+  io.timing.vSyncActive := RegNext(inVSync, init = False)
   io.x := RegNext(hCount.value)
   io.y := RegNext(vCount.value)
 }
