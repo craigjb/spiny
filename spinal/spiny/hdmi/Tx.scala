@@ -34,6 +34,8 @@ package spiny.hdmi
 import spinal.core._
 import spinal.lib._
 
+import spiny.graphics.Pixel
+
 case class HdmiTx(pixelClk5XDomain: ClockDomain) extends Component {
   val io = new Bundle {
     val timing = in(VideoTiming())

@@ -35,7 +35,7 @@ import spinal.core._
 import spinal.lib._
 
 import spiny.ClockGen
-import spiny.Pulse
+import spiny.graphics.Pixel
 import spiny.hdmi._
 
 class HdmiTest extends Component {
