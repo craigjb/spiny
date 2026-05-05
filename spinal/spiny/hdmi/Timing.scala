@@ -72,7 +72,7 @@ case class VideoMode(
 
 object VideoMode {
   object Dmt {
-    val Hdmi720p60Hz = VideoMode(
+    val Dmt720p60Hz = VideoMode(
       pixelClkFreq = 74.25 MHz,
       hActive = 1280,
       hFrontPorch = 110,
@@ -88,7 +88,21 @@ object VideoMode {
   }
 
   object CvtRb {
-    val Hdmi720p60Hz = VideoMode(
+    val CvtRb540p60Hz = VideoMode(
+      pixelClkFreq = 37.25 MHz,
+      hActive = 960,
+      hFrontPorch = 48,
+      hSync = 32,
+      hBackPorch = 80,
+      hSyncPolarity = POSITIVE,
+      vActive = 540,
+      vFrontPorch = 3,
+      vSync = 5,
+      vBackPorch = 8,
+      vSyncPolarity = NEGATIVE
+    )
+
+    val CvtRb720p60Hz = VideoMode(
       pixelClkFreq = 64 MHz,
       hActive = 1280,
       hFrontPorch = 48,

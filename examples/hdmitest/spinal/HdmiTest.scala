@@ -53,7 +53,7 @@ class HdmiTest extends Component {
     frequency = FixedFrequency(100 MHz)
   )
 
-  val videoMode = VideoMode.Dmt.Hdmi720p60Hz
+  val videoMode = VideoMode.Dmt.Dmt720p60Hz
 
   val clockGen = inputClkDomain on ClockGen()
   val pixelClk5XDomain = clockGen.request(
