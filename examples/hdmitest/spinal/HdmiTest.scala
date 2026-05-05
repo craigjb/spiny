@@ -35,7 +35,7 @@ import spinal.core._
 import spinal.lib._
 
 import spiny.ClockGen
-import spiny.graphics.Pixel
+import spiny.graphics.RgbPixel
 import spiny.hdmi._
 
 class HdmiTest extends Component {
@@ -71,7 +71,7 @@ class HdmiTest extends Component {
     val yCounter = Counter(videoMode.hActive, Counter(2, vSyncPulse).willOverflow)
     val greenCounter = Counter(0xff, Counter(6, vSyncPulse).willOverflow)
     
-    val pixel = RegNext(Pixel(
+    val pixel = RegNext(RgbPixel(
       r = (timingGen.io.x + xCounter).resized,
       g = greenCounter.resized,
       b = (timingGen.io.y + yCounter).resized

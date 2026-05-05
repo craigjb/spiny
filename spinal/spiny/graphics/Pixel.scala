@@ -35,17 +35,17 @@ import spinal.core._
 import spinal.lib._
 
 
-object Pixel {
-  def apply(r: Int, g: Int, b: Int): Pixel = {
-      val pixel = Pixel()
+object RgbPixel {
+  def apply(r: Int, g: Int, b: Int): RgbPixel = {
+      val pixel = RgbPixel()
       pixel.r := r
       pixel.g := g
       pixel.b := b
       pixel
   }
 
-  def apply(r: UInt, g: UInt, b: UInt): Pixel = {
-      val pixel = Pixel()
+  def apply(r: UInt, g: UInt, b: UInt): RgbPixel = {
+      val pixel = RgbPixel()
       pixel.r := r
       pixel.g := g
       pixel.b := b
@@ -53,7 +53,7 @@ object Pixel {
   }
 }
 
-case class Pixel() extends Bundle {
+case class RgbPixel() extends Bundle {
   val r = UInt(8 bits)
   val g = UInt(8 bits)
   val b = UInt(8 bits)
@@ -63,7 +63,7 @@ case class Pixel() extends Bundle {
         case 0 => b
         case 1 => g
         case 2 => r
-        case default => SpinalError("Pixel only has channels 0-2")
+        case default => SpinalError("RgbPixel only has channels 0-2")
       }
   }
 }

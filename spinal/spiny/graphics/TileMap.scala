@@ -72,12 +72,12 @@ object TileMap {
 case class TileMap(config: TileMapConfig) extends Component {
   val io = new Bundle {
     val position = in(Flow(TileMapPosition(config)))
-    val pixels = out(Flow(Pixel()))
+    val pixels = out(Flow(RgbPixel()))
   }
 
   
   val tileMemSize = config.tileSetSize * config.tileSize * config.tileSize
-  val tileMem = Mem(Pixel(), tileMemSize)
+  val tileMem = Mem(RgbPixel(), tileMemSize)
 
   val mapMemSize = config.mapWidth * config.mapHeight
   val mapMem = Mem(config.Tile, mapMemSize)
