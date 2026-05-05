@@ -64,6 +64,10 @@ object Utils {
       ).toSeq
   }
 
+  def readBytesFromFile(path: String): Seq[Int] = {
+    Files.readAllBytes(Paths.get(path)).map(_ & 0xff).toSeq
+  }
+
   // Adds .when to the Option companion object for Scala 2.12
   implicit class OptionFactoryExtensions(val opt: Option.type) extends AnyVal {
     def when[A](cond: Boolean)(a: => A): Option[A] = {

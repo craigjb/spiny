@@ -69,15 +69,17 @@ object TileMap {
   val Latency = 2
 }
 
-case class TileMap(config: TileMapConfig) extends Component {
+case class TileMap[T <: Data](
+  config: TileMapConfig,
+  pixelFormat: HardType[T]
+) extends Component {
   val io = new Bundle {
     val position = in(Flow(TileMapPosition(config)))
-    val pixels = out(Flow(RgbPixel()))
+    val pixels = out(Flow(pixelFormat()))
   }
 
-  
   val tileMemSize = config.tileSetSize * config.tileSize * config.tileSize
-  val tileMem = Mem(RgbPixel(), tileMemSize)
+  val tileMem = Mem(pixelFormat(), tileMemSize)
 
   val mapMemSize = config.mapWidth * config.mapHeight
   val mapMem = Mem(config.Tile, mapMemSize)

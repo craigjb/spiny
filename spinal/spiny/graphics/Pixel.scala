@@ -34,6 +34,12 @@ package spiny.graphics
 import spinal.core._
 import spinal.lib._
 
+object PalettePixel {
+  def apply(width: BitCount) = UInt(width)
+  def apply(c: Int, width: BitCount) = U(c, width)
+  def apply(paletteSize: Int) = UInt(log2Up(paletteSize) bits)
+  def apply(c: Int, paletteSize: Int) = U(c, log2Up(paletteSize) bits)
+}
 
 object RgbPixel {
   def apply(r: Int, g: Int, b: Int): RgbPixel = {
