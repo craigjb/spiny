@@ -56,3 +56,12 @@ lazy val hdmitest = (project in file("examples/hdmitest"))
     publish / skip := true,
     libraryDependencies ++= Seq(spinalIdslPlugin, scallop),
   )
+
+lazy val graphics2d = (project in file("examples/graphics2d"))
+  .dependsOn(spiny)
+  .settings(
+    name := "graphics2d",
+    Compile / scalaSource := baseDirectory.value / "spinal",
+    publish / skip := true,
+    libraryDependencies ++= Seq(spinalIdslPlugin, scallop),
+  )

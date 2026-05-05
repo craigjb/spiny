@@ -1,0 +1,38 @@
+CAPI=2:
+name: craigjb:spiny:graphics2d:0
+description: 2D graphics example with HDMI ouput
+
+filesets:
+  nexys_video_xdc:
+    files:
+      - data/nexys_video.xdc
+    file_type: xdc
+
+  vivado_settings:
+    files:
+      - data/vivado_settings.tcl
+    file_type: tclSource
+
+  dep:
+    depend:
+      - craigjb:spiny:generators:0.1.0
+
+generate:
+  spinalhdl:
+    generator: spinalhdl
+    parameters:
+      sbt_dir: "../../"
+      output_path: "target/spinal/Graphics2D.v"
+      main: spiny.examples.graphics2d.TopLevelVerilog
+      project: graphics2d
+      file_type: verilogSource
+
+targets:
+  nexys_video:
+    filesets: [nexys_video_xdc, vivado_settings, dep]
+    generate:
+      - spinalhdl
+    toplevel: Graphics2D
+    flow: vivado
+    flow_options:
+      part: xc7a200t-sbg484-1
