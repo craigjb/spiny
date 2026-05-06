@@ -68,6 +68,7 @@ case class VideoMode(
   def vLast: Int = vTotal - 1
   def vSyncStart: Int = vActive + vFrontPorch
   def vSyncEnd: Int = vActive + vFrontPorch + vSync
+  def frameRate: HertzNumber = pixelClkFreq / hTotal / vTotal
 }
 
 object VideoMode {
