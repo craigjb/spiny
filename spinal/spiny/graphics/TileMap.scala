@@ -87,8 +87,8 @@ case class TileMap[T <: Data](
   // ==================================
   //  STAGE 0 
   // ==================================
-  val mapPixelX = io.position.x.intoSInt + io.position.scrollX
-  val mapPixelY = io.position.y.intoSInt + io.position.scrollY
+  val mapPixelX = io.position.x.intoSInt +^ io.position.scrollX
+  val mapPixelY = io.position.y.intoSInt +^ io.position.scrollY
   val mapX = mapPixelX >> config.tileBits
   val tilePixelX = mapPixelX(config.tileBits - 1 downto 0).asUInt
   val mapY = mapPixelY >> config.tileBits
