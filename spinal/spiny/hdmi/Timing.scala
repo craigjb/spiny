@@ -119,6 +119,18 @@ object VideoMode {
   }
 }
 
+object VideoTiming {
+  def inactive() : VideoTiming = {
+    val timing = VideoTiming()
+    timing.hSync := False
+    timing.hSyncActive := False
+    timing.vSync := False
+    timing.vSyncActive := False
+    timing.videoActive := False
+    timing
+  }
+}
+
 case class VideoTiming() extends Bundle {
   val hSync = Bool()
   val hSyncActive = Bool()
