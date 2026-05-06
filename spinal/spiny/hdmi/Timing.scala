@@ -204,8 +204,14 @@ case class VideoTimingGen(hMax: Int, vMax: Int) extends Component {
                   vCount < io.videoMode.vActive)
   val inHSync = (hCount >= io.videoMode.hSyncStart &&
                  hCount < io.videoMode.hSyncEnd)
-  val inVSync = (vCount >= io.videoMode.vSyncStart &&
-                 vCount < io.videoMode.vSyncEnd)
+  val inVSyncLine = (vCount >= io.videoMode.vSyncStart &&
+                     vCount < io.videoMode.vSyncEnd)
+  val vSync = RegInit(False)
+  val vSyncActive = RegInit(False)
+  when(hCount === io.videoMode.hSyncStart) {
+    vSync := Mux(io.videoMode.vSyncPolarity, inVSyncLine, ~inVSyncLine)
+    vSyncActive := inVSyncLine
+  }
 
   io.timing.videoActive := RegNext(inActive, init = False)
   io.timing.hSync := RegNext(
@@ -213,11 +219,10 @@ case class VideoTimingGen(hMax: Int, vMax: Int) extends Component {
     init = False
   )
   io.timing.hSyncActive := RegNext(inHSync, init = False)
-  io.timing.vSync := RegNext(
-    Mux(io.videoMode.vSyncPolarity, inVSync, ~inVSync),
-    init = False
-  )
-  io.timing.vSyncActive := RegNext(inVSync, init = False)
+
+  io.timing.vSync := vSync
+  io.timing.vSyncActive := vSyncActive
+
   io.x := RegNext(hCount.value)
   io.y := RegNext(vCount.value)
 }
