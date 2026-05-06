@@ -36,6 +36,22 @@ import spinal.lib._
 import spinal.lib.blackbox.xilinx.s7.{MMCME2_BASE, BUFG}
 import scala.collection.mutable.ArrayBuffer
 
+sealed trait ClockGenBandwidth
+
+object ClockGenBandwidth {
+  object High extends ClockGenBandwidth {
+    override def toString() = "HIGH"
+  }
+
+  object Low extends ClockGenBandwidth {
+    override def toString() = "LOW"
+  }
+
+  object Optimized extends ClockGenBandwidth {
+    override def toString() = "OPTIMIZED"
+  }
+}
+
 case class ClockRequest(
   freq: HertzNumber,
   tolerance: Double = 0.0,
@@ -47,7 +63,8 @@ case class ClockGen(
   vcoMax: HertzNumber = 1200 MHz,
   inputFreqMin: HertzNumber = 10 MHz,
   outputFreqMin: HertzNumber = 4.69 MHz,
-  outputFreqMax: HertzNumber = 800 MHz
+  outputFreqMax: HertzNumber = 800 MHz,
+  bandwidth: ClockGenBandwidth = ClockGenBandwidth.Optimized
 ) extends Component {
   val io = new Bundle {
     val locked = out(Bool())
@@ -267,6 +284,7 @@ case class ClockGen(
 
     val inputPeriodNs = 1.0e9 / inputFreqHz
     val mmcm = MMCME2_BASE(
+      BANDWIDTH = bandwidth.toString,
       CLKIN1_PERIOD = inputPeriodNs,
       CLKFBOUT_MULT_F = solution.m,
       DIVCLK_DIVIDE = solution.d.toDouble,
