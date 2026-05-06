@@ -179,19 +179,18 @@ case class TmdsVideoEncoder() extends Component {
   val dataBits = Mux(invert, ~qM(7 downto 0), qM(7 downto 0))
   io.output := RegNext(invert ## qM(8) ## dataBits)
 
-  val disparityDelta = SInt(4 bits)
+  val disparityDelta = SInt(5 bits)
+  val zerosMinusOnes = numQZeros.intoSInt - numQOnes.intoSInt
+  val onesMinusZeros = numQOnes.intoSInt - numQZeros.intoSInt
   when(disparityCount === 0 || numQOnes === numQZeros) {
-    disparityDelta := Mux(invert,
-      (numQZeros - numQOnes).asSInt,
-      (numQOnes - numQZeros).asSInt
-    )
+    disparityDelta := Mux(invert, zerosMinusOnes, onesMinusZeros)
   } otherwise {
     when(invert) {
       val offset = Mux(qM(8), S(2), S(0))
-      disparityDelta := offset + (numQZeros - numQOnes).asSInt
+      disparityDelta := offset + zerosMinusOnes
     } otherwise {
       val offset = Mux(qM(8), S(0), S(-2))
-      disparityDelta := offset + (numQOnes - numQZeros).asSInt
+      disparityDelta := offset + onesMinusZeros
     }
   }
 
