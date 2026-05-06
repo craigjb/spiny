@@ -27,7 +27,25 @@ generate:
       project: graphics2d
       file_type: verilogSource
 
+  spinalsim:
+    generator: spinalhdl
+    parameters:
+      sbt_dir: "../../"
+      main: spiny.examples.graphics2d.TopLevelSim
+      project: graphics2d
+      file_type: verilogSource
+
 targets:
+  sim:
+    filesets: [dep]
+    generate:
+      - spinalsim
+    toplevel: GraphicsDemo
+    flow: generic # dummy flow
+    flow_options:
+      tool: verilator
+      mode: lint-only
+
   nexys_video:
     filesets: [nexys_video_xdc, vivado_settings, dep]
     generate:
