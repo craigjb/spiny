@@ -95,7 +95,8 @@ case class TileMap[T <: Data](
   val tilePixelY = mapPixelY(config.tileBits - 1 downto 0).asUInt
   val mapAddr = (mapY(log2Up(config.mapHeight) - 1 downto 0) ##
                  mapX(log2Up(config.mapWidth) - 1 downto 0)).asUInt
-  val inBounds = mapX >= 0 && mapY >= 0
+  val inBounds = mapX >= 0 && mapX < config.mapWidth &&
+                 mapY >= 0 && mapY < config.mapHeight
 
   // ==================================
   //  STAGE 1 
