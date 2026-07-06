@@ -53,8 +53,8 @@ object GraphicsDemo {
   assert(TileSetData.length % (TileSize * TileSize) == 0)
   val TileSetSize = TileSetData.length / TileSize / TileSize
 
-  val MapWidth = 128
-  val MapHeight = 128
+  val MapWidth = 64
+  val MapHeight = 64
   assert(TileSetSize <= 256)
 
   val MapData = {
