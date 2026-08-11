@@ -31,7 +31,7 @@ generate:
   svd:
     generator: spinalhdl
     parameters:
-      sbt_dir: "../../"
+      sbt_dir: ../../
       main: spiny.examples.blinky.TopLevelVerilog
       project: blinky
 
@@ -40,36 +40,35 @@ generate:
     parameters:
       crate_name: blinky-pac
       crate_version: 0.1.0
-      output_path: "target/rust/blinky-pac"
+      output_path: target/rust/blinky-pac
 
   firmware:
     generator: cargo
     parameters:
       project_dir: "rust"
-      args:
-        - "objcopy"
-        - "--release"
-        - "--"
-        - "-O"
-        - "binary"
-        - "target/release/blinky.bin"
+      args: [
+        "objcopy", "--release",
+        "--",
+        "-O", "binary",
+        "target/release/blinky.bin"
+      ]
 
   spinalsim:
     generator: spinalhdl
     parameters:
-      sbt_dir: "../../"
+      sbt_dir: ../../
       main: spiny.examples.blinky.TopLevelSim
       project: blinky
-      output_path: "target/spinal/Blinky.v"
+      output_path: target/spinal/Blinky.v
       file_type: verilogSource
    
   spinalhdl:
     generator: spinalhdl
     parameters:
-      sbt_dir: "../../"
+      sbt_dir: ../../
       main: spiny.examples.blinky.TopLevelVerilog
       project: blinky
-      output_path: "target/spinal/Blinky.v"
+      output_path: target/spinal/Blinky.v
       file_type: verilogSource
 
 targets:
@@ -81,7 +80,7 @@ targets:
         - firmware
         - spinalsim:
             args:
-              - "rust/target/release/blinky.bin"
+              - rust/target/release/blinky.bin
     toplevel: Blinky
     flow: generic # dummy flow
     flow_options: # only lint, sim is done with SpinalHDL
@@ -95,24 +94,17 @@ targets:
     generate:
       - svd:
           args:
-            - "--num-leds"
-            - "16"
-            - "--num-switches"
-            - "16"
-            - "--freq-mhz"
-            - "100"
+            - --num-leds=16
+            - --num-switches=16
+            - --freq-mhz=100
       - rustpac
       - firmware
       - spinalhdl:
           args:
-            - "--num-leds"
-            - "16"
-            - "--num-switches"
-            - "16"
-            - "--freq-mhz"
-            - "100"
-            - "--firmware"
-            - "rust/target/release/blinky.bin"
+            - --num-leds=16
+            - --num-switches=16
+            - --freq-mhz=100
+            - --firmware=rust/target/release/blinky.bin
     toplevel: Blinky
     flow: vivado
     flow_options:
@@ -123,24 +115,17 @@ targets:
     generate:
       - svd:
           args:
-            - "--num-leds"
-            - "8"
-            - "--num-switches"
-            - "8"
-            - "--freq-mhz"
-            - "100"
+            - --num-leds=8
+            - --num-switches=8
+            - --freq-mhz=100
       - rustpac
       - firmware
       - spinalhdl:
           args:
-            - "--num-leds"
-            - "8"
-            - "--num-switches"
-            - "8"
-            - "--freq-mhz"
-            - "100"
-            - "--firmware"
-            - "rust/target/release/blinky.bin"
+            - --num-leds=8
+            - --num-switches=8
+            - --freq-mhz=100
+            - --firmware=rust/target/release/blinky.bin
     toplevel: Blinky
     flow: vivado
     flow_options:
@@ -151,26 +136,19 @@ targets:
     generate:
       - svd:
           args:
-            - "--num-leds"
-            - "8"
-            - "--num-switches"
-            - "8"
+            - --num-leds=8
+            - --num-switches=8
             - --flip-led-polarity
-            - "--freq-mhz"
-            - "54"
+            - --freq-mhz=54
       - rustpac
       - firmware
       - spinalhdl:
           args:
-            - "--num-leds"
-            - "8"
-            - "--num-switches"
-            - "8"
+            - --num-leds=8
+            - --num-switches=8
             - --flip-led-polarity
-            - "--freq-mhz"
-            - "54"
-            - "--firmware"
-            - "rust/target/release/blinky.bin"
+            - --freq-mhz=54
+            - --firmware=rust/target/release/blinky.bin
     toplevel: Blinky
     flow: trellis
     flow_options:
