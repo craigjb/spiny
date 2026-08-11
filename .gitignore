@@ -55,3 +55,4 @@ tmp/
 null
 /*.bin
 *.out
+.envrc
