@@ -44,6 +44,8 @@ import org.rogach.scallop._
 class Blinky(
   numLeds: Int = 16,
   numSwitches: Int = 16,
+  flipLedPolarity: Boolean = false,
+  freq: HertzNumber = 100.MHz,
   firmwarePath: String = null
 ) extends Component {
   val io = new Bundle {
@@ -61,7 +63,7 @@ class Blinky(
       input = !io.CPU_RESET_N,
       clockDomain = ClockDomain(io.SYS_CLK)
     ),
-    frequency = FixedFrequency(100 MHz),
+    frequency = FixedFrequency(freq),
     config = ClockDomainConfig(
       resetKind = SYNC,
     )
@@ -93,7 +95,12 @@ class Blinky(
         )
       )
     ).setName("Gpio")
-    io.LEDS := gpio.getBankBits("leds")
+
+    if (flipLedPolarity) {
+      io.LEDS := ~gpio.getBankBits("leds")
+    } else {
+      io.LEDS := gpio.getBankBits("leds")
+    }
     gpio.getBankBits("switches") := io.SWITCHES
 
     build(peripherals = Seq(
@@ -107,7 +114,9 @@ object TopLevelVerilog extends App {
   object Conf extends ScallopConf(args) {
     val numLeds = opt[Int](default = Some(8))
     val numSwitches = opt[Int](default = Some(8))
+    val flipLedPolarity = opt[Boolean]()
 
+    val freqMhz = opt[BigDecimal](required = true)
     val firmware = opt[File]()
     validateFileExists(firmware)
     validateFileIsFile(firmware)
@@ -122,6 +131,8 @@ object TopLevelVerilog extends App {
   ).generateVerilog(new Blinky(
     numLeds = Conf.numLeds(),
     numSwitches = Conf.numSwitches(),
+    flipLedPolarity = Conf.flipLedPolarity(),
+    freq = Conf.freqMhz().MHz,
     firmwarePath = Conf.firmware.map(f => f.getAbsolutePath()).getOrElse(null)
   ))
 

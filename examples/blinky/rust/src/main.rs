@@ -57,7 +57,7 @@ async fn main(_spawner: Spawner) {
 
     let mut led_mask: usize = 0x80;
     loop {
-        Timer::after_micros(100).await;
+        Timer::after_millis(100).await;
 
         let switches = gpio.switches_read().read().value().bits() as usize;
 

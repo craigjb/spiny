@@ -18,6 +18,11 @@ filesets:
       - data/vivado_settings.tcl
     file_type: tclSource
 
+  ecp5_pcie:
+    files:
+      - data/ecp5_pcie.lpf
+    file_type: LPF
+
   dep:
     depend:
       - craigjb:spiny:generators:0.1.0
@@ -94,6 +99,8 @@ targets:
             - "16"
             - "--num-switches"
             - "16"
+            - "--freq-mhz"
+            - "100"
       - rustpac
       - firmware
       - spinalhdl:
@@ -102,6 +109,8 @@ targets:
             - "16"
             - "--num-switches"
             - "16"
+            - "--freq-mhz"
+            - "100"
             - "--firmware"
             - "rust/target/release/blinky.bin"
     toplevel: Blinky
@@ -118,6 +127,8 @@ targets:
             - "8"
             - "--num-switches"
             - "8"
+            - "--freq-mhz"
+            - "100"
       - rustpac
       - firmware
       - spinalhdl:
@@ -126,9 +137,44 @@ targets:
             - "8"
             - "--num-switches"
             - "8"
+            - "--freq-mhz"
+            - "100"
             - "--firmware"
             - "rust/target/release/blinky.bin"
     toplevel: Blinky
     flow: vivado
     flow_options:
       part: xc7a200t-sbg484-1
+
+  ecp5_pcie:
+    filesets: [ecp5_pcie, dep]
+    generate:
+      - svd:
+          args:
+            - "--num-leds"
+            - "8"
+            - "--num-switches"
+            - "8"
+            - --flip-led-polarity
+            - "--freq-mhz"
+            - "54"
+      - rustpac
+      - firmware
+      - spinalhdl:
+          args:
+            - "--num-leds"
+            - "8"
+            - "--num-switches"
+            - "8"
+            - --flip-led-polarity
+            - "--freq-mhz"
+            - "54"
+            - "--firmware"
+            - "rust/target/release/blinky.bin"
+    toplevel: Blinky
+    flow: trellis
+    flow_options:
+      nextpnr_options:
+        - --um-85k
+        - --package CABGA756
+        - --speed 8
