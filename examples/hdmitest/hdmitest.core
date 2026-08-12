@@ -21,8 +21,8 @@ generate:
   spinalhdl:
     generator: spinalhdl
     parameters:
-      sbt_dir: "../../"
-      output_path: "target/spinal/HdmiTest.v"
+      sbt_dir: ../../
+      output_path: target/spinal/HdmiTest.v
       main: spiny.examples.hdmitest.TopLevelVerilog
       project: hdmitest
       file_type: verilogSource
