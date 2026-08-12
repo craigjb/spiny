@@ -21,8 +21,8 @@ generate:
   spinalhdl:
     generator: spinalhdl
     parameters:
-      sbt_dir: "../../"
-      output_path: "target/spinal/Graphics2D.v"
+      sbt_dir: ../../
+      output_path: target/spinal/Graphics2D.v
       main: spiny.examples.graphics2d.TopLevelVerilog
       project: graphics2d
       file_type: verilogSource
@@ -30,7 +30,7 @@ generate:
   spinalsim:
     generator: spinalhdl
     parameters:
-      sbt_dir: "../../"
+      sbt_dir: ../../
       main: spiny.examples.graphics2d.TopLevelSim
       project: graphics2d
       file_type: verilogSource
