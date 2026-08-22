@@ -34,7 +34,6 @@ package spiny.displayport
 import spinal.core._
 import spinal.lib._
 import spinal.lib.fsm._
-import spinal.lib.io.TriState
 
 import spiny._
 
