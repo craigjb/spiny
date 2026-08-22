@@ -41,10 +41,16 @@ object Pulse {
 }
 
 case class Pulse(frequency: HertzNumber) extends ImplicitArea[Bool] {
-  val timer = Timeout(frequency)
-  timer.clearWhen(timer)
+  val period = frequency.toTime
+  val stateCount = (
+    (period.toBigDecimal * ClockDomain.current.frequency.getValue.toBigDecimal)
+          .setScale(0, BigDecimal.RoundingMode.UP)).toBigInt
+  val counter = Counter(stateCount)
+  counter.increment()
 
-  override def implicitValue: Bool = timer.implicitValue
+  def clear() = counter.clear()
+
+  override def implicitValue: Bool = counter.willOverflow
 }
 
 object Utils {
