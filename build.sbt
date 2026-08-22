@@ -17,14 +17,17 @@ lazy val spiny = (project in file("."))
   .settings(
     name := "spiny",
     Compile / scalaSource := baseDirectory.value / "spinal",
+    Test / scalaSource := baseDirectory.value / "tests",
     libraryDependencies ++= Seq(
       spinalCore,
       spinalLib,
       spinalIdslPlugin,
       "org.scala-lang.modules" %% "scala-xml" % "2.1.0",
       "org.yaml" % "snakeyaml" % "2.0",
-      "com.lihaoyi" %% "ujson" % "3.3.1"
-    )
+      "com.lihaoyi" %% "ujson" % "3.3.1",
+      "org.scalatest" %% "scalatest" % "3.2.17" % Test
+    ),
+    Test / fork := true
   )
 
 // Example projects
