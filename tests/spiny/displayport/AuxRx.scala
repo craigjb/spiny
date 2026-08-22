@@ -40,53 +40,52 @@ import spiny._
 import spinal.lib.IntRicher
 
 object AuxRxSpec {
-  val ClockFreq = FixedFrequency(100 MHz)
+  val ClockFreqs = Seq(20 MHz, 20.33 MHz, 21.3 MHz, 25.3 MHz, 66.6 MHz, 100 MHz)
   val DataRate = 1 MHz
-  val ClocksPerQuarterBit = (ClockFreq.value / DataRate / 4)
-    .setScale(0, BigDecimal.RoundingMode.CEILING)
-    .toInt
-  val ClocksPerHalfBit = ClocksPerQuarterBit * 2
-  val ClocksPerBit = ClocksPerQuarterBit * 4
-  val PreChargeBits = 16
+  val BitPeriod = DataRate.toTime
+  val HalfBitPeriod = DataRate.toTime / 2
   val SyncBits = 16
-  val SyncEndBits = 4
-  val StopBits = 4
-  val DataTimeout = ClocksPerBit * 
-    (PreChargeBits + SyncBits + SyncEndBits + StopBits + 16)
 }
 
 class AuxRxSpec extends AnyFunSuite {
   import AuxRxSpec._
 
-  test("AuxRx should properly decode packets") {
-    SpinySimConfig("AuxRx_Transactions")
-      .withConfig(SpinalConfig(defaultClockDomainFrequency = ClockFreq))
-      .compile(AuxRx(dataRate = DataRate))
-      .doSim { dut =>
-        val packets = Seq(
-          Seq(0xde, 0xad, 0xbe, 0xef),
-          Seq(0xa, 0xb, 0xc, 0xd, 0xe, 0xf),
-          Seq(0xab),
-          Seq(0xff, 0x00, 0xff, 0x00),
-          Seq(0x00, 0xff, 0x00, 0xff)
-        )
+  for (clockFreq <- ClockFreqs) {
+    test(f"AuxRx should properly decode packets @ $clockFreq%S") {
+      val dataTimeout = ((400 us) / clockFreq.toTime)
+        .setScale(0, BigDecimal.RoundingMode.CEILING)
+        .toInt
 
-        dut.clockDomain.forkStimulus()
+      SpinySimConfig(f"AuxRx_Packets_$clockFreq%S")
+        .withConfig(SpinalConfig(
+          defaultClockDomainFrequency = FixedFrequency(clockFreq)))
+        .compile(AuxRx(dataRate = DataRate))
+        .doSim { dut =>
+          val packets = Seq(
+            Seq(0xde, 0xad, 0xbe, 0xef),
+            Seq(0xa, 0xb, 0xc, 0xd, 0xe, 0xf),
+            Seq(0xab),
+            Seq(0xff, 0x00, 0xff, 0x00),
+            Seq(0x00, 0xff, 0x00, 0xff)
+          )
 
-        val checkerThread = fork {
-          val checker = AuxRxChecker(dut)
-          for (packet <- packets) {
-            checker.checkPacket(packet)
+          dut.clockDomain.forkStimulus()
+
+          val checkerThread = fork {
+            val checker = AuxRxChecker(dut, dataTimeout)
+            for (packet <- packets) {
+              checker.checkPacket(packet)
+            }
           }
-        }
 
-        val driver = AuxRxDriver(dut)
-        for (packet <- packets) {
-          driver.packet(packet)
+          val driver = AuxRxDriver(dut)
+          for (packet <- packets) {
+            driver.packet(packet)
+          }
+          sleep(1 us)
+          checkerThread.join()
         }
-        dut.clockDomain.waitSampling(ClocksPerBit)
-        checkerThread.join()
-      }
+    }
   }
 }
 
@@ -95,9 +94,9 @@ case class AuxRxDriver(dut: AuxRx) {
 
   def bit(value: Boolean) {
     dut.io.read #= value
-    dut.clockDomain.waitSampling(AuxRxSpec.ClocksPerHalfBit)
+    sleep(AuxRxSpec.HalfBitPeriod)
     dut.io.read #= !value
-    dut.clockDomain.waitSampling(AuxRxSpec.ClocksPerHalfBit)
+    sleep(AuxRxSpec.HalfBitPeriod)
   }
 
   def preCharge() = sync()
@@ -110,9 +109,9 @@ case class AuxRxDriver(dut: AuxRx) {
 
   def syncEnd() {
     dut.io.read #= true
-    dut.clockDomain.waitSampling(AuxRxSpec.ClocksPerBit * 2)
+    sleep(AuxRxSpec.BitPeriod * 2)
     dut.io.read #= false
-    dut.clockDomain.waitSampling(AuxRxSpec.ClocksPerBit * 2)
+    sleep(AuxRxSpec.BitPeriod * 2)
   }
 
   def stop() = syncEnd()
@@ -139,10 +138,9 @@ case class AuxRxDriver(dut: AuxRx) {
   }
 }
 
-case class AuxRxChecker(dut: AuxRx) {
+case class AuxRxChecker(dut: AuxRx, dataTimeout: Int) {
   def checkByte(expected: Int, last: Boolean, index: Int) {
-    dut.clockDomain.waitSamplingWhere(
-      AuxRxSpec.DataTimeout)(dut.io.data.valid.toBoolean)
+    dut.clockDomain.waitSamplingWhere(dataTimeout)(dut.io.data.valid.toBoolean)
     val value = dut.io.data.fragment.toInt
     assert(
       value == expected,

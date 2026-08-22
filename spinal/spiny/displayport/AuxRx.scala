@@ -42,19 +42,24 @@ case class AuxRx(
   dataRate: HertzNumber = 1 MHz,
   tolerance: BigDecimal = 0.15
 ) extends Component {
+  assert(
+    ClockDomain.current.frequency.getValue >= 20.MHz,
+    "AuxRx must be clocked at ≥20 MHz")
+
   val io = new Bundle {
     val read = in(Bool())
     val readEnable = in(Bool())
     val data = master(Flow(Fragment(Bits(8 bits))))
   }
 
-  val clocksPerHalfBit = (ClockDomain.current.frequency.getValue / dataRate / 2)
-    .setScale(0, BigDecimal.RoundingMode.CEILING)
-    .toInt
-  val clocksPerBit = clocksPerHalfBit * 2
-  val clocksPerTol = (tolerance * clocksPerBit)
-    .setScale(0, BigDecimal.RoundingMode.CEILING)
-    .toInt
+  val ratio = ClockDomain.current.frequency.getValue / dataRate
+  // calculate and round each one separately to avoid cascading rounding error
+  val clocksPerThreeBits = (ratio * 3).setScale(0, BigDecimal.RoundingMode.HALF_UP).toInt
+  val clocksPerTwoBits = (ratio * 2).setScale(0, BigDecimal.RoundingMode.HALF_UP).toInt
+  val clocksToStop = (ratio * 1.5).setScale(0, BigDecimal.RoundingMode.HALF_UP).toInt
+  val clocksPerBit = ratio.setScale(0, BigDecimal.RoundingMode.HALF_UP).toInt
+  val clocksPerHalfBit = (ratio / 2).setScale(0, BigDecimal.RoundingMode.HALF_UP).toInt
+  val clocksPerTol = (tolerance * ratio).setScale(0, BigDecimal.RoundingMode.HALF_UP).toInt
 
   // synchronize external input
   val readSynced = BufferCC(io.read, init = False)
@@ -71,12 +76,13 @@ case class AuxRx(
   }
 
   // define intervals between edges
-  val isShort = intervalTimer > (clocksPerHalfBit - clocksPerTol) &&
-                intervalTimer < (clocksPerHalfBit + clocksPerTol)
-  val isLong = intervalTimer > (clocksPerBit - clocksPerTol) &&
-                intervalTimer < (clocksPerBit + clocksPerTol)
-  val isStop = intervalTimer > (clocksPerHalfBit * 3)
-  val isTwoBits = intervalTimer >= (clocksPerBit * 2)
+  val isBounce = intervalTimer <= clocksPerHalfBit - clocksPerTol
+  val isShort = intervalTimer >= (clocksPerHalfBit - clocksPerTol) &&
+                intervalTimer <= (clocksPerHalfBit + clocksPerTol)
+  val isLong = intervalTimer >= (clocksPerBit - clocksPerTol) &&
+                intervalTimer <= (clocksPerBit + clocksPerTol)
+  val isStop = intervalTimer >= clocksToStop
+  val isTwoBits = intervalTimer >= clocksPerTwoBits
 
   val nextEdgeIsMidBit = RegInit(True)
   val highViolationOccurred = RegInit(False)
@@ -164,6 +170,9 @@ case class AuxRx(
             isValidBit := True
             // bit boundary is expected next
             nextEdgeIsMidBit := False
+          } elsewhen(isBounce) {
+            // edge arrived early or is a bounce
+            // do nothing
           } otherwise {
             // glitch, abort
             goto(stateIdle)
