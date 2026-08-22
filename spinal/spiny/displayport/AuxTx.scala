@@ -37,6 +37,7 @@ import spinal.lib.fsm._
 
 import spiny._
 
+/** TX side of DisplayPort AUX channel */
 case class AuxTx(dataRate: HertzNumber = 1 MHz) extends Component {
   val io = new Bundle {
     val data = slave(Stream(Fragment(Bits(8 bits))))

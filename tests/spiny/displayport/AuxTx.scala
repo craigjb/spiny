@@ -68,7 +68,7 @@ class AuxTxSpec extends AnyFunSuite {
 
         dut.clockDomain.forkStimulus()
 
-        val monitorThread = fork {
+        val checkerThread = fork {
           val checker = AuxTxChecker(dut)
           checker.checkPacket(data1)
           dut.clockDomain.waitSamplingWhere(StopTimeout)(!dut.io.writeEnable.toBoolean)
@@ -90,7 +90,7 @@ class AuxTxSpec extends AnyFunSuite {
         driver.write(data3)
         dut.clockDomain.waitSamplingWhere(StopTimeout)(!dut.io.writeEnable.toBoolean)
         dut.clockDomain.waitSampling(ClocksPerBit)
-        monitorThread.join()
+        checkerThread.join()
       }
   }
 
@@ -101,7 +101,7 @@ class AuxTxSpec extends AnyFunSuite {
       .doSim { dut =>
         dut.clockDomain.forkStimulus()
 
-        val monitorThread = fork {
+        val checkerThread = fork {
           val checker = AuxTxChecker(dut)
           checker.checkPreCharge()
           checker.checkSync()
@@ -122,7 +122,7 @@ class AuxTxSpec extends AnyFunSuite {
         dut.clockDomain.waitSamplingWhere(
           SyncTimeout + StopTimeout)(!dut.io.writeEnable.toBoolean)
         dut.clockDomain.waitSampling(ClocksPerBit)
-        monitorThread.join()
+        checkerThread.join()
       }
   }
 
@@ -133,7 +133,7 @@ class AuxTxSpec extends AnyFunSuite {
       .doSim { dut =>
         dut.clockDomain.forkStimulus()
 
-        val monitorThread = fork {
+        val checkerThread = fork {
           val checker = AuxTxChecker(dut)
           checker.checkPreCharge()
           checker.checkSync()
@@ -147,7 +147,7 @@ class AuxTxSpec extends AnyFunSuite {
         driver.write(0xde, false)
         dut.clockDomain.waitSamplingWhere(StopTimeout)(!dut.io.writeEnable.toBoolean)
         dut.clockDomain.waitSampling(ClocksPerBit)
-        monitorThread.join()
+        checkerThread.join()
       }
   }
 }
