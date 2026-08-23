@@ -27,7 +27,8 @@ lazy val spiny = (project in file("."))
       "com.lihaoyi" %% "ujson" % "3.3.1",
       "org.scalatest" %% "scalatest" % "3.2.17" % Test
     ),
-    Test / fork := true
+    Test / fork := true,
+    Test / testForkedParallel := true
   )
 
 // Example projects
