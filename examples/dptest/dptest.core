@@ -1,0 +1,38 @@
+CAPI=2:
+name: craigjb:spiny:dptest:0
+description: DisplayPort test
+
+filesets:
+  xdc_nexys_video:
+    files:
+      - data/nexys_video.xdc
+    file_type: xdc
+
+  vivado_settings:
+    files:
+      - data/vivado_settings.tcl
+    file_type: tclSource
+
+  dep:
+    depend:
+      - craigjb:spiny:generators:0.1.0
+
+generate:
+  spinalhdl:
+    generator: spinalhdl
+    parameters:
+      sbt_dir: ../../
+      main: spiny.examples.dptest.TopLevelVerilog
+      project: dptest
+      output_path: target/spinal/DpTest.v
+      file_type: verilogSource
+
+targets:
+  nexys_video:
+    filesets: [xdc_nexys_video, vivado_settings, dep]
+    generate: 
+      - spinalhdl
+    toplevel: DpTest
+    flow: vivado
+    flow_options:
+      part: xc7a200t-sbg484-1

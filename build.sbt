@@ -69,3 +69,12 @@ lazy val graphics2d = (project in file("examples/graphics2d"))
     publish / skip := true,
     libraryDependencies ++= Seq(spinalIdslPlugin, scallop),
   )
+
+lazy val dptest = (project in file("examples/dptest"))
+  .dependsOn(spiny)
+  .settings(
+    name := "dptest",
+    Compile / scalaSource := baseDirectory.value / "spinal",
+    publish / skip := true,
+    libraryDependencies ++= Seq(spinalIdslPlugin, scallop),
+  )
