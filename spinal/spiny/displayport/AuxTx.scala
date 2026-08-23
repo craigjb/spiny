@@ -55,6 +55,12 @@ case class AuxTx(dataRate: HertzNumber = 1 MHz) extends Component {
 
   // ticks twice per bit
   val phaseTick = Pulse(dataRate * 2)
+  val unitInterval = 
+    ClockDomain.current.frequency.getValue.toTime * phaseTick.stateCount.toInt
+  // Per Table 3-3, UI must be 0.4 - 0.6 µs
+  assert(unitInterval >= 0.4.us && unitInterval <= 0.6.us,
+    f"AuxTx unit interval ($unitInterval%s) is outside range of 0.4-0.6 µs")
+
   when(phaseTick) {
     firstHalf := !firstHalf
     when(!firstHalf) {
