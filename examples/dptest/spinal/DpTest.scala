@@ -33,6 +33,7 @@ package spiny.examples.dptest
 
 import spinal.core._
 import spinal.lib._
+import spinal.lib.fsm._
 import spinal.lib.blackbox.xilinx.s7._
 
 import spiny.displayport._
@@ -67,14 +68,89 @@ class DpTest() extends Component {
     io.AUX_P := auxIoBuf.IO
     io.AUX_N := auxIoBuf.IOB
 
-    // io.LEDS.setAsReg().init(B"8'0")
-    io.LEDS := (B"8'0")
+    // HPD comes from the sink, so synchronize it
+    val hpd = BufferCC(io.HPD, init = False)
 
+    val leds = Reg(Bits(8 bits)) init(B"8'0")
+    io.LEDS := leds
+
+    // native AUX read of 1 byte from 0x00000 (DPCD revision)
     val auxRequest = Seq(0x90, 0x00, 0x00, 0x00)
+    val requestBytes = Vec(auxRequest.map(b => B(b, 8 bits)))
+    val txIndex = Reg(UInt(log2Up(auxRequest.length) bits)) init(0)
+    val rxIndex = Reg(UInt(8 bits)) init(0)
 
     auxPhy.io.txData.valid := False
-    auxPhy.io.txData.fragment := B"8'0"
-    auxPhy.io.txData.last := False
+    auxPhy.io.txData.fragment := requestBytes(txIndex)
+    auxPhy.io.txData.last := txIndex === (auxRequest.length - 1)
+
+    val settleDelay = Timeout(5 ms)
+
+    val fsm = new StateMachine {
+      always {
+        // any HPD drop restarts the whole test
+        when(!hpd) {
+          leds := B"8'0"
+          forceGoto(stateIdle)
+        }
+      }
+
+      val stateIdle: State = new State with EntryPoint {
+        whenIsActive {
+          settleDelay.clear()
+          when(hpd) {
+            goto(stateSettle)
+          }
+        }
+      }
+
+      val stateSettle: State = new State {
+        whenIsActive {
+          when(settleDelay) {
+            goto(stateRequest)
+          }
+        }
+      }
+
+      val stateRequest: State = new State {
+        onEntry {
+          txIndex := 0
+        }
+        whenIsActive {
+          auxPhy.io.txData.valid := True
+          when(auxPhy.io.txData.fire) {
+            when(auxPhy.io.txData.last) {
+              goto(stateReply)
+            } otherwise {
+              txIndex := txIndex + 1
+            }
+          }
+        }
+      }
+
+      val stateReply: State = new State {
+        onEntry {
+          rxIndex := 0
+        }
+        whenIsActive {
+          when(auxPhy.io.rxData.valid) {
+            // second byte of the reply is the data byte
+            when(rxIndex === 1) {
+              leds := auxPhy.io.rxData.fragment
+            }
+            rxIndex := rxIndex + 1
+
+            when(auxPhy.io.rxData.last) {
+              goto(stateDone)
+            }
+          }
+        }
+      }
+
+      val stateDone: State = new State {
+        whenIsActive {}
+      }
+    }
   }
 }
 
