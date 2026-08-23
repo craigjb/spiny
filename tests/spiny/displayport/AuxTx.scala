@@ -39,122 +39,126 @@ import spinal.core.sim._
 import spiny._
 
 object AuxTxSpec {
-  val ClockFreq = FixedFrequency(100 MHz)
+  val ClockFreqs = Seq(20 MHz, 20.33 MHz, 21.3 MHz, 25.3 MHz, 66.6 MHz, 100 MHz)
   val DataRate = 1 MHz
   val BitPeriod = DataRate.toTime
-  val HalfBitPeriod = DataRate.toTime / 2
-  val QuarterBitPeriod = DataRate.toTime / 4
-  val Timeout = (400.us / ClockFreq.getValue.toTime)
-        .setScale(0, BigDecimal.RoundingMode.CEILING)
-        .toInt
   val PacketGap = 10 us
 }
 
 class AuxTxSpec extends AnyFunSuite {
   import AuxTxSpec._
 
-  test("AuxTx should properly encode and transmit packets") {
-    SpinySimConfig("AuxTx_Packets")
-      .withConfig(SpinalConfig(defaultClockDomainFrequency = ClockFreq))
-      .compile(AuxTx(dataRate = DataRate))
-      .doSim { dut =>
-        val packets = Seq(
-          Seq(0xde, 0xad, 0xbe, 0xef),
-          Seq(0xa, 0xb, 0xc, 0xd, 0xe, 0xf),
-          Seq(0xab)
-        )
+  for (clockFreq <- ClockFreqs) {
+    val timeout = (400.us / clockFreq.toTime)
+        .setScale(0, BigDecimal.RoundingMode.CEILING)
+        .toInt
 
-        dut.clockDomain.forkStimulus()
+    test(f"AuxTx should properly encode and transmit packets @ $clockFreq%S") {
+      SpinySimConfig(f"AuxTx_Packets_$clockFreq%S")
+        .withConfig(SpinalConfig(
+          defaultClockDomainFrequency = FixedFrequency(clockFreq)))
+        .compile(AuxTx(dataRate = DataRate))
+        .doSim { dut =>
+          val packets = Seq(
+            Seq(0xde, 0xad, 0xbe, 0xef),
+            Seq(0xa, 0xb, 0xc, 0xd, 0xe, 0xf),
+            Seq(0xab)
+          )
 
-        val checkerThread = fork {
-          dut.clockDomain.waitSampling()
-          val checker = AuxTxChecker(dut)
-          for ((packet, i) <- packets.zipWithIndex) {
-            println(s"Checking packet $i")
-            checker.checkPacket(packet)
+          dut.clockDomain.forkStimulus()
+
+          val checkerThread = fork {
+            dut.clockDomain.waitSampling()
+            val checker = AuxTxChecker(dut)
+            for ((packet, i) <- packets.zipWithIndex) {
+              println(s"Checking packet $i")
+              checker.checkPacket(packet)
+            }
           }
-        }
 
-        val driver = AuxTxDriver(dut)
-        dut.clockDomain.waitSampling(10)
-        for (packet <- packets) {
-          driver.write(packet)
-          dut.clockDomain.waitSamplingWhere(Timeout)(!dut.io.writeEnable.toBoolean)
+          val driver = AuxTxDriver(dut, timeout)
+          dut.clockDomain.waitSampling(10)
+          for (packet <- packets) {
+            driver.write(packet)
+            dut.clockDomain.waitSamplingWhere(timeout)(!dut.io.writeEnable.toBoolean)
+            sleep(PacketGap)
+          }
+          checkerThread.join()
+        }
+    }
+
+    test(f"AuxTx should abort on no data @ $clockFreq%S") {
+      SpinySimConfig(f"AuxTx_NoDataAbort_$clockFreq%S")
+        .withConfig(SpinalConfig(
+          defaultClockDomainFrequency = FixedFrequency(clockFreq)))
+        .compile(AuxTx(dataRate = DataRate))
+        .doSim { dut =>
+          dut.clockDomain.forkStimulus()
+
+          val checkerThread = fork {
+            dut.clockDomain.waitSampling()
+            val checker = AuxTxChecker(dut)
+            checker.waitForPacketStart()
+            checker.checkPreCharge()
+            checker.checkSync()
+            checker.checkSyncEnd()
+            checker.checkStop()
+          }
+
+          val driver = AuxTxDriver(dut, timeout)
+          dut.clockDomain.waitSampling(10)
+
+          // kick off packet, but then deassert valid
+          dut.io.data.fragment #= 0xde
+          dut.io.data.last #= false
+          dut.io.data.valid #= true
+          dut.clockDomain.waitSampling()
+          dut.io.data.valid #= false
+
+          dut.clockDomain.waitSamplingWhere(timeout)(!dut.io.writeEnable.toBoolean)
           sleep(PacketGap)
+          checkerThread.join()
         }
-        checkerThread.join()
-      }
-  }
+    }
 
-  test("AuxTx should abort on no data") {
-    SpinySimConfig("AuxTx_NoDataAbort")
-      .withConfig(SpinalConfig(defaultClockDomainFrequency = ClockFreq))
-      .compile(AuxTx(dataRate = DataRate))
-      .doSim { dut =>
-        dut.clockDomain.forkStimulus()
+    test(f"AuxTx should abort on data underrun @ $clockFreq%S") {
+      SpinySimConfig(f"AuxTx_UnderrunAbort_$clockFreq%S")
+        .withConfig(SpinalConfig(
+          defaultClockDomainFrequency = FixedFrequency(clockFreq)))
+        .compile(AuxTx(dataRate = DataRate))
+        .doSim { dut =>
+          dut.clockDomain.forkStimulus()
 
-        val checkerThread = fork {
-          dut.clockDomain.waitSampling()
-          val checker = AuxTxChecker(dut)
-          checker.waitForPacketStart()
-          checker.checkPreCharge()
-          checker.checkSync()
-          checker.checkSyncEnd()
-          checker.checkStop()
+          val checkerThread = fork {
+            dut.clockDomain.waitSampling()
+            val checker = AuxTxChecker(dut)
+            checker.waitForPacketStart()
+            checker.checkPreCharge()
+            checker.checkSync()
+            checker.checkSyncEnd()
+            checker.checkByte(0xde)
+            checker.checkStop()
+          }
+
+          val driver = AuxTxDriver(dut, timeout)
+          dut.clockDomain.waitSampling(10)
+          driver.write(0xde, false)
+          dut.clockDomain.waitSamplingWhere(timeout)(!dut.io.writeEnable.toBoolean)
+          sleep(PacketGap)
+          checkerThread.join()
         }
-
-        val driver = AuxTxDriver(dut)
-        dut.clockDomain.waitSampling(10)
-
-        // kick off packet, but then deassert valid
-        dut.io.data.fragment #= 0xde
-        dut.io.data.last #= false
-        dut.io.data.valid #= true
-        dut.clockDomain.waitSampling()
-        dut.io.data.valid #= false
-
-        dut.clockDomain.waitSamplingWhere(Timeout)(!dut.io.writeEnable.toBoolean)
-        sleep(PacketGap)
-        checkerThread.join()
-      }
-  }
-
-  test("AuxTx should abort on data underrun") {
-    SpinySimConfig("AuxTx_UnderrunAbort")
-      .withConfig(SpinalConfig(defaultClockDomainFrequency = ClockFreq))
-      .compile(AuxTx(dataRate = DataRate))
-      .doSim { dut =>
-        dut.clockDomain.forkStimulus()
-
-        val checkerThread = fork {
-          dut.clockDomain.waitSampling()
-          val checker = AuxTxChecker(dut)
-          checker.waitForPacketStart()
-          checker.checkPreCharge()
-          checker.checkSync()
-          checker.checkSyncEnd()
-          checker.checkByte(0xde)
-          checker.checkStop()
-        }
-
-        val driver = AuxTxDriver(dut)
-        dut.clockDomain.waitSampling(10)
-        driver.write(0xde, false)
-        dut.clockDomain.waitSamplingWhere(Timeout)(!dut.io.writeEnable.toBoolean)
-        sleep(PacketGap)
-        checkerThread.join()
-      }
+    }
   }
 }
 
-case class AuxTxDriver(dut: AuxTx) {
+case class AuxTxDriver(dut: AuxTx, timeout: Int) {
   dut.io.data.valid #= false
 
   def write(byte: Int, last: Boolean) {
     dut.io.data.fragment #= byte
     dut.io.data.last #= last
     dut.io.data.valid #= true
-    dut.clockDomain.waitSamplingWhere(AuxTxSpec.Timeout)(dut.io.data.ready.toBoolean)
+    dut.clockDomain.waitSamplingWhere(timeout)(dut.io.data.ready.toBoolean)
     dut.io.data.valid #= false
   }
 
@@ -167,18 +171,20 @@ case class AuxTxDriver(dut: AuxTx) {
 }
 
 case class AuxTxChecker(dut: AuxTx) {
+  val clocksPerHalfBit = dut.phaseTick.stateCount.toInt
+
   def checkPreCharge() {
     for (i <- 0 until 16) {
       assert(
         dut.io.write.toBoolean == false,
         s"precharge bit $i first half should be low"
       )
-      sleep(AuxTxSpec.HalfBitPeriod)
+      dut.clockDomain.waitSampling(clocksPerHalfBit)
       assert(
         dut.io.write.toBoolean == true,
         s"precharge bit $i second half should be high"
       )
-      sleep(AuxTxSpec.HalfBitPeriod)
+      dut.clockDomain.waitSampling(clocksPerHalfBit)
     }
   }
 
@@ -188,12 +194,12 @@ case class AuxTxChecker(dut: AuxTx) {
         dut.io.write.toBoolean == false,
         s"sync bit $i first half should be low"
       )
-      sleep(AuxTxSpec.HalfBitPeriod)
+      dut.clockDomain.waitSampling(clocksPerHalfBit)
       assert(
         dut.io.write.toBoolean == true,
         s"sync bit $i second half should be high"
       )
-      sleep(AuxTxSpec.HalfBitPeriod)
+      dut.clockDomain.waitSampling(clocksPerHalfBit)
     }
   }
 
@@ -203,24 +209,24 @@ case class AuxTxChecker(dut: AuxTx) {
         dut.io.write.toBoolean == true,
         s"sync end bit $i should stay high for first and second half"
       )
-      sleep(AuxTxSpec.HalfBitPeriod)
+      dut.clockDomain.waitSampling(clocksPerHalfBit)
       assert(
         dut.io.write.toBoolean == true,
         s"sync end bit $i should stay high for first and second half"
       )
-      sleep(AuxTxSpec.HalfBitPeriod)
+      dut.clockDomain.waitSampling(clocksPerHalfBit)
     }
     for (i <- 0 until 2) {
       assert(
         dut.io.write.toBoolean == false,
         s"sync end bit $i should stay low for first and second half"
       )
-      sleep(AuxTxSpec.HalfBitPeriod)
+      dut.clockDomain.waitSampling(clocksPerHalfBit)
       assert(
         dut.io.write.toBoolean == false,
         s"sync end bit $i should stay low for first and second half"
       )
-      sleep(AuxTxSpec.HalfBitPeriod)
+      dut.clockDomain.waitSampling(clocksPerHalfBit)
     }
   }
 
@@ -230,24 +236,24 @@ case class AuxTxChecker(dut: AuxTx) {
         dut.io.write.toBoolean == true,
         s"stop bit $i should stay high for first and second half"
       )
-      sleep(AuxTxSpec.HalfBitPeriod)
+      dut.clockDomain.waitSampling(clocksPerHalfBit)
       assert(
         dut.io.write.toBoolean == true,
         s"stop bit $i should stay high for first and second half"
       )
-      sleep(AuxTxSpec.HalfBitPeriod)
+      dut.clockDomain.waitSampling(clocksPerHalfBit)
     }
     for (i <- 0 until 2) {
       assert(
         dut.io.write.toBoolean == false,
         s"stop bit $i should stay low for first and second half"
       )
-      sleep(AuxTxSpec.HalfBitPeriod)
+      dut.clockDomain.waitSampling(clocksPerHalfBit)
       assert(
         dut.io.write.toBoolean == false,
         s"stop bit $i should stay low for first and second half"
       )
-      sleep(AuxTxSpec.HalfBitPeriod)
+      dut.clockDomain.waitSampling(clocksPerHalfBit)
     }
   }
 
@@ -256,12 +262,12 @@ case class AuxTxChecker(dut: AuxTx) {
       dut.io.write.toBoolean == value,
       s"data bit $i first half should be ${if (value) "high" else "low"}"
     )
-    sleep(AuxTxSpec.HalfBitPeriod)
+    dut.clockDomain.waitSampling(clocksPerHalfBit)
     assert(
       dut.io.write.toBoolean == !value,
       s"data bit $i first half should be ${if (!value) "high" else "low"}"
     )
-    sleep(AuxTxSpec.HalfBitPeriod)
+    dut.clockDomain.waitSampling(clocksPerHalfBit)
   }
 
   def checkByte(byte: Int) {
@@ -279,7 +285,7 @@ case class AuxTxChecker(dut: AuxTx) {
 
   def waitForPacketStart() {
     waitUntil(dut.io.writeEnable.toBoolean)
-    sleep(AuxTxSpec.QuarterBitPeriod)
+    dut.clockDomain.waitSampling(clocksPerHalfBit / 2)
   }
 
   def checkPacket(bytes: Seq[Int]) {
