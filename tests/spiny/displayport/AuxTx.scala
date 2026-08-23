@@ -86,68 +86,74 @@ class AuxTxSpec extends AnyFunSuite {
           checkerThread.join()
         }
     }
+  }
 
-    test(f"AuxTx should abort on no data @ $clockFreq%S") {
-      SpinySimConfig(f"AuxTx_NoDataAbort_$clockFreq%S")
-        .withConfig(SpinalConfig(
-          defaultClockDomainFrequency = FixedFrequency(clockFreq)))
-        .compile(AuxTx(dataRate = DataRate))
-        .doSim { dut =>
-          dut.clockDomain.forkStimulus()
+  test("AuxTx should abort on no data") {
+    val timeout = (400.us / 100.MHz.toTime)
+        .setScale(0, BigDecimal.RoundingMode.CEILING)
+        .toInt
+    SpinySimConfig(f"AuxTx_NoDataAbort")
+      .withConfig(SpinalConfig(
+        defaultClockDomainFrequency = FixedFrequency(100 MHz)))
+      .compile(AuxTx(dataRate = DataRate))
+      .doSim { dut =>
+        dut.clockDomain.forkStimulus()
 
-          val checkerThread = fork {
-            dut.clockDomain.waitSampling()
-            val checker = AuxTxChecker(dut)
-            checker.waitForPacketStart()
-            checker.checkPreCharge()
-            checker.checkSync()
-            checker.checkSyncEnd()
-            checker.checkStop()
-          }
-
-          val driver = AuxTxDriver(dut, timeout)
-          dut.clockDomain.waitSampling(10)
-
-          // kick off packet, but then deassert valid
-          dut.io.data.fragment #= 0xde
-          dut.io.data.last #= false
-          dut.io.data.valid #= true
+        val checkerThread = fork {
           dut.clockDomain.waitSampling()
-          dut.io.data.valid #= false
-
-          dut.clockDomain.waitSamplingWhere(timeout)(!dut.io.writeEnable.toBoolean)
-          sleep(PacketGap)
-          checkerThread.join()
+          val checker = AuxTxChecker(dut)
+          checker.waitForPacketStart()
+          checker.checkPreCharge()
+          checker.checkSync()
+          checker.checkSyncEnd()
+          checker.checkStop()
         }
-    }
 
-    test(f"AuxTx should abort on data underrun @ $clockFreq%S") {
-      SpinySimConfig(f"AuxTx_UnderrunAbort_$clockFreq%S")
-        .withConfig(SpinalConfig(
-          defaultClockDomainFrequency = FixedFrequency(clockFreq)))
-        .compile(AuxTx(dataRate = DataRate))
-        .doSim { dut =>
-          dut.clockDomain.forkStimulus()
+        val driver = AuxTxDriver(dut, timeout)
+        dut.clockDomain.waitSampling(10)
 
-          val checkerThread = fork {
-            dut.clockDomain.waitSampling()
-            val checker = AuxTxChecker(dut)
-            checker.waitForPacketStart()
-            checker.checkPreCharge()
-            checker.checkSync()
-            checker.checkSyncEnd()
-            checker.checkByte(0xde)
-            checker.checkStop()
-          }
+        // kick off packet, but then deassert valid
+        dut.io.data.fragment #= 0xde
+        dut.io.data.last #= false
+        dut.io.data.valid #= true
+        dut.clockDomain.waitSampling()
+        dut.io.data.valid #= false
 
-          val driver = AuxTxDriver(dut, timeout)
-          dut.clockDomain.waitSampling(10)
-          driver.write(0xde, false)
-          dut.clockDomain.waitSamplingWhere(timeout)(!dut.io.writeEnable.toBoolean)
-          sleep(PacketGap)
-          checkerThread.join()
+        dut.clockDomain.waitSamplingWhere(timeout)(!dut.io.writeEnable.toBoolean)
+        sleep(PacketGap)
+        checkerThread.join()
+      }
+  }
+
+  test("AuxTx should abort on data underrun") {
+    val timeout = (400.us / 100.MHz.toTime)
+        .setScale(0, BigDecimal.RoundingMode.CEILING)
+        .toInt
+    SpinySimConfig(f"AuxTx_UnderrunAbort")
+      .withConfig(SpinalConfig(
+        defaultClockDomainFrequency = FixedFrequency(100 MHz)))
+      .compile(AuxTx(dataRate = DataRate))
+      .doSim { dut =>
+        dut.clockDomain.forkStimulus()
+
+        val checkerThread = fork {
+          dut.clockDomain.waitSampling()
+          val checker = AuxTxChecker(dut)
+          checker.waitForPacketStart()
+          checker.checkPreCharge()
+          checker.checkSync()
+          checker.checkSyncEnd()
+          checker.checkByte(0xde)
+          checker.checkStop()
         }
-    }
+
+        val driver = AuxTxDriver(dut, timeout)
+        dut.clockDomain.waitSampling(10)
+        driver.write(0xde, false)
+        dut.clockDomain.waitSamplingWhere(timeout)(!dut.io.writeEnable.toBoolean)
+        sleep(PacketGap)
+        checkerThread.join()
+      }
   }
 }
 
