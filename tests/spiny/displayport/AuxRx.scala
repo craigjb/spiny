@@ -116,7 +116,7 @@ class AuxRxSpec extends AnyFunSuite {
 
           val driver = AuxRxDriver(dut, glitchMax)
           for (packet <- Packets) {
-            driver.packetWithGlitches(packet)
+            driver.packet(packet)
           }
           sleep(1 us)
           checkerThread.join()
@@ -134,11 +134,28 @@ case class AuxRxDriver(
   val rng = new Random(rngSeed)
   dut.io.readEnable #= true
 
-  def bit(value: Boolean) {
-    dut.io.read #= value
-    sleep(AuxRxSpec.HalfBitPeriod)
-    dut.io.read #= !value
-    sleep(AuxRxSpec.HalfBitPeriod)
+  def bit(value: Boolean, period: TimeNumber = AuxRxSpec.BitPeriod) {
+    val glitchStart = (period * rng.nextDouble())
+      .min(period - glitchMax)
+    val glitchLen = glitchMax * rng.nextDouble()
+    val glitchEnd = glitchStart + glitchLen
+
+    val edgeTimes = Seq(
+      0 ns,
+      glitchStart,
+      glitchEnd,
+      period / 2,
+    ).distinct.sortBy(_.toDouble)
+
+    var time = 0.ns
+    for (edgeTime <- edgeTimes) {
+      sleep(edgeTime - time)
+      time = edgeTime
+      val idealValue = if (time < period / 2) value else !value
+      val isGlitched = time >= glitchStart && time < glitchEnd
+      dut.io.read #= (if (isGlitched) !idealValue else idealValue)
+    }
+    sleep(period - time)
   }
 
   def preCharge() = sync()
@@ -150,10 +167,7 @@ case class AuxRxDriver(
   }
 
   def syncEnd() {
-    dut.io.read #= true
-    sleep(AuxRxSpec.BitPeriod * 2)
-    dut.io.read #= false
-    sleep(AuxRxSpec.BitPeriod * 2)
+    bit(true, AuxRxSpec.BitPeriod * 4)
   }
 
   def stop() = syncEnd()
@@ -177,65 +191,6 @@ case class AuxRxDriver(
     syncEnd()
     data(bytes)
     stop()
-  }
-
-  def bitWithGlitch(value: Boolean, period: TimeNumber) {
-    val glitchStart = (period * rng.nextDouble())
-      .min(period - glitchMax)
-    val glitchLen = glitchMax * rng.nextDouble()
-    val glitchEnd = glitchStart + glitchLen
-
-    val edgeTimes = Seq(
-      glitchStart,
-      glitchEnd,
-      period / 2,
-    ).distinct.sortBy(_.toDouble)
-
-    var time = 0.ns
-    dut.io.read #= value
-    for (edgeTime <- edgeTimes) {
-      sleep(edgeTime - time)
-      time = edgeTime
-      val idealValue = if (time < period / 2) value else !value
-      val isGlitched = time >= glitchStart && time < glitchEnd
-      dut.io.read #= (if (isGlitched) !idealValue else idealValue)
-    }
-    sleep(period - time)
-  }
-
-  def preChargeWithGlitches() = syncWithGlitches()
-
-  def syncWithGlitches() {
-    for (i <- 0 until AuxRxSpec.SyncBits) {
-      bitWithGlitch(false, AuxRxSpec.BitPeriod)
-    }
-  }
-
-  def syncEndWithGlitch() {
-    bitWithGlitch(true, AuxRxSpec.BitPeriod * 4)
-  }
-
-  def stopWithGlitch() = syncEndWithGlitch()
-
-  def dataWithGlitches(byte: Int) {
-    for (i <- 7 to 0 by -1) {
-      val bitValue = ((byte >> i) & 1) == 1
-      bitWithGlitch(bitValue, AuxRxSpec.BitPeriod)
-    }
-  }
-
-  def dataWithGlitches(bytes: Seq[Int]) {
-    for (byte <- bytes) {
-      dataWithGlitches(byte)
-    }
-  }
-
-  def packetWithGlitches(bytes: Seq[Int]) {
-    preChargeWithGlitches()
-    syncWithGlitches()
-    syncEndWithGlitch()
-    dataWithGlitches(bytes)
-    stopWithGlitch()
   }
 }
 
