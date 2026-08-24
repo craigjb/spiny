@@ -86,6 +86,30 @@ class AuxRxSpec extends AnyFunSuite {
           checkerThread.join()
         }
     }
+
+    test(f"AuxRx should handle 30 ns jitter @ $clockFreq%s") {
+      SpinySimConfig(f"AuxRx_Jitter_$clockFreq%S")
+        .withConfig(SpinalConfig(
+          defaultClockDomainFrequency = FixedFrequency(clockFreq)))
+        .compile(AuxRx(dataRate = DataRate))
+        .doSim { dut =>
+          dut.clockDomain.forkStimulus()
+
+          val checkerThread = fork {
+            val checker = AuxRxChecker(dut, dataTimeout)
+            for (packet <- Packets) {
+              checker.checkPacket(packet)
+            }
+          }
+
+          val driver = AuxRxDriver(dut, maxJitter = 30 ns)
+          for (packet <- Packets) {
+            driver.packet(packet)
+          }
+          sleep(1 us)
+          checkerThread.join()
+        }
+    }
   }
 
   for (clockFreq <- Seq(61 MHz, 66.6 MHz, 100 MHz)) {
@@ -97,9 +121,9 @@ class AuxRxSpec extends AnyFunSuite {
     val rawTaps = (50.ns / clockFreq.toTime).toInt
     val taps = if (rawTaps % 2 == 0) rawTaps - 1 else rawTaps
     val maxEdgesAllowed = taps / 2
-    val glitchMax = ((clockFreq.toTime * maxEdgesAllowed) - (0.1 ns))
+    val maxGlitch = ((clockFreq.toTime * maxEdgesAllowed) - (0.1 ns))
 
-    test(f"AuxRx should handle glitches <$glitchMax%.2s @ $clockFreq%s") {
+    test(f"AuxRx should handle glitches <$maxGlitch%.2s @ $clockFreq%s") {
       SpinySimConfig(f"AuxRx_Glitches_$clockFreq%S")
         .withConfig(SpinalConfig(
           defaultClockDomainFrequency = FixedFrequency(clockFreq)))
@@ -114,7 +138,7 @@ class AuxRxSpec extends AnyFunSuite {
             }
           }
 
-          val driver = AuxRxDriver(dut, glitchMax)
+          val driver = AuxRxDriver(dut, maxGlitch)
           for (packet <- Packets) {
             driver.packet(packet)
           }
@@ -128,7 +152,8 @@ class AuxRxSpec extends AnyFunSuite {
 
 case class AuxRxDriver(
   dut: AuxRx,
-  glitchMax: TimeNumber = 0 ns,
+  maxGlitch: TimeNumber = 0 ns,
+  maxJitter: TimeNumber = 0 ns,
   rngSeed: Int = 12345
 ) {
   val rng = new Random(rngSeed)
@@ -136,26 +161,32 @@ case class AuxRxDriver(
 
   def bit(value: Boolean, period: TimeNumber = AuxRxSpec.BitPeriod) {
     val glitchStart = (period * rng.nextDouble())
-      .min(period - glitchMax)
-    val glitchLen = glitchMax * rng.nextDouble()
+      .min(period - maxGlitch)
+    val glitchLen = maxGlitch * rng.nextDouble()
     val glitchEnd = glitchStart + glitchLen
 
+    val jitterStart = maxJitter * rng.nextDouble()
+    val jitterMid = maxJitter * (rng.nextDouble() * (if (rng.nextBoolean()) 1.0 else -1.0))
+    val jitterEnd = maxJitter * (rng.nextDouble() * (if (rng.nextBoolean()) 1.0 else -1.0))
+
+    val midBit = (period / 2) + jitterMid
+
     val edgeTimes = Seq(
-      0 ns,
+      0.ns + jitterStart,
       glitchStart,
       glitchEnd,
-      period / 2,
+      midBit,
     ).distinct.sortBy(_.toDouble)
 
     var time = 0.ns
     for (edgeTime <- edgeTimes) {
       sleep(edgeTime - time)
       time = edgeTime
-      val idealValue = if (time < period / 2) value else !value
+      val idealValue = if (time < midBit) value else !value
       val isGlitched = time >= glitchStart && time < glitchEnd
       dut.io.read #= (if (isGlitched) !idealValue else idealValue)
     }
-    sleep(period - time)
+    sleep(((period + jitterEnd) - time).max(0.ns))
   }
 
   def preCharge() = sync()
