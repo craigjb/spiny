@@ -32,54 +32,54 @@
 package spiny.displayport
 
 import scala.collection.mutable
+import scala.util.Random
 import org.scalatest.funsuite.AnyFunSuite
 import spinal.core._
 import spinal.core.sim._
 
 import spiny._
 import spinal.lib.IntRicher
+import spiny.displayport.AuxTxSpec.BitPeriod
 
 object AuxRxSpec {
-  val ClockFreqs = Seq(20 MHz, 20.33 MHz, 21.3 MHz, 25.3 MHz, 66.6 MHz, 100 MHz)
   val DataRate = 1 MHz
   val BitPeriod = DataRate.toTime
   val HalfBitPeriod = DataRate.toTime / 2
   val SyncBits = 16
+  val Packets = Seq(
+    Seq(0xde, 0xad, 0xbe, 0xef),
+    Seq(0xa, 0xb, 0xc, 0xd, 0xe, 0xf),
+    Seq(0xab),
+    Seq(0xff, 0x00, 0xff, 0x00),
+    Seq(0x00, 0xff, 0x00, 0xff)
+  )
 }
 
 class AuxRxSpec extends AnyFunSuite {
   import AuxRxSpec._
 
-  for (clockFreq <- ClockFreqs) {
-    test(f"AuxRx should properly decode packets @ $clockFreq%S") {
-      val dataTimeout = ((400 us) / clockFreq.toTime)
-        .setScale(0, BigDecimal.RoundingMode.CEILING)
-        .toInt
+  for (clockFreq <- Seq(20 MHz, 20.33 MHz, 21.3 MHz, 25.3 MHz, 66.6 MHz, 100 MHz)) {
+    val dataTimeout = ((400 us) / clockFreq.toTime)
+      .setScale(0, BigDecimal.RoundingMode.CEILING)
+      .toInt
 
+    test(f"AuxRx should properly decode packets @ $clockFreq%s") {
       SpinySimConfig(f"AuxRx_Packets_$clockFreq%S")
         .withConfig(SpinalConfig(
           defaultClockDomainFrequency = FixedFrequency(clockFreq)))
         .compile(AuxRx(dataRate = DataRate))
         .doSim { dut =>
-          val packets = Seq(
-            Seq(0xde, 0xad, 0xbe, 0xef),
-            Seq(0xa, 0xb, 0xc, 0xd, 0xe, 0xf),
-            Seq(0xab),
-            Seq(0xff, 0x00, 0xff, 0x00),
-            Seq(0x00, 0xff, 0x00, 0xff)
-          )
-
           dut.clockDomain.forkStimulus()
 
           val checkerThread = fork {
             val checker = AuxRxChecker(dut, dataTimeout)
-            for (packet <- packets) {
+            for (packet <- Packets) {
               checker.checkPacket(packet)
             }
           }
 
           val driver = AuxRxDriver(dut)
-          for (packet <- packets) {
+          for (packet <- Packets) {
             driver.packet(packet)
           }
           sleep(1 us)
@@ -87,9 +87,51 @@ class AuxRxSpec extends AnyFunSuite {
         }
     }
   }
+
+  for (clockFreq <- Seq(61 MHz, 66.6 MHz, 100 MHz)) {
+    val dataTimeout = ((400 us) / clockFreq.toTime)
+      .setScale(0, BigDecimal.RoundingMode.CEILING)
+      .toInt
+
+    // max glitch size that can be handled depends on filter
+    val rawTaps = (50.ns / clockFreq.toTime).toInt
+    val taps = if (rawTaps % 2 == 0) rawTaps - 1 else rawTaps
+    val maxEdgesAllowed = taps / 2
+    val glitchMax = ((clockFreq.toTime * maxEdgesAllowed) - (0.1 ns))
+
+    test(f"AuxRx should handle glitches <$glitchMax%.2s @ $clockFreq%s") {
+      SpinySimConfig(f"AuxRx_Glitches_$clockFreq%S")
+        .withConfig(SpinalConfig(
+          defaultClockDomainFrequency = FixedFrequency(clockFreq)))
+        .compile(AuxRx(dataRate = DataRate))
+        .doSim { dut =>
+          dut.clockDomain.forkStimulus()
+
+          val checkerThread = fork {
+            val checker = AuxRxChecker(dut, dataTimeout)
+            for (packet <- Packets) {
+              checker.checkPacket(packet)
+            }
+          }
+
+          val driver = AuxRxDriver(dut, glitchMax)
+          for (packet <- Packets) {
+            driver.packetWithGlitches(packet)
+          }
+          sleep(1 us)
+          checkerThread.join()
+
+        }
+    }
+  }
 }
 
-case class AuxRxDriver(dut: AuxRx) {
+case class AuxRxDriver(
+  dut: AuxRx,
+  glitchMax: TimeNumber = 0 ns,
+  rngSeed: Int = 12345
+) {
+  val rng = new Random(rngSeed)
   dut.io.readEnable #= true
 
   def bit(value: Boolean) {
@@ -135,6 +177,65 @@ case class AuxRxDriver(dut: AuxRx) {
     syncEnd()
     data(bytes)
     stop()
+  }
+
+  def bitWithGlitch(value: Boolean, period: TimeNumber) {
+    val glitchStart = (period * rng.nextDouble())
+      .min(period - glitchMax)
+    val glitchLen = glitchMax * rng.nextDouble()
+    val glitchEnd = glitchStart + glitchLen
+
+    val edgeTimes = Seq(
+      glitchStart,
+      glitchEnd,
+      period / 2,
+    ).distinct.sortBy(_.toDouble)
+
+    var time = 0.ns
+    dut.io.read #= value
+    for (edgeTime <- edgeTimes) {
+      sleep(edgeTime - time)
+      time = edgeTime
+      val idealValue = if (time < period / 2) value else !value
+      val isGlitched = time >= glitchStart && time < glitchEnd
+      dut.io.read #= (if (isGlitched) !idealValue else idealValue)
+    }
+    sleep(period - time)
+  }
+
+  def preChargeWithGlitches() = syncWithGlitches()
+
+  def syncWithGlitches() {
+    for (i <- 0 until AuxRxSpec.SyncBits) {
+      bitWithGlitch(false, AuxRxSpec.BitPeriod)
+    }
+  }
+
+  def syncEndWithGlitch() {
+    bitWithGlitch(true, AuxRxSpec.BitPeriod * 4)
+  }
+
+  def stopWithGlitch() = syncEndWithGlitch()
+
+  def dataWithGlitches(byte: Int) {
+    for (i <- 7 to 0 by -1) {
+      val bitValue = ((byte >> i) & 1) == 1
+      bitWithGlitch(bitValue, AuxRxSpec.BitPeriod)
+    }
+  }
+
+  def dataWithGlitches(bytes: Seq[Int]) {
+    for (byte <- bytes) {
+      dataWithGlitches(byte)
+    }
+  }
+
+  def packetWithGlitches(bytes: Seq[Int]) {
+    preChargeWithGlitches()
+    syncWithGlitches()
+    syncEndWithGlitch()
+    dataWithGlitches(bytes)
+    stopWithGlitch()
   }
 }
 

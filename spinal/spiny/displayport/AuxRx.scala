@@ -40,7 +40,8 @@ import spiny._
 /** RX side of DisplayPort AUX channel */
 case class AuxRx(
   dataRate: HertzNumber = 1 MHz,
-  tolerance: BigDecimal = 0.15
+  tolerance: BigDecimal = 0.15,
+  filterWindow: TimeNumber = 50 ns
 ) extends Component {
   assert(
     ClockDomain.current.frequency.getValue >= 20.MHz,
@@ -63,10 +64,11 @@ case class AuxRx(
 
   // synchronize external input
   val readSynced = BufferCC(io.read, init = False)
+  val readValue = AuxRxFilter.on(readSynced, filterWindow)
 
   // find all edges
-  val readReg = RegNext(readSynced) init(False)
-  val edgeDetected = readSynced =/= readReg
+  val readReg = RegNext(readValue) init(False)
+  val edgeDetected = readValue =/= readReg
 
   val intervalTimer = Counter(clocksPerBit * 3)
   when(!io.readEnable || edgeDetected) {
@@ -181,7 +183,7 @@ case class AuxRx(
           when(isValidBit) {
             // low to high = zero
             // high to low = one
-            val bitValue = !readSynced
+            val bitValue = !readValue
             shiftRegNext := (shiftReg |<< 1) | bitValue.asBits.resized
             bitCounter.increment()
 
@@ -211,5 +213,38 @@ case class AuxRx(
         }
       }
     }
+  }
+}
+
+object AuxRxFilter {
+  def on(rxSynced: Bool, filterWindow:TimeNumber = 50 ns): Bool = {
+    val filter = AuxRxFilter(filterWindow)
+    filter.io.rxSynced := rxSynced
+    filter.io.rxFiltered
+  }
+}
+
+case class AuxRxFilter(filterWindow: TimeNumber = 50 ns) extends Component {
+  val io = new Bundle() {
+    val rxSynced = in(Bool())
+    val rxFiltered = out(Bool())
+  }
+
+  val clockFreq = ClockDomain.current.frequency.getValue
+  val rawTaps = (filterWindow / clockFreq.toTime).toInt
+  if (rawTaps >= 3) {
+    val taps = if (rawTaps % 2 == 0) rawTaps - 1 else rawTaps
+    val threshold = taps / 2
+    val history = History(io.rxSynced, taps)
+
+    val sumWidth = log2Up(taps + 1) bits
+    val activeBits = history.map(_.asUInt(sumWidth)).reduce(_ + _)
+    io.rxFiltered := activeBits > threshold
+
+    SpinalInfo(f"AuxRxFilter: Generated $taps-tap majority vote filter for $clockFreq%s")
+  } else {
+    io.rxFiltered := io.rxSynced
+
+    SpinalInfo(f"AuxRxFilter: $clockFreq%s is too slow for $filterWindow%s filter window")
   }
 }
