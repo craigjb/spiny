@@ -84,6 +84,10 @@ class AuxPhySpec extends AnyFunSuite {
             }
           }
 
+          // check that no errors are pulsed
+          val txErrors = AuxTxErrorMonitor(dut)
+          val rxErrors = AuxRxErrorMonitor(dut)
+
           val txDriver = AuxTxDriver(dut, timeout)
           val rxDriver = AuxRxDriver(dut.io.aux.read)
 
@@ -118,7 +122,10 @@ class AuxPhySpec extends AnyFunSuite {
             !receivedWhileTransmitting,
             "rxData went valid while the PHY was driving the AUX line"
           )
+          txErrors.assertNone("transmitting requests")
+          rxErrors.assertNone("receiving replies")
         }
     }
   }
+
 }
