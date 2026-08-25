@@ -31,23 +31,19 @@
 
 package spiny.displayport
 
-import scala.collection.mutable
 import org.scalatest.funsuite.AnyFunSuite
 import spinal.core._
 import spinal.core.sim._
-import spinal.lib.{Stream, Fragment}
 
 import spiny._
 import spiny.SimClockDomainExt._
 
 object AuxTxSpec {
-  val ClockFreqs = Seq(20 MHz, 20.33 MHz, 21.3 MHz, 25.3 MHz, 66.6 MHz, 100 MHz)
-  val DataRate = 1 MHz
-  val BitPeriod = DataRate.toTime
   val PacketGap = 10 us
 }
 
 class AuxTxSpec extends AnyFunSuite {
+  import AuxSim._
   import AuxTxSpec._
 
   for (clockFreq <- ClockFreqs) {
@@ -155,218 +151,5 @@ class AuxTxSpec extends AnyFunSuite {
         checkerThread.join()
         errors.assertOne("aborting on underrun")
       }
-  }
-}
-
-object AuxTxDriver {
-  def apply(auxTx: AuxTx, timeout: Int): AuxTxDriver = {
-    AuxTxDriver(
-      txData = auxTx.io.data,
-      timeout = timeout,
-      clockDomain = auxTx.clockDomain
-    )
-  }
-
-  def apply(auxPhy: AuxPhy, timeout: Int): AuxTxDriver = {
-    AuxTxDriver(
-      txData = auxPhy.io.txData,
-      timeout = timeout,
-      clockDomain = auxPhy.clockDomain
-    )
-  }
-}
-
-case class AuxTxDriver(
-  txData: Stream[Fragment[Bits]],
-  timeout: Int,
-  clockDomain: ClockDomain
-) {
-  txData.valid #= false
-
-  def write(byte: Int, last: Boolean) {
-    txData.fragment #= byte
-    txData.last #= last
-    txData.valid #= true
-    clockDomain.waitSamplingWhereOrFail(
-        timeout, f"txData.ready on 0x$byte%02x"
-      )(txData.ready.toBoolean)
-    txData.valid #= false
-  }
-
-  def write(bytes: Seq[Int]) {
-    for(byte <- bytes.init) {
-      write(byte, false)
-    }
-    write(bytes.last, true)
-  }
-}
-
-object AuxTxErrorMonitor {
-  def apply(auxTx: AuxTx): SimPulseMonitor = {
-    SimPulseMonitor(
-      signal = auxTx.io.error,
-      clockDomain = auxTx.clockDomain,
-      name = "AuxTx error"
-    )
-  }
-
-  def apply(auxPhy: AuxPhy): SimPulseMonitor = {
-    SimPulseMonitor(
-      signal = auxPhy.io.txError,
-      clockDomain = auxPhy.clockDomain,
-      name = "AuxTx error"
-    )
-  }
-}
-
-object AuxTxChecker {
-  def apply(auxTx: AuxTx): AuxTxChecker = {
-    AuxTxChecker(
-      auxWrite = auxTx.io.write,
-      auxWriteEnable = auxTx.io.writeEnable,
-      clocksPerHalfBit = auxTx.phaseTick.stateCount.toInt,
-      clockDomain = auxTx.clockDomain
-    )
-  }
-
-  /** Checks the AUX line an AuxPhy drives, rather than the AuxTx port */
-  def apply(auxPhy: AuxPhy): AuxTxChecker = {
-    AuxTxChecker(
-      auxWrite = auxPhy.io.aux.write,
-      auxWriteEnable = auxPhy.io.aux.writeEnable,
-      clocksPerHalfBit = auxPhy.tx.phaseTick.stateCount.toInt,
-      clockDomain = auxPhy.clockDomain
-    )
-  }
-}
-
-case class AuxTxChecker(
-  auxWrite: Bool,
-  auxWriteEnable: Bool,
-  clocksPerHalfBit: Int,
-  clockDomain: ClockDomain
-) {
-  def checkPreCharge() {
-    for (i <- 0 until 16) {
-      assert(
-        auxWrite.toBoolean == false,
-        s"precharge bit $i first half should be low"
-      )
-      clockDomain.waitSampling(clocksPerHalfBit)
-      assert(
-        auxWrite.toBoolean == true,
-        s"precharge bit $i second half should be high"
-      )
-      clockDomain.waitSampling(clocksPerHalfBit)
-    }
-  }
-
-  def checkSync() {
-    for (i <- 0 until 16) {
-      assert(
-        auxWrite.toBoolean == false,
-        s"sync bit $i first half should be low"
-      )
-      clockDomain.waitSampling(clocksPerHalfBit)
-      assert(
-        auxWrite.toBoolean == true,
-        s"sync bit $i second half should be high"
-      )
-      clockDomain.waitSampling(clocksPerHalfBit)
-    }
-  }
-
-  def checkSyncEnd() {
-    for (i <- 0 until 2) {
-      assert(
-        auxWrite.toBoolean == true,
-        s"sync end bit $i should stay high for first and second half"
-      )
-      clockDomain.waitSampling(clocksPerHalfBit)
-      assert(
-        auxWrite.toBoolean == true,
-        s"sync end bit $i should stay high for first and second half"
-      )
-      clockDomain.waitSampling(clocksPerHalfBit)
-    }
-    for (i <- 0 until 2) {
-      assert(
-        auxWrite.toBoolean == false,
-        s"sync end bit $i should stay low for first and second half"
-      )
-      clockDomain.waitSampling(clocksPerHalfBit)
-      assert(
-        auxWrite.toBoolean == false,
-        s"sync end bit $i should stay low for first and second half"
-      )
-      clockDomain.waitSampling(clocksPerHalfBit)
-    }
-  }
-
-  def checkStop() {
-    for (i <- 0 until 2) {
-      assert(
-        auxWrite.toBoolean == true,
-        s"stop bit $i should stay high for first and second half"
-      )
-      clockDomain.waitSampling(clocksPerHalfBit)
-      assert(
-        auxWrite.toBoolean == true,
-        s"stop bit $i should stay high for first and second half"
-      )
-      clockDomain.waitSampling(clocksPerHalfBit)
-    }
-    for (i <- 0 until 2) {
-      assert(
-        auxWrite.toBoolean == false,
-        s"stop bit $i should stay low for first and second half"
-      )
-      clockDomain.waitSampling(clocksPerHalfBit)
-      assert(
-        auxWrite.toBoolean == false,
-        s"stop bit $i should stay low for first and second half"
-      )
-      clockDomain.waitSampling(clocksPerHalfBit)
-    }
-  }
-
-  def checkBit(i: Int, value: Boolean) {
-    assert(
-      auxWrite.toBoolean == value,
-      s"data bit $i first half should be ${if (value) "high" else "low"}"
-    )
-    clockDomain.waitSampling(clocksPerHalfBit)
-    assert(
-      auxWrite.toBoolean == !value,
-      s"data bit $i first half should be ${if (!value) "high" else "low"}"
-    )
-    clockDomain.waitSampling(clocksPerHalfBit)
-  }
-
-  def checkByte(byte: Int) {
-    for (i <- 7 to 0 by -1) {
-      val bitValue = ((byte >> i) & 1) == 1
-      checkBit(i, bitValue)
-    } 
-  }
-
-  def checkBytes(bytes: Seq[Int]) {
-    for (byte <- bytes) {
-      checkByte(byte)
-    }
-  }
-
-  def waitForPacketStart() {
-    waitUntil(auxWriteEnable.toBoolean)
-    clockDomain.waitSampling(clocksPerHalfBit / 2)
-  }
-
-  def checkPacket(bytes: Seq[Int]) {
-    waitForPacketStart()
-    checkPreCharge()
-    checkSync()
-    checkSyncEnd()
-    checkBytes(bytes)
-    checkStop()
   }
 }

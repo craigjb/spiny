@@ -39,8 +39,6 @@ import spiny._
 import spiny.SimClockDomainExt._
 
 object AuxPhySpec {
-  val ClockFreqs = Seq(20 MHz, 20.33 MHz, 21.3 MHz, 25.3 MHz, 66.6 MHz, 100 MHz)
-  val DataRate = 1 MHz
   // time the sink takes to turn the line around and answer
   val ReplyDelay = 20 us
   // idle time between one transaction and the next
@@ -59,6 +57,7 @@ object AuxPhySpec {
 }
 
 class AuxPhySpec extends AnyFunSuite {
+  import AuxSim._
   import AuxPhySpec._
 
   for (clockFreq <- ClockFreqs) {

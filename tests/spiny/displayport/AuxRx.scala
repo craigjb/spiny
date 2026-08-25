@@ -31,22 +31,14 @@
 
 package spiny.displayport
 
-import scala.collection.mutable
-import scala.util.Random
 import org.scalatest.funsuite.AnyFunSuite
 import spinal.core._
 import spinal.core.sim._
 
 import spiny._
 import spiny.SimClockDomainExt._
-import spinal.lib.{Flow, Fragment, IntRicher}
-import spiny.displayport.AuxTxSpec.BitPeriod
 
 object AuxRxSpec {
-  val DataRate = 1 MHz
-  val BitPeriod = DataRate.toTime
-  val HalfBitPeriod = DataRate.toTime / 2
-  val SyncBits = 16
   // long enough for the receiver to see the line as stopped
   val AbortGap = 10 us
   val Packets = Seq(
@@ -59,9 +51,10 @@ object AuxRxSpec {
 }
 
 class AuxRxSpec extends AnyFunSuite {
+  import AuxSim._
   import AuxRxSpec._
 
-  for (clockFreq <- Seq(20 MHz, 20.33 MHz, 21.3 MHz, 25.3 MHz, 66.6 MHz, 100 MHz)) {
+  for (clockFreq <- ClockFreqs) {
     test(f"AuxRx should properly decode packets @ $clockFreq%s") {
       SpinySimConfig("AuxRx_Packets", clockFreq)
         .compile(AuxRx(dataRate = DataRate))
@@ -215,9 +208,9 @@ class AuxRxSpec extends AnyFunSuite {
       driver.data(0xde)
       // neither a half bit nor a whole bit, so it decodes as nothing
       driver.auxRead #= false
-      sleep(AuxRxSpec.BitPeriod * 0.75)
+      sleep(AuxSim.BitPeriod * 0.75)
       driver.auxRead #= true
-      sleep(AuxRxSpec.BitPeriod * 0.75)
+      sleep(AuxSim.BitPeriod * 0.75)
     })
   )) {
     test(f"AuxRx should report an error when the source $name") {
@@ -263,145 +256,5 @@ class AuxRxSpec extends AnyFunSuite {
           checkerThread.join()
         }
     }
-  }
-}
-
-case class AuxRxDriver(
-  auxRead: Bool,
-  maxGlitch: TimeNumber = 0 ns,
-  maxJitter: TimeNumber = 0 ns,
-  rngSeed: Int = 12345
-) {
-  val rng = new Random(rngSeed)
-
-  def bit(value: Boolean, period: TimeNumber = AuxRxSpec.BitPeriod) {
-    val glitchStart = (period * rng.nextDouble())
-      .min(period - maxGlitch)
-    val glitchLen = maxGlitch * rng.nextDouble()
-    val glitchEnd = glitchStart + glitchLen
-
-    val jitterStart = maxJitter * rng.nextDouble()
-    val jitterMid = maxJitter * (rng.nextDouble() * (if (rng.nextBoolean()) 1.0 else -1.0))
-    val jitterEnd = maxJitter * (rng.nextDouble() * (if (rng.nextBoolean()) 1.0 else -1.0))
-
-    val midBit = (period / 2) + jitterMid
-
-    val edgeTimes = Seq(
-      0.ns + jitterStart,
-      glitchStart,
-      glitchEnd,
-      midBit,
-    ).distinct.sortBy(_.toDouble)
-
-    var time = 0.ns
-    for (edgeTime <- edgeTimes) {
-      sleep(edgeTime - time)
-      time = edgeTime
-      val idealValue = if (time < midBit) value else !value
-      val isGlitched = time >= glitchStart && time < glitchEnd
-      auxRead #= (if (isGlitched) !idealValue else idealValue)
-    }
-    sleep(((period + jitterEnd) - time).max(0.ns))
-  }
-
-  def preCharge() = sync()
-
-  def sync() {
-    for (i <- 0 until AuxRxSpec.SyncBits) {
-      bit(false)
-    }
-  }
-
-  def syncEnd() {
-    bit(true, AuxRxSpec.BitPeriod * 4)
-  }
-
-  def stop() = syncEnd()
-
-  def data(byte: Int) {
-    for (i <- 7 to 0 by -1) {
-      val bitValue = ((byte >> i) & 1) == 1
-      bit(bitValue)
-    }
-  }
-
-  def data(bytes: Seq[Int]) {
-    for (byte <- bytes) {
-      data(byte)
-    }
-  }
-
-  def packet(bytes: Seq[Int]) {
-    preCharge()
-    sync()
-    syncEnd()
-    data(bytes)
-    stop()
-  }
-}
-
-object AuxRxErrorMonitor {
-  def apply(auxRx: AuxRx): SimPulseMonitor = {
-    SimPulseMonitor(
-      signal = auxRx.io.error,
-      clockDomain = auxRx.clockDomain,
-      name = "AuxRx error"
-    )
-  }
-
-  def apply(auxPhy: AuxPhy): SimPulseMonitor = {
-    SimPulseMonitor(
-      signal = auxPhy.io.rxError,
-      clockDomain = auxPhy.clockDomain,
-      name = "AuxRx error"
-    )
-  }
-}
-
-object AuxRxChecker {
-  def apply(auxRx: AuxRx, dataTimeout: Int): AuxRxChecker = {
-    AuxRxChecker(
-      rxData = auxRx.io.data,
-      dataTimeout = dataTimeout,
-      clockDomain = auxRx.clockDomain
-    )
-  }
-
-  def apply(auxPhy: AuxPhy, dataTimeout: Int): AuxRxChecker = {
-    AuxRxChecker(
-      rxData = auxPhy.io.rxData,
-      dataTimeout = dataTimeout,
-      clockDomain = auxPhy.clockDomain
-    )
-  }
-}
-
-case class AuxRxChecker(
-  rxData: Flow[Fragment[Bits]],
-  dataTimeout: Int,
-  clockDomain: ClockDomain
-) {
-  def checkByte(expected: Int, last: Boolean, index: Int) {
-    clockDomain.waitSamplingWhereOrFail(
-        dataTimeout, s"data[$index]"
-      )(rxData.valid.toBoolean)
-    val value = rxData.fragment.toInt
-    assert(
-      value == expected,
-      s"data[$index] should be 0x${expected.hexString()}, but saw 0x${value.hexString()}"
-    )
-    if (last) {
-      assert(rxData.last.toBoolean, s"data[$index] should be last")
-    } else {
-      assert(!rxData.last.toBoolean, s"data[$index] should not be last")
-    }
-  }
-
-  def checkPacket(bytes: Seq[Int]) {
-    val bytesWithIndex = bytes.zipWithIndex
-    for ((byte, i) <- bytesWithIndex.init) {
-      checkByte(byte, false, i)
-    }
-    checkByte(bytes.last, true, bytesWithIndex.length - 1)
   }
 }
