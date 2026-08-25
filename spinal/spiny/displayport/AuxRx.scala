@@ -57,9 +57,6 @@ case class AuxRx(
 
   val ratio = ClockDomain.current.frequency.getValue / dataRate
   // calculate and round each one separately to avoid cascading rounding error
-  val clocksPerThreeBits = (ratio * 3).setScale(0, BigDecimal.RoundingMode.HALF_UP).toInt
-  val clocksPerTwoBits = (ratio * 2).setScale(0, BigDecimal.RoundingMode.HALF_UP).toInt
-  val clocksToStop = (ratio * 1.5).setScale(0, BigDecimal.RoundingMode.HALF_UP).toInt
   val clocksPerBit = ratio.setScale(0, BigDecimal.RoundingMode.HALF_UP).toInt
   val clocksPerHalfBit = (ratio / 2).setScale(0, BigDecimal.RoundingMode.HALF_UP).toInt
   val clocksPerTol = (tolerance * ratio).setScale(0, BigDecimal.RoundingMode.HALF_UP).toInt
@@ -79,14 +76,21 @@ case class AuxRx(
     intervalTimer.increment()
   }
 
+  // half bit period is measured on sync pulses to adapt bit period
+  // (required to meet spec UI range)
+  val measuredHalfBit = Reg(UInt(intervalTimer.getWidth bits))
+    .init(clocksPerHalfBit)
+
   // define intervals between edges
+  // half bit stays against the nominal rate, since it's used to
+  // acquire the measurements for the other intervals
   val isBounce = intervalTimer <= clocksPerHalfBit - clocksPerTol
   val isShort = intervalTimer >= (clocksPerHalfBit - clocksPerTol) &&
                 intervalTimer <= (clocksPerHalfBit + clocksPerTol)
-  val isLong = intervalTimer >= (clocksPerBit - clocksPerTol) &&
-                intervalTimer <= (clocksPerBit + clocksPerTol)
-  val isStop = intervalTimer >= clocksToStop
-  val isTwoBits = intervalTimer >= clocksPerTwoBits
+  // these use the measured bit period
+  val isLong = intervalTimer >= (measuredHalfBit * 2 - clocksPerTol) &&
+               intervalTimer <= (measuredHalfBit * 2 + clocksPerTol)
+  val isStop = intervalTimer >= measuredHalfBit * 3
 
   val nextEdgeIsMidBit = RegInit(True)
   val highViolationOccurred = RegInit(False)
@@ -126,6 +130,12 @@ case class AuxRx(
       }
       whenIsActive {
         when(edgeDetected) {
+          when(isShort) {
+            // measure half bit period on sync pulses
+            // average in so jitter on any single edge doesn't drag the rate
+            // round rather than truncate, or it creeps downwards every update
+            measuredHalfBit := (measuredHalfBit +^ intervalTimer.value + 1) >> 1
+          }
           when(isStop && readReg) {
             // 2 µs high then low
             highViolationOccurred := True
@@ -138,7 +148,10 @@ case class AuxRx(
             // glitch, reset hunt
             highViolationOccurred := False
           }
-        } elsewhen(isTwoBits && highViolationOccurred) {
+        } elsewhen(highViolationOccurred &&
+                   (intervalTimer.value >> 2) >= measuredHalfBit) {
+          // sync end drives low for 4 half bits of the source, so data
+          // starts here even though the first bit has no edge yet
           highViolationOccurred := False
           intervalTimer.clear()
           goto(stateData)

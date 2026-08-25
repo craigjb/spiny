@@ -265,11 +265,12 @@ case class AuxRxDriver(
   auxRead: Bool,
   maxGlitch: TimeNumber = 0 ns,
   maxJitter: TimeNumber = 0 ns,
-  rngSeed: Int = 12345
+  rngSeed: Int = 12345,
+  bitPeriod: TimeNumber = AuxSim.BitPeriod
 ) {
   val rng = new Random(rngSeed)
 
-  def bit(value: Boolean, period: TimeNumber = AuxSim.BitPeriod) {
+  def bit(value: Boolean, period: TimeNumber = bitPeriod) {
     val glitchStart = (period * rng.nextDouble())
       .min(period - maxGlitch)
     val glitchLen = maxGlitch * rng.nextDouble()
@@ -308,7 +309,7 @@ case class AuxRxDriver(
   }
 
   def syncEnd() {
-    bit(true, AuxSim.BitPeriod * 4)
+    bit(true, bitPeriod * 4)
   }
 
   def stop() = syncEnd()

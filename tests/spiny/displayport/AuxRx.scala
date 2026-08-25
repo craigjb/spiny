@@ -139,6 +139,37 @@ class AuxRxSpec extends AnyFunSuite {
     }
   }
 
+  // Per Table 3-3 a source may use any unit interval from 0.4 to 0.6 µs, so
+  // the receiver measures the rate from the sync pulses rather than assuming
+  // the nominal one. These are the extremes the spec allows, plus the middle.
+  for (unitInterval <- Seq(0.40 us, 0.45 us, 0.50 us, 0.55 us, 0.60 us)) {
+    test(f"AuxRx should decode a source at $unitInterval%.0s UI") {
+      SpinySimConfig(f"AuxRx_UnitInterval_$unitInterval%.0S", 100 MHz)
+        .compile(AuxRx(dataRate = DataRate))
+        .doSim { dut =>
+          val dataTimeout = dut.clockDomain.cycles(400 us)
+          dut.clockDomain.forkStimulus()
+
+          val checkerThread = fork {
+            val checker = AuxRxChecker(dut, dataTimeout)
+            for (packet <- Packets) {
+              checker.checkPacket(packet)
+            }
+          }
+
+          dut.io.readEnable #= true
+          val errors = AuxRxErrorMonitor(dut)
+          val driver = AuxRxDriver(dut.io.read, bitPeriod = unitInterval * 2)
+          for (packet <- Packets) {
+            driver.packet(packet)
+          }
+          sleep(1 us)
+          checkerThread.join()
+          errors.assertNone(f"receiving a $unitInterval%.0s UI source")
+        }
+    }
+  }
+
   test("AuxRx should abort when readEnable deasserts") {
     SpinySimConfig("AuxRx_ReadEnableAbort", 100 MHz)
       .compile(AuxRx(dataRate = DataRate))
