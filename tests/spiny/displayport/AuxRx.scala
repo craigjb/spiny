@@ -38,6 +38,7 @@ import spinal.core._
 import spinal.core.sim._
 
 import spiny._
+import spiny.SimClockDomainExt._
 import spinal.lib.{Flow, Fragment, IntRicher}
 import spiny.displayport.AuxTxSpec.BitPeriod
 
@@ -59,12 +60,11 @@ class AuxRxSpec extends AnyFunSuite {
   import AuxRxSpec._
 
   for (clockFreq <- Seq(20 MHz, 20.33 MHz, 21.3 MHz, 25.3 MHz, 66.6 MHz, 100 MHz)) {
-    val dataTimeout = SimCycles(400 us, clockFreq)
-
     test(f"AuxRx should properly decode packets @ $clockFreq%s") {
       SpinySimConfig("AuxRx_Packets", clockFreq)
         .compile(AuxRx(dataRate = DataRate))
         .doSim { dut =>
+          val dataTimeout = dut.clockDomain.cycles(400 us)
           dut.clockDomain.forkStimulus()
 
           val checkerThread = fork {
@@ -88,6 +88,7 @@ class AuxRxSpec extends AnyFunSuite {
       SpinySimConfig("AuxRx_Jitter", clockFreq)
         .compile(AuxRx(dataRate = DataRate))
         .doSim { dut =>
+          val dataTimeout = dut.clockDomain.cycles(400 us)
           dut.clockDomain.forkStimulus()
 
           val checkerThread = fork {
@@ -109,8 +110,6 @@ class AuxRxSpec extends AnyFunSuite {
   }
 
   for (clockFreq <- Seq(61 MHz, 66.6 MHz, 100 MHz)) {
-    val dataTimeout = SimCycles(400 us, clockFreq)
-
     // max glitch size that can be handled depends on filter
     val rawTaps = (50.ns / clockFreq.toTime).toInt
     val taps = if (rawTaps % 2 == 0) rawTaps - 1 else rawTaps
@@ -121,6 +120,7 @@ class AuxRxSpec extends AnyFunSuite {
       SpinySimConfig("AuxRx_Glitches", clockFreq)
         .compile(AuxRx(dataRate = DataRate))
         .doSim { dut =>
+          val dataTimeout = dut.clockDomain.cycles(400 us)
           dut.clockDomain.forkStimulus()
 
           val checkerThread = fork {
@@ -241,7 +241,9 @@ case class AuxRxChecker(
   clockDomain: ClockDomain
 ) {
   def checkByte(expected: Int, last: Boolean, index: Int) {
-    clockDomain.waitSamplingWhere(dataTimeout)(rxData.valid.toBoolean)
+    clockDomain.waitSamplingWhereOrFail(
+        dataTimeout, s"data[$index]"
+      )(rxData.valid.toBoolean)
     val value = rxData.fragment.toInt
     assert(
       value == expected,

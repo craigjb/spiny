@@ -38,6 +38,7 @@ import spinal.core.sim._
 import spinal.lib.{Stream, Fragment}
 
 import spiny._
+import spiny.SimClockDomainExt._
 
 object AuxTxSpec {
   val ClockFreqs = Seq(20 MHz, 20.33 MHz, 21.3 MHz, 25.3 MHz, 66.6 MHz, 100 MHz)
@@ -50,12 +51,11 @@ class AuxTxSpec extends AnyFunSuite {
   import AuxTxSpec._
 
   for (clockFreq <- ClockFreqs) {
-    val timeout = SimCycles(400 us, clockFreq)
-
     test(f"AuxTx should properly encode and transmit packets @ $clockFreq%S") {
       SpinySimConfig("AuxTx_Packets", clockFreq)
         .compile(AuxTx(dataRate = DataRate))
         .doSim { dut =>
+          val timeout = dut.clockDomain.cycles(400 us)
           val packets = Seq(
             Seq(0xde, 0xad, 0xbe, 0xef),
             Seq(0xa, 0xb, 0xc, 0xd, 0xe, 0xf),
@@ -77,7 +77,9 @@ class AuxTxSpec extends AnyFunSuite {
           dut.clockDomain.waitSampling(10)
           for (packet <- packets) {
             driver.write(packet)
-            dut.clockDomain.waitSamplingWhere(timeout)(!dut.io.writeEnable.toBoolean)
+            dut.clockDomain.waitSamplingWhereOrFail(
+                timeout, "writeEnable to drop"
+              )(!dut.io.writeEnable.toBoolean)
             sleep(PacketGap)
           }
           checkerThread.join()
@@ -86,11 +88,10 @@ class AuxTxSpec extends AnyFunSuite {
   }
 
   test("AuxTx should abort on no data") {
-    val timeout = SimCycles(400 us, 100 MHz)
-
     SpinySimConfig("AuxTx_NoDataAbort", 100 MHz)
       .compile(AuxTx(dataRate = DataRate))
       .doSim { dut =>
+        val timeout = dut.clockDomain.cycles(400 us)
         dut.clockDomain.forkStimulus()
 
         val checkerThread = fork {
@@ -113,18 +114,19 @@ class AuxTxSpec extends AnyFunSuite {
         dut.clockDomain.waitSampling()
         dut.io.data.valid #= false
 
-        dut.clockDomain.waitSamplingWhere(timeout)(!dut.io.writeEnable.toBoolean)
+        dut.clockDomain.waitSamplingWhereOrFail(
+            timeout, "writeEnable to drop"
+          )(!dut.io.writeEnable.toBoolean)
         sleep(PacketGap)
         checkerThread.join()
       }
   }
 
   test("AuxTx should abort on data underrun") {
-    val timeout = SimCycles(400 us, 100 MHz)
-
     SpinySimConfig("AuxTx_UnderrunAbort", 100 MHz)
       .compile(AuxTx(dataRate = DataRate))
       .doSim { dut =>
+        val timeout = dut.clockDomain.cycles(400 us)
         dut.clockDomain.forkStimulus()
 
         val checkerThread = fork {
@@ -141,7 +143,9 @@ class AuxTxSpec extends AnyFunSuite {
         val driver = AuxTxDriver(dut, timeout)
         dut.clockDomain.waitSampling(10)
         driver.write(0xde, false)
-        dut.clockDomain.waitSamplingWhere(timeout)(!dut.io.writeEnable.toBoolean)
+        dut.clockDomain.waitSamplingWhereOrFail(
+            timeout, "writeEnable to drop"
+          )(!dut.io.writeEnable.toBoolean)
         sleep(PacketGap)
         checkerThread.join()
       }
@@ -177,7 +181,9 @@ case class AuxTxDriver(
     txData.fragment #= byte
     txData.last #= last
     txData.valid #= true
-    clockDomain.waitSamplingWhere(timeout)(txData.ready.toBoolean)
+    clockDomain.waitSamplingWhereOrFail(
+        timeout, f"txData.ready on 0x$byte%02x"
+      )(txData.ready.toBoolean)
     txData.valid #= false
   }
 

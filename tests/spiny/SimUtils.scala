@@ -33,6 +33,7 @@ package spiny
 
 import spinal.core._
 import spinal.core.sim._
+import spinal.core.fiber.Handle
 
 /** Helper to ensure unique sim directory per test */
 object SpinySimConfig {
@@ -52,11 +53,28 @@ object SpinySimConfig {
   }
 }
 
-/** Calculates clock cycles per unit of time (rounding up) */
-object SimCycles {
-  def apply(time: TimeNumber, clockFreq: HertzNumber): Int = {
-    (time / clockFreq.toTime)
-      .setScale(0, BigDecimal.RoundingMode.CEILING)
-      .toInt
+/** ClockDomain helpers for simulation */
+object SimClockDomainExt {
+  implicit class SimClockDomainExtension(clockDomain: ClockDomain) {
+    /** Clock cycles in a span of time (rounding up) */
+    def cycles(time: TimeNumber): Int = {
+      (time / clockDomain.frequency.getValue.toTime)
+        .setScale(0, BigDecimal.RoundingMode.CEILING)
+        .toInt
+    }
+
+    /** Calls waitSamplingWhere, but fails assert on timeout */
+    def waitSamplingWhereOrFail(timeout: Int, waitingFor: String)
+                               (condAnd: => Boolean) {
+      assert(
+        !clockDomain.waitSamplingWhere(timeout)(condAnd),
+        s"timed out after $timeout cycles waiting for $waitingFor"
+      )
+    }
   }
+
+  // dut.clockDomain is a Handle, and Scala applies only one implicit
+  // conversion, so this is needed to handle DUT ClockDomains
+  implicit class SimClockDomainHandleExtension(clockDomain: Handle[ClockDomain])
+    extends SimClockDomainExtension(clockDomain.get)
 }

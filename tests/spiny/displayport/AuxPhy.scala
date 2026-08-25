@@ -36,6 +36,7 @@ import spinal.core._
 import spinal.core.sim._
 
 import spiny._
+import spiny.SimClockDomainExt._
 
 object AuxPhySpec {
   val ClockFreqs = Seq(20 MHz, 20.33 MHz, 21.3 MHz, 25.3 MHz, 66.6 MHz, 100 MHz)
@@ -61,12 +62,11 @@ class AuxPhySpec extends AnyFunSuite {
   import AuxPhySpec._
 
   for (clockFreq <- ClockFreqs) {
-    val timeout = SimCycles(400 us, clockFreq)
-
     test(f"AuxPhy should request and reply via loopback @ $clockFreq%S") {
       SpinySimConfig("AuxPhy_Loopback", clockFreq)
         .compile(AuxPhy(dataRate = DataRate))
         .doSim { dut =>
+          val timeout = dut.clockDomain.cycles(400 us)
           dut.clockDomain.forkStimulus()
           dut.io.aux.read #= false
 
@@ -99,9 +99,9 @@ class AuxPhySpec extends AnyFunSuite {
             dut.clockDomain.waitSampling(10)
             txDriver.write(request)
 
-            val txTimedOut = dut.clockDomain
-              .waitSamplingWhere(timeout)(!dut.io.aux.writeEnable.toBoolean)
-            assert(!txTimedOut, s"transaction $i: AUX line was never released")
+            dut.clockDomain.waitSamplingWhereOrFail(
+              timeout, "the AUX line to be released"
+            )(!dut.io.aux.writeEnable.toBoolean)
             txCheckerThread.join()
 
             // let the sink answer, and check what the PHY decodes
