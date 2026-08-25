@@ -101,6 +101,14 @@ case class AuxRx(
   io.data.valid := False
 
   val fsm = new StateMachine {
+    always {
+      // abort whatever packet is in flight, so no half-received data
+      // leaks into the next one
+      when(!io.readEnable) {
+        forceGoto(stateIdle)
+      }
+    }
+
     val stateIdle: State = new State with EntryPoint {
       whenIsActive {
         when(io.readEnable) {

@@ -47,6 +47,8 @@ object AuxRxSpec {
   val BitPeriod = DataRate.toTime
   val HalfBitPeriod = DataRate.toTime / 2
   val SyncBits = 16
+  // long enough for the receiver to see the line as stopped
+  val AbortGap = 10 us
   val Packets = Seq(
     Seq(0xde, 0xad, 0xbe, 0xef),
     Seq(0xa, 0xb, 0xc, 0xd, 0xe, 0xf),
@@ -140,6 +142,60 @@ class AuxRxSpec extends AnyFunSuite {
 
         }
     }
+  }
+
+  test("AuxRx should abort when readEnable deasserts") {
+    SpinySimConfig("AuxRx_ReadEnableAbort", 100 MHz)
+      .compile(AuxRx(dataRate = DataRate))
+      .doSim { dut =>
+        val dataTimeout = dut.clockDomain.cycles(400 us)
+        dut.clockDomain.forkStimulus()
+
+        // nothing may be received between the abort and the next packet
+        var expectQuiet = true
+        var receivedWhileQuiet = Option.empty[Int]
+        fork {
+          while (true) {
+            dut.clockDomain.waitSampling()
+            if (expectQuiet && dut.io.data.valid.toBoolean) {
+              receivedWhileQuiet = Some(dut.io.data.fragment.toInt)
+            }
+          }
+        }
+
+        dut.io.readEnable #= true
+        val driver = AuxRxDriver(dut.io.read)
+
+        // a byte is latched, but only emitted once the next one arrives
+        driver.preCharge()
+        driver.sync()
+        driver.syncEnd()
+        driver.data(0xde)
+
+        // drop readEnable in the middle of a packet
+        dut.io.readEnable #= false
+        dut.io.read #= false
+        sleep(AbortGap)
+
+        // raise it again once the line is released
+        dut.io.readEnable #= true
+        sleep(AbortGap)
+
+        assert(
+          receivedWhileQuiet.isEmpty,
+          f"AuxRx emitted 0x${receivedWhileQuiet.getOrElse(0)}%02x " +
+            "left over from the aborted packet"
+        )
+
+        // the next packet should still be received normally
+        expectQuiet = false
+        val checkerThread = fork {
+          AuxRxChecker(dut, dataTimeout).checkPacket(Packets.head)
+        }
+        driver.packet(Packets.head)
+        sleep(1 us)
+        checkerThread.join()
+      }
   }
 }
 
