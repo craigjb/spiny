@@ -341,40 +341,20 @@ case class AuxRxDriver(
 }
 
 object AuxRxErrorMonitor {
-  def apply(auxRx: AuxRx): AuxRxErrorMonitor = {
-    AuxRxErrorMonitor(
-      error = auxRx.io.error,
-      clockDomain = auxRx.clockDomain
+  def apply(auxRx: AuxRx): SimPulseMonitor = {
+    SimPulseMonitor(
+      signal = auxRx.io.error,
+      clockDomain = auxRx.clockDomain,
+      name = "AuxRx error"
     )
   }
 
-  def apply(auxPhy: AuxPhy): AuxRxErrorMonitor = {
-    AuxRxErrorMonitor(
-      error = auxPhy.io.rxError,
-      clockDomain = auxPhy.clockDomain
+  def apply(auxPhy: AuxPhy): SimPulseMonitor = {
+    SimPulseMonitor(
+      signal = auxPhy.io.rxError,
+      clockDomain = auxPhy.clockDomain,
+      name = "AuxRx error"
     )
-  }
-}
-
-/** Counts error pulses in the background, from construction onwards */
-case class AuxRxErrorMonitor(error: Bool, clockDomain: ClockDomain) {
-  var count = 0
-
-  fork {
-    while (true) {
-      clockDomain.waitSampling()
-      if (error.toBoolean) {
-        count += 1
-      }
-    }
-  }
-
-  def assertNone(whileDoing: String) {
-    assert(count == 0, s"AuxRx raised $count error(s) while $whileDoing")
-  }
-
-  def assertOne(whileDoing: String) {
-    assert(count == 1, s"AuxRx raised $count error(s) while $whileDoing, expected 1")
   }
 }
 

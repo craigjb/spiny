@@ -73,6 +73,7 @@ class AuxTxSpec extends AnyFunSuite {
             }
           }
 
+          val errors = AuxTxErrorMonitor(dut)
           val driver = AuxTxDriver(dut, timeout)
           dut.clockDomain.waitSampling(10)
           for (packet <- packets) {
@@ -83,6 +84,7 @@ class AuxTxSpec extends AnyFunSuite {
             sleep(PacketGap)
           }
           checkerThread.join()
+          errors.assertNone("transmitting good packets")
         }
     }
   }
@@ -104,6 +106,7 @@ class AuxTxSpec extends AnyFunSuite {
           checker.checkStop()
         }
 
+        val errors = AuxTxErrorMonitor(dut)
         val driver = AuxTxDriver(dut, timeout)
         dut.clockDomain.waitSampling(10)
 
@@ -119,6 +122,7 @@ class AuxTxSpec extends AnyFunSuite {
           )(!dut.io.writeEnable.toBoolean)
         sleep(PacketGap)
         checkerThread.join()
+        errors.assertOne("aborting with no data")
       }
   }
 
@@ -140,6 +144,7 @@ class AuxTxSpec extends AnyFunSuite {
           checker.checkStop()
         }
 
+        val errors = AuxTxErrorMonitor(dut)
         val driver = AuxTxDriver(dut, timeout)
         dut.clockDomain.waitSampling(10)
         driver.write(0xde, false)
@@ -148,6 +153,7 @@ class AuxTxSpec extends AnyFunSuite {
           )(!dut.io.writeEnable.toBoolean)
         sleep(PacketGap)
         checkerThread.join()
+        errors.assertOne("aborting on underrun")
       }
   }
 }
@@ -192,6 +198,24 @@ case class AuxTxDriver(
       write(byte, false)
     }
     write(bytes.last, true)
+  }
+}
+
+object AuxTxErrorMonitor {
+  def apply(auxTx: AuxTx): SimPulseMonitor = {
+    SimPulseMonitor(
+      signal = auxTx.io.error,
+      clockDomain = auxTx.clockDomain,
+      name = "AuxTx error"
+    )
+  }
+
+  def apply(auxPhy: AuxPhy): SimPulseMonitor = {
+    SimPulseMonitor(
+      signal = auxPhy.io.txError,
+      clockDomain = auxPhy.clockDomain,
+      name = "AuxTx error"
+    )
   }
 }
 

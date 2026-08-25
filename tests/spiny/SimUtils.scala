@@ -78,3 +78,25 @@ object SimClockDomainExt {
   implicit class SimClockDomainHandleExtension(clockDomain: Handle[ClockDomain])
     extends SimClockDomainExtension(clockDomain.get)
 }
+
+/** Counts single cycle pulses on a signal, from construction onwards */
+case class SimPulseMonitor(signal: Bool, clockDomain: ClockDomain, name: String) {
+  var count = 0
+
+  fork {
+    while (true) {
+      clockDomain.waitSampling()
+      if (signal.toBoolean) {
+        count += 1
+      }
+    }
+  }
+
+  def assertNone(whileDoing: String) {
+    assert(count == 0, s"$name pulsed $count time(s) while $whileDoing")
+  }
+
+  def assertOne(whileDoing: String) {
+    assert(count == 1, s"$name pulsed $count time(s) while $whileDoing, expected 1")
+  }
+}

@@ -43,10 +43,15 @@ case class AuxTx(dataRate: HertzNumber = 1 MHz) extends Component {
     val data = slave(Stream(Fragment(Bits(8 bits))))
     val write = out(Bool())
     val writeEnable = out(Bool())
+    // pulse on error and packet is dropped (e.g. for user retry or abort logic)
+    // note: remainder of the data Flow is not consumed and  must be
+    // reset by producer on error or another packet will start
+    val error = out(Bool())
   }
   io.write.setAsReg().init(False)
   io.writeEnable.setAsReg().init(False)
   io.data.ready := False
+  io.error := False
 
   // longest is sync + pre-charge (16 + 16)
   val bitCounter = Counter(32)
@@ -124,6 +129,7 @@ case class AuxTx(dataRate: HertzNumber = 1 MHz) extends Component {
               goto(stateData)
             } otherwise {
               // not valid data = underrun, so abort
+              io.error := True
               goto(stateStop)
             }
           }
@@ -168,6 +174,7 @@ case class AuxTx(dataRate: HertzNumber = 1 MHz) extends Component {
                   io.write := io.data.fragment.msb
                 } otherwise {
                   // not valid data = underrun, so abort
+                  io.error := True
                   goto(stateStop)
                 }
               }
