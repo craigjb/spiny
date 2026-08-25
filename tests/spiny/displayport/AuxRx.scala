@@ -115,10 +115,8 @@ class AuxRxSpec extends AnyFunSuite {
   }
 
   for (clockFreq <- Seq(61 MHz, 66.6 MHz, 100 MHz)) {
-    // max glitch size that can be handled depends on filter
-    val rawTaps = (50.ns / clockFreq.toTime).toInt
-    val taps = if (rawTaps % 2 == 0) rawTaps - 1 else rawTaps
-    val maxEdgesAllowed = taps / 2
+    // max glitch size that can be handled depends on filter taps
+    val maxEdgesAllowed = AuxRxFilter.taps(clockFreq) / 2
     val maxGlitch = ((clockFreq.toTime * maxEdgesAllowed) - (0.1 ns))
 
     test(f"AuxRx should handle glitches <$maxGlitch%.2s @ $clockFreq%s") {

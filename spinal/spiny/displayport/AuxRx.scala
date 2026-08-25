@@ -41,7 +41,7 @@ import spiny._
 case class AuxRx(
   dataRate: HertzNumber = 1 MHz,
   tolerance: BigDecimal = 0.15,
-  filterWindow: TimeNumber = 50 ns
+  filterWindow: TimeNumber = AuxRxFilter.DefaultWindow
 ) extends Component {
   assert(
     ClockDomain.current.frequency.getValue >= 20.MHz,
@@ -251,23 +251,38 @@ case class AuxRx(
 }
 
 object AuxRxFilter {
-  def on(rxSynced: Bool, filterWindow:TimeNumber = 50 ns): Bool = {
+  val DefaultWindow = 50 ns
+
+  /** Calculates tap count for the filter
+   *
+   *  Odd tap count that fits the window, or zero when the clock is too slow
+    * to fit the three taps a majority vote needs
+    */
+  def taps(clockFreq: HertzNumber, filterWindow: TimeNumber = DefaultWindow): Int = {
+    val rawTaps = (filterWindow / clockFreq.toTime).toInt
+    if (rawTaps < 3) 0
+    else if (rawTaps % 2 == 0) rawTaps - 1
+    else rawTaps
+  }
+
+  def on(rxSynced: Bool, filterWindow: TimeNumber = DefaultWindow): Bool = {
     val filter = AuxRxFilter(filterWindow)
     filter.io.rxSynced := rxSynced
     filter.io.rxFiltered
   }
 }
 
-case class AuxRxFilter(filterWindow: TimeNumber = 50 ns) extends Component {
+case class AuxRxFilter(
+  filterWindow: TimeNumber = AuxRxFilter.DefaultWindow
+) extends Component {
   val io = new Bundle() {
     val rxSynced = in(Bool())
     val rxFiltered = out(Bool())
   }
 
   val clockFreq = ClockDomain.current.frequency.getValue
-  val rawTaps = (filterWindow / clockFreq.toTime).toInt
-  if (rawTaps >= 3) {
-    val taps = if (rawTaps % 2 == 0) rawTaps - 1 else rawTaps
+  val taps = AuxRxFilter.taps(clockFreq, filterWindow)
+  if (taps > 0) {
     val threshold = taps / 2
     val history = History(io.rxSynced, taps)
 
