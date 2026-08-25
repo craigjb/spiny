@@ -68,7 +68,7 @@ class AuxTxSpec extends AnyFunSuite {
             dut.clockDomain.waitSampling()
             val checker = AuxTxChecker(dut)
             for ((packet, i) <- packets.zipWithIndex) {
-              println(s"Checking packet $i")
+              SpinalInfo(s"Checking packet $i")
               checker.checkPacket(packet)
             }
           }
@@ -156,6 +156,14 @@ object AuxTxDriver {
       clockDomain = auxTx.clockDomain
     )
   }
+
+  def apply(auxPhy: AuxPhy, timeout: Int): AuxTxDriver = {
+    AuxTxDriver(
+      txData = auxPhy.io.txData,
+      timeout = timeout,
+      clockDomain = auxPhy.clockDomain
+    )
+  }
 }
 
 case class AuxTxDriver(
@@ -188,6 +196,16 @@ object AuxTxChecker {
       auxWriteEnable = auxTx.io.writeEnable,
       clocksPerHalfBit = auxTx.phaseTick.stateCount.toInt,
       clockDomain = auxTx.clockDomain
+    )
+  }
+
+  /** Checks the AUX line an AuxPhy drives, rather than the AuxTx port */
+  def apply(auxPhy: AuxPhy): AuxTxChecker = {
+    AuxTxChecker(
+      auxWrite = auxPhy.io.aux.write,
+      auxWriteEnable = auxPhy.io.aux.writeEnable,
+      clocksPerHalfBit = auxPhy.tx.phaseTick.stateCount.toInt,
+      clockDomain = auxPhy.clockDomain
     )
   }
 }

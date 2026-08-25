@@ -225,6 +225,14 @@ object AuxRxChecker {
       clockDomain = auxRx.clockDomain
     )
   }
+
+  def apply(auxPhy: AuxPhy, dataTimeout: Int): AuxRxChecker = {
+    AuxRxChecker(
+      rxData = auxPhy.io.rxData,
+      dataTimeout = dataTimeout,
+      clockDomain = auxPhy.clockDomain
+    )
+  }
 }
 
 case class AuxRxChecker(
