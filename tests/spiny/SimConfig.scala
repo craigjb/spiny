@@ -31,15 +31,32 @@
 
 package spiny
 
+import spinal.core._
 import spinal.core.sim._
 
-// Ensures unique sim directory per test
+/** Helper to ensure unique sim directory per test */
 object SpinySimConfig {
-  def apply(testName: String) = {
+  def apply(testName: String): SpinalSimConfig = {
     SimConfig
       .withWave
-      // sbt clean will cleanup with it in target/
+      // sbt clean will clean-up simWorkspace now
       .workspacePath("target/simWorkspace")
       .workspaceName(testName)
+  }
+
+  // same, but for tests repeated at multiple clock frequencies.
+  def apply(testName: String, clockFreq: HertzNumber): SpinalSimConfig = {
+    SpinySimConfig(f"${testName}_$clockFreq%S")
+      .withConfig(SpinalConfig(
+        defaultClockDomainFrequency = FixedFrequency(clockFreq)))
+  }
+}
+
+/** Calculates clock cycles per unit of time (rounding up) */
+object SimCycles {
+  def apply(time: TimeNumber, clockFreq: HertzNumber): Int = {
+    (time / clockFreq.toTime)
+      .setScale(0, BigDecimal.RoundingMode.CEILING)
+      .toInt
   }
 }

@@ -59,14 +59,10 @@ class AuxRxSpec extends AnyFunSuite {
   import AuxRxSpec._
 
   for (clockFreq <- Seq(20 MHz, 20.33 MHz, 21.3 MHz, 25.3 MHz, 66.6 MHz, 100 MHz)) {
-    val dataTimeout = ((400 us) / clockFreq.toTime)
-      .setScale(0, BigDecimal.RoundingMode.CEILING)
-      .toInt
+    val dataTimeout = SimCycles(400 us, clockFreq)
 
     test(f"AuxRx should properly decode packets @ $clockFreq%s") {
-      SpinySimConfig(f"AuxRx_Packets_$clockFreq%S")
-        .withConfig(SpinalConfig(
-          defaultClockDomainFrequency = FixedFrequency(clockFreq)))
+      SpinySimConfig("AuxRx_Packets", clockFreq)
         .compile(AuxRx(dataRate = DataRate))
         .doSim { dut =>
           dut.clockDomain.forkStimulus()
@@ -88,9 +84,7 @@ class AuxRxSpec extends AnyFunSuite {
     }
 
     test(f"AuxRx should handle 30 ns jitter @ $clockFreq%s") {
-      SpinySimConfig(f"AuxRx_Jitter_$clockFreq%S")
-        .withConfig(SpinalConfig(
-          defaultClockDomainFrequency = FixedFrequency(clockFreq)))
+      SpinySimConfig("AuxRx_Jitter", clockFreq)
         .compile(AuxRx(dataRate = DataRate))
         .doSim { dut =>
           dut.clockDomain.forkStimulus()
@@ -113,9 +107,7 @@ class AuxRxSpec extends AnyFunSuite {
   }
 
   for (clockFreq <- Seq(61 MHz, 66.6 MHz, 100 MHz)) {
-    val dataTimeout = ((400 us) / clockFreq.toTime)
-      .setScale(0, BigDecimal.RoundingMode.CEILING)
-      .toInt
+    val dataTimeout = SimCycles(400 us, clockFreq)
 
     // max glitch size that can be handled depends on filter
     val rawTaps = (50.ns / clockFreq.toTime).toInt
@@ -124,9 +116,7 @@ class AuxRxSpec extends AnyFunSuite {
     val maxGlitch = ((clockFreq.toTime * maxEdgesAllowed) - (0.1 ns))
 
     test(f"AuxRx should handle glitches <$maxGlitch%.2s @ $clockFreq%s") {
-      SpinySimConfig(f"AuxRx_Glitches_$clockFreq%S")
-        .withConfig(SpinalConfig(
-          defaultClockDomainFrequency = FixedFrequency(clockFreq)))
+      SpinySimConfig("AuxRx_Glitches", clockFreq)
         .compile(AuxRx(dataRate = DataRate))
         .doSim { dut =>
           dut.clockDomain.forkStimulus()

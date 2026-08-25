@@ -49,14 +49,10 @@ class AuxTxSpec extends AnyFunSuite {
   import AuxTxSpec._
 
   for (clockFreq <- ClockFreqs) {
-    val timeout = (400.us / clockFreq.toTime)
-        .setScale(0, BigDecimal.RoundingMode.CEILING)
-        .toInt
+    val timeout = SimCycles(400 us, clockFreq)
 
     test(f"AuxTx should properly encode and transmit packets @ $clockFreq%S") {
-      SpinySimConfig(f"AuxTx_Packets_$clockFreq%S")
-        .withConfig(SpinalConfig(
-          defaultClockDomainFrequency = FixedFrequency(clockFreq)))
+      SpinySimConfig("AuxTx_Packets", clockFreq)
         .compile(AuxTx(dataRate = DataRate))
         .doSim { dut =>
           val packets = Seq(
@@ -89,12 +85,9 @@ class AuxTxSpec extends AnyFunSuite {
   }
 
   test("AuxTx should abort on no data") {
-    val timeout = (400.us / 100.MHz.toTime)
-        .setScale(0, BigDecimal.RoundingMode.CEILING)
-        .toInt
-    SpinySimConfig(f"AuxTx_NoDataAbort")
-      .withConfig(SpinalConfig(
-        defaultClockDomainFrequency = FixedFrequency(100 MHz)))
+    val timeout = SimCycles(400 us, 100 MHz)
+
+    SpinySimConfig("AuxTx_NoDataAbort", 100 MHz)
       .compile(AuxTx(dataRate = DataRate))
       .doSim { dut =>
         dut.clockDomain.forkStimulus()
@@ -126,12 +119,9 @@ class AuxTxSpec extends AnyFunSuite {
   }
 
   test("AuxTx should abort on data underrun") {
-    val timeout = (400.us / 100.MHz.toTime)
-        .setScale(0, BigDecimal.RoundingMode.CEILING)
-        .toInt
-    SpinySimConfig(f"AuxTx_UnderrunAbort")
-      .withConfig(SpinalConfig(
-        defaultClockDomainFrequency = FixedFrequency(100 MHz)))
+    val timeout = SimCycles(400 us, 100 MHz)
+
+    SpinySimConfig("AuxTx_UnderrunAbort", 100 MHz)
       .compile(AuxTx(dataRate = DataRate))
       .doSim { dut =>
         dut.clockDomain.forkStimulus()
