@@ -87,6 +87,24 @@ class AuxTxSpec extends AnyFunSuite {
     }
   }
 
+  test("AuxTx should reject a unit interval that is too short") {
+    assertThrows[AssertionError] {
+      SpinalConfig(
+        targetDirectory = ElaborationDir.path,
+        defaultClockDomainFrequency = FixedFrequency(100 MHz)
+      ).generateVerilog(AuxTx(dataRate = 2 MHz))
+    }
+  }
+
+  test("AuxTx should reject a unit interval that is too long") {
+    assertThrows[AssertionError] {
+      SpinalConfig(
+        targetDirectory = ElaborationDir.path,
+        defaultClockDomainFrequency = FixedFrequency(2.5 MHz)
+      ).generateVerilog(AuxTx(dataRate = DataRate))
+    }
+  }
+
   test("AuxTx should abort on no data") {
     SpinySimConfig("AuxTx_NoDataAbort", 100 MHz)
       .compile(AuxTx(dataRate = DataRate))
