@@ -53,6 +53,11 @@ object SpinySimConfig {
   }
 }
 
+/** Scratch output dir for tests that only elaborate, no simulation */
+object ElaborationDir {
+  val path = "target/elaboration"
+}
+
 /** ClockDomain helpers for simulation */
 object SimClockDomainExt {
   implicit class SimClockDomainExtension(clockDomain: ClockDomain) {

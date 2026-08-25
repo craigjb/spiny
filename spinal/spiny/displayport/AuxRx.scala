@@ -46,6 +46,10 @@ case class AuxRx(
   assert(
     ClockDomain.current.frequency.getValue >= 20.MHz,
     "AuxRx must be clocked at ≥20 MHz")
+  assert(
+    tolerance >= 0.1,
+    f"AuxRx tolerance ($tolerance) must be ≥0.1 to support DP spec " +
+      "0.4-0.6 µs unit interval range")
 
   val io = new Bundle {
     val read = in(Bool())

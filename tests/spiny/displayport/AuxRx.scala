@@ -170,6 +170,24 @@ class AuxRxSpec extends AnyFunSuite {
     }
   }
 
+  test("AuxRx should reject a clock it cannot oversample") {
+    assertThrows[AssertionError] {
+      SpinalConfig(
+        targetDirectory = ElaborationDir.path,
+        defaultClockDomainFrequency = FixedFrequency(19 MHz)
+      ).generateVerilog(AuxRx(dataRate = DataRate))
+    }
+  }
+
+  test("AuxRx should reject a tolerance that cannot support the UI range") {
+    assertThrows[AssertionError] {
+      SpinalConfig(
+        targetDirectory = ElaborationDir.path,
+        defaultClockDomainFrequency = FixedFrequency(100 MHz)
+      ).generateVerilog(AuxRx(dataRate = DataRate, tolerance = 0.08))
+    }
+  }
+
   test("AuxRx should abort when readEnable deasserts") {
     SpinySimConfig("AuxRx_ReadEnableAbort", 100 MHz)
       .compile(AuxRx(dataRate = DataRate))
