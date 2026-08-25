@@ -77,12 +77,14 @@ class AuxRxSpec extends AnyFunSuite {
           }
 
           dut.io.readEnable #= true
+          val errors = AuxRxErrorMonitor(dut)
           val driver = AuxRxDriver(dut.io.read)
           for (packet <- Packets) {
             driver.packet(packet)
           }
           sleep(1 us)
           checkerThread.join()
+          errors.assertNone("receiving good packets")
         }
     }
 
@@ -197,6 +199,71 @@ class AuxRxSpec extends AnyFunSuite {
         checkerThread.join()
       }
   }
+
+  // dropped packets must be reported, otherwise the layer above cannot
+  // tell a corrupt reply from one that is still on its way
+  for ((name, corrupt) <- Seq[(String, AuxRxDriver => Unit)](
+    ("stopped mid byte", { driver =>
+      driver.data(0xde)
+      // three bits is not a whole byte
+      driver.bit(true)
+      driver.bit(false)
+      driver.bit(true)
+    }),
+    ("sent no data", { driver => }),
+    ("sent malformed interval", { driver =>
+      driver.data(0xde)
+      // neither a half bit nor a whole bit, so it decodes as nothing
+      driver.auxRead #= false
+      sleep(AuxRxSpec.BitPeriod * 0.75)
+      driver.auxRead #= true
+      sleep(AuxRxSpec.BitPeriod * 0.75)
+    })
+  )) {
+    test(f"AuxRx should report an error when the source $name") {
+      SpinySimConfig(f"AuxRx_Error_${name.replace(' ', '_')}", 100 MHz)
+        .compile(AuxRx(dataRate = DataRate))
+        .doSim { dut =>
+          val dataTimeout = dut.clockDomain.cycles(400 us)
+          dut.clockDomain.forkStimulus()
+
+          var received = 0
+          fork {
+            while (true) {
+              dut.clockDomain.waitSampling()
+              if (dut.io.data.valid.toBoolean) {
+                received += 1
+              }
+            }
+          }
+
+          dut.io.readEnable #= true
+          val errors = AuxRxErrorMonitor(dut)
+          val driver = AuxRxDriver(dut.io.read)
+
+          driver.preCharge()
+          driver.sync()
+          driver.syncEnd()
+          corrupt(driver)
+          driver.stop()
+          sleep(AbortGap)
+
+          errors.assertOne(name)
+          assert(
+            received == 0,
+            s"AuxRx emitted $received byte(s) from a dropped packet"
+          )
+
+          // and the receiver recovers for the next packet
+          val checkerThread = fork {
+            AuxRxChecker(dut, dataTimeout).checkPacket(Packets.head)
+          }
+          driver.packet(Packets.head)
+          sleep(1 us)
+          checkerThread.join()
+        }
+    }
+  }
 }
 
 case class AuxRxDriver(
@@ -270,6 +337,44 @@ case class AuxRxDriver(
     syncEnd()
     data(bytes)
     stop()
+  }
+}
+
+object AuxRxErrorMonitor {
+  def apply(auxRx: AuxRx): AuxRxErrorMonitor = {
+    AuxRxErrorMonitor(
+      error = auxRx.io.error,
+      clockDomain = auxRx.clockDomain
+    )
+  }
+
+  def apply(auxPhy: AuxPhy): AuxRxErrorMonitor = {
+    AuxRxErrorMonitor(
+      error = auxPhy.io.rxError,
+      clockDomain = auxPhy.clockDomain
+    )
+  }
+}
+
+/** Counts error pulses in the background, from construction onwards */
+case class AuxRxErrorMonitor(error: Bool, clockDomain: ClockDomain) {
+  var count = 0
+
+  fork {
+    while (true) {
+      clockDomain.waitSampling()
+      if (error.toBoolean) {
+        count += 1
+      }
+    }
+  }
+
+  def assertNone(whileDoing: String) {
+    assert(count == 0, s"AuxRx raised $count error(s) while $whileDoing")
+  }
+
+  def assertOne(whileDoing: String) {
+    assert(count == 1, s"AuxRx raised $count error(s) while $whileDoing, expected 1")
   }
 }
 

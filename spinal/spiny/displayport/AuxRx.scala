@@ -51,6 +51,8 @@ case class AuxRx(
     val read = in(Bool())
     val readEnable = in(Bool())
     val data = master(Flow(Fragment(Bits(8 bits))))
+    // pulse on error and packet is dropped (e.g. for user retry or abort logic)
+    val error = out(Bool())
   }
 
   val ratio = ClockDomain.current.frequency.getValue / dataRate
@@ -99,6 +101,7 @@ case class AuxRx(
   io.data.fragment.setAsReg()
   io.data.last := False
   io.data.valid := False
+  io.error := False
 
   val fsm = new StateMachine {
     always {
@@ -151,12 +154,15 @@ case class AuxRx(
       }
       whenIsActive {
         when(isStop) {
-          when(isDataLatched) {
-            // this must be the last byte
+          when(isDataLatched && bitCounter === 0) {
+            // whole bytes only, so this must be the last one
             io.data.valid := True
             io.data.last := True
-            isDataLatched := False
+          } otherwise {
+            // stopped mid-byte, or sync ended with no data at all
+            io.error := True
           }
+          isDataLatched := False
 
           // packet is done (2 µs without edge)
           goto(stateStop)
@@ -184,8 +190,11 @@ case class AuxRx(
             // edge arrived early or is a bounce
             // do nothing
           } otherwise {
-            // glitch, abort
-            goto(stateIdle)
+            // interval matches nothing valid, so the packet is corrupt.
+            // Wait out the rest of it rather than re-hunting straight away,
+            // which would read the trailing stop as another sync end.
+            io.error := True
+            goto(stateStop)
           }
 
           when(isValidBit) {

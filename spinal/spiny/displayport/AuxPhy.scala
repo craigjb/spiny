@@ -43,6 +43,7 @@ case class AuxPhy(
     val aux = master(TriState(Bool()))
     val txData = slave(Stream(Fragment(Bits(8 bits))))
     val rxData = master(Flow(Fragment(Bits(8 bits))))
+    val rxError = out(Bool())
   }
 
   val tx = AuxTx(dataRate = dataRate)
@@ -54,5 +55,6 @@ case class AuxPhy(
   rx.io.read := io.aux.read
   rx.io.readEnable := !tx.io.writeEnable
   rx.io.data >> io.rxData
+  io.rxError := rx.io.error
 }
 
