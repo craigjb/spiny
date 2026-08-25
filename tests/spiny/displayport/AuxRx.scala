@@ -41,6 +41,8 @@ import spiny.SimClockDomainExt._
 object AuxRxSpec {
   // long enough for the receiver to see the line as stopped
   val AbortGap = 10 us
+  // jitter and glitches are random, so try a few seeds of each
+  val RngSeeds = Seq(12345, 23456, 34567, 45678)
   val Packets = Seq(
     Seq(0xde, 0xad, 0xbe, 0xef),
     Seq(0xa, 0xb, 0xc, 0xd, 0xe, 0xf),
@@ -82,9 +84,11 @@ class AuxRxSpec extends AnyFunSuite {
     }
 
     test(f"AuxRx should handle 30 ns jitter @ $clockFreq%s") {
-      SpinySimConfig("AuxRx_Jitter", clockFreq)
+      // compiled once, so extra seeds cost a simulation but not a build
+      val compiled = SpinySimConfig("AuxRx_Jitter", clockFreq)
         .compile(AuxRx(dataRate = DataRate))
-        .doSim { dut =>
+      for (rngSeed <- RngSeeds) {
+        compiled.doSim(f"seed_$rngSeed") { dut =>
           val dataTimeout = dut.clockDomain.cycles(400 us)
           dut.clockDomain.forkStimulus()
 
@@ -96,13 +100,17 @@ class AuxRxSpec extends AnyFunSuite {
           }
 
           dut.io.readEnable #= true
-          val driver = AuxRxDriver(dut.io.read, maxJitter = 30 ns)
+          val errors = AuxRxErrorMonitor(dut)
+          val driver = AuxRxDriver(
+            dut.io.read, maxJitter = 30 ns, rngSeed = rngSeed)
           for (packet <- Packets) {
             driver.packet(packet)
           }
           sleep(1 us)
           checkerThread.join()
+          errors.assertNone(s"receiving jittered packets with seed $rngSeed")
         }
+      }
     }
   }
 
@@ -114,9 +122,10 @@ class AuxRxSpec extends AnyFunSuite {
     val maxGlitch = ((clockFreq.toTime * maxEdgesAllowed) - (0.1 ns))
 
     test(f"AuxRx should handle glitches <$maxGlitch%.2s @ $clockFreq%s") {
-      SpinySimConfig("AuxRx_Glitches", clockFreq)
+      val compiled = SpinySimConfig("AuxRx_Glitches", clockFreq)
         .compile(AuxRx(dataRate = DataRate))
-        .doSim { dut =>
+      for (rngSeed <- RngSeeds) {
+        compiled.doSim(f"seed_$rngSeed") { dut =>
           val dataTimeout = dut.clockDomain.cycles(400 us)
           dut.clockDomain.forkStimulus()
 
@@ -128,14 +137,16 @@ class AuxRxSpec extends AnyFunSuite {
           }
 
           dut.io.readEnable #= true
-          val driver = AuxRxDriver(dut.io.read, maxGlitch)
+          val errors = AuxRxErrorMonitor(dut)
+          val driver = AuxRxDriver(dut.io.read, maxGlitch, rngSeed = rngSeed)
           for (packet <- Packets) {
             driver.packet(packet)
           }
           sleep(1 us)
           checkerThread.join()
-
+          errors.assertNone(s"receiving glitched packets with seed $rngSeed")
         }
+      }
     }
   }
 
