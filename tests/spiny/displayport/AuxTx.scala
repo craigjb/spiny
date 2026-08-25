@@ -40,6 +40,14 @@ import spiny.SimClockDomainExt._
 
 object AuxTxSpec {
   val PacketGap = 10 us
+  val Packets = Seq(
+    Seq(0xde, 0xad, 0xbe, 0xef),
+    Seq(0xa, 0xb, 0xc, 0xd, 0xe, 0xf),
+    Seq(0xab),
+    // all zeros encodes the same as sync, all ones is the other extreme
+    Seq(0x00, 0xff, 0x00, 0xff),
+    Seq(0xff, 0x00, 0xff, 0x00)
+  )
 }
 
 class AuxTxSpec extends AnyFunSuite {
@@ -52,18 +60,12 @@ class AuxTxSpec extends AnyFunSuite {
         .compile(AuxTx(dataRate = DataRate))
         .doSim { dut =>
           val timeout = dut.clockDomain.cycles(400 us)
-          val packets = Seq(
-            Seq(0xde, 0xad, 0xbe, 0xef),
-            Seq(0xa, 0xb, 0xc, 0xd, 0xe, 0xf),
-            Seq(0xab)
-          )
-
           dut.clockDomain.forkStimulus()
 
           val checkerThread = fork {
             dut.clockDomain.waitSampling()
             val checker = AuxTxChecker(dut)
-            for ((packet, i) <- packets.zipWithIndex) {
+            for ((packet, i) <- Packets.zipWithIndex) {
               SpinalInfo(s"Checking packet $i")
               checker.checkPacket(packet)
             }
@@ -72,7 +74,7 @@ class AuxTxSpec extends AnyFunSuite {
           val errors = AuxTxErrorMonitor(dut)
           val driver = AuxTxDriver(dut, timeout)
           dut.clockDomain.waitSampling(10)
-          for (packet <- packets) {
+          for (packet <- Packets) {
             driver.write(packet)
             dut.clockDomain.waitSamplingWhereOrFail(
                 timeout, "writeEnable to drop"
