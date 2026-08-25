@@ -38,7 +38,7 @@ import spinal.core._
 import spinal.core.sim._
 
 import spiny._
-import spinal.lib.IntRicher
+import spinal.lib.{Flow, Fragment, IntRicher}
 import spiny.displayport.AuxTxSpec.BitPeriod
 
 object AuxRxSpec {
@@ -74,7 +74,8 @@ class AuxRxSpec extends AnyFunSuite {
             }
           }
 
-          val driver = AuxRxDriver(dut)
+          dut.io.readEnable #= true
+          val driver = AuxRxDriver(dut.io.read)
           for (packet <- Packets) {
             driver.packet(packet)
           }
@@ -96,7 +97,8 @@ class AuxRxSpec extends AnyFunSuite {
             }
           }
 
-          val driver = AuxRxDriver(dut, maxJitter = 30 ns)
+          dut.io.readEnable #= true
+          val driver = AuxRxDriver(dut.io.read, maxJitter = 30 ns)
           for (packet <- Packets) {
             driver.packet(packet)
           }
@@ -128,7 +130,8 @@ class AuxRxSpec extends AnyFunSuite {
             }
           }
 
-          val driver = AuxRxDriver(dut, maxGlitch)
+          dut.io.readEnable #= true
+          val driver = AuxRxDriver(dut.io.read, maxGlitch)
           for (packet <- Packets) {
             driver.packet(packet)
           }
@@ -141,13 +144,12 @@ class AuxRxSpec extends AnyFunSuite {
 }
 
 case class AuxRxDriver(
-  dut: AuxRx,
+  auxRead: Bool,
   maxGlitch: TimeNumber = 0 ns,
   maxJitter: TimeNumber = 0 ns,
   rngSeed: Int = 12345
 ) {
   val rng = new Random(rngSeed)
-  dut.io.readEnable #= true
 
   def bit(value: Boolean, period: TimeNumber = AuxRxSpec.BitPeriod) {
     val glitchStart = (period * rng.nextDouble())
@@ -174,7 +176,7 @@ case class AuxRxDriver(
       time = edgeTime
       val idealValue = if (time < midBit) value else !value
       val isGlitched = time >= glitchStart && time < glitchEnd
-      dut.io.read #= (if (isGlitched) !idealValue else idealValue)
+      auxRead #= (if (isGlitched) !idealValue else idealValue)
     }
     sleep(((period + jitterEnd) - time).max(0.ns))
   }
@@ -215,18 +217,32 @@ case class AuxRxDriver(
   }
 }
 
-case class AuxRxChecker(dut: AuxRx, dataTimeout: Int) {
+object AuxRxChecker {
+  def apply(auxRx: AuxRx, dataTimeout: Int): AuxRxChecker = {
+    AuxRxChecker(
+      rxData = auxRx.io.data,
+      dataTimeout = dataTimeout,
+      clockDomain = auxRx.clockDomain
+    )
+  }
+}
+
+case class AuxRxChecker(
+  rxData: Flow[Fragment[Bits]],
+  dataTimeout: Int,
+  clockDomain: ClockDomain
+) {
   def checkByte(expected: Int, last: Boolean, index: Int) {
-    dut.clockDomain.waitSamplingWhere(dataTimeout)(dut.io.data.valid.toBoolean)
-    val value = dut.io.data.fragment.toInt
+    clockDomain.waitSamplingWhere(dataTimeout)(rxData.valid.toBoolean)
+    val value = rxData.fragment.toInt
     assert(
       value == expected,
       s"data[$index] should be 0x${expected.hexString()}, but saw 0x${value.hexString()}"
     )
     if (last) {
-      assert(dut.io.data.last.toBoolean, s"data[$index] should be last")
+      assert(rxData.last.toBoolean, s"data[$index] should be last")
     } else {
-      assert(!dut.io.data.last.toBoolean, s"data[$index] should not be last")
+      assert(!rxData.last.toBoolean, s"data[$index] should not be last")
     }
   }
 

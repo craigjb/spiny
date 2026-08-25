@@ -35,6 +35,7 @@ import scala.collection.mutable
 import org.scalatest.funsuite.AnyFunSuite
 import spinal.core._
 import spinal.core.sim._
+import spinal.lib.{Stream, Fragment}
 
 import spiny._
 
@@ -147,15 +148,29 @@ class AuxTxSpec extends AnyFunSuite {
   }
 }
 
-case class AuxTxDriver(dut: AuxTx, timeout: Int) {
-  dut.io.data.valid #= false
+object AuxTxDriver {
+  def apply(auxTx: AuxTx, timeout: Int): AuxTxDriver = {
+    AuxTxDriver(
+      txData = auxTx.io.data,
+      timeout = timeout,
+      clockDomain = auxTx.clockDomain
+    )
+  }
+}
+
+case class AuxTxDriver(
+  txData: Stream[Fragment[Bits]],
+  timeout: Int,
+  clockDomain: ClockDomain
+) {
+  txData.valid #= false
 
   def write(byte: Int, last: Boolean) {
-    dut.io.data.fragment #= byte
-    dut.io.data.last #= last
-    dut.io.data.valid #= true
-    dut.clockDomain.waitSamplingWhere(timeout)(dut.io.data.ready.toBoolean)
-    dut.io.data.valid #= false
+    txData.fragment #= byte
+    txData.last #= last
+    txData.valid #= true
+    clockDomain.waitSamplingWhere(timeout)(txData.ready.toBoolean)
+    txData.valid #= false
   }
 
   def write(bytes: Seq[Int]) {
@@ -166,104 +181,118 @@ case class AuxTxDriver(dut: AuxTx, timeout: Int) {
   }
 }
 
-case class AuxTxChecker(dut: AuxTx) {
-  val clocksPerHalfBit = dut.phaseTick.stateCount.toInt
+object AuxTxChecker {
+  def apply(auxTx: AuxTx): AuxTxChecker = {
+    AuxTxChecker(
+      auxWrite = auxTx.io.write,
+      auxWriteEnable = auxTx.io.writeEnable,
+      clocksPerHalfBit = auxTx.phaseTick.stateCount.toInt,
+      clockDomain = auxTx.clockDomain
+    )
+  }
+}
 
+case class AuxTxChecker(
+  auxWrite: Bool,
+  auxWriteEnable: Bool,
+  clocksPerHalfBit: Int,
+  clockDomain: ClockDomain
+) {
   def checkPreCharge() {
     for (i <- 0 until 16) {
       assert(
-        dut.io.write.toBoolean == false,
+        auxWrite.toBoolean == false,
         s"precharge bit $i first half should be low"
       )
-      dut.clockDomain.waitSampling(clocksPerHalfBit)
+      clockDomain.waitSampling(clocksPerHalfBit)
       assert(
-        dut.io.write.toBoolean == true,
+        auxWrite.toBoolean == true,
         s"precharge bit $i second half should be high"
       )
-      dut.clockDomain.waitSampling(clocksPerHalfBit)
+      clockDomain.waitSampling(clocksPerHalfBit)
     }
   }
 
   def checkSync() {
     for (i <- 0 until 16) {
       assert(
-        dut.io.write.toBoolean == false,
+        auxWrite.toBoolean == false,
         s"sync bit $i first half should be low"
       )
-      dut.clockDomain.waitSampling(clocksPerHalfBit)
+      clockDomain.waitSampling(clocksPerHalfBit)
       assert(
-        dut.io.write.toBoolean == true,
+        auxWrite.toBoolean == true,
         s"sync bit $i second half should be high"
       )
-      dut.clockDomain.waitSampling(clocksPerHalfBit)
+      clockDomain.waitSampling(clocksPerHalfBit)
     }
   }
 
   def checkSyncEnd() {
     for (i <- 0 until 2) {
       assert(
-        dut.io.write.toBoolean == true,
+        auxWrite.toBoolean == true,
         s"sync end bit $i should stay high for first and second half"
       )
-      dut.clockDomain.waitSampling(clocksPerHalfBit)
+      clockDomain.waitSampling(clocksPerHalfBit)
       assert(
-        dut.io.write.toBoolean == true,
+        auxWrite.toBoolean == true,
         s"sync end bit $i should stay high for first and second half"
       )
-      dut.clockDomain.waitSampling(clocksPerHalfBit)
+      clockDomain.waitSampling(clocksPerHalfBit)
     }
     for (i <- 0 until 2) {
       assert(
-        dut.io.write.toBoolean == false,
+        auxWrite.toBoolean == false,
         s"sync end bit $i should stay low for first and second half"
       )
-      dut.clockDomain.waitSampling(clocksPerHalfBit)
+      clockDomain.waitSampling(clocksPerHalfBit)
       assert(
-        dut.io.write.toBoolean == false,
+        auxWrite.toBoolean == false,
         s"sync end bit $i should stay low for first and second half"
       )
-      dut.clockDomain.waitSampling(clocksPerHalfBit)
+      clockDomain.waitSampling(clocksPerHalfBit)
     }
   }
 
   def checkStop() {
     for (i <- 0 until 2) {
       assert(
-        dut.io.write.toBoolean == true,
+        auxWrite.toBoolean == true,
         s"stop bit $i should stay high for first and second half"
       )
-      dut.clockDomain.waitSampling(clocksPerHalfBit)
+      clockDomain.waitSampling(clocksPerHalfBit)
       assert(
-        dut.io.write.toBoolean == true,
+        auxWrite.toBoolean == true,
         s"stop bit $i should stay high for first and second half"
       )
-      dut.clockDomain.waitSampling(clocksPerHalfBit)
+      clockDomain.waitSampling(clocksPerHalfBit)
     }
     for (i <- 0 until 2) {
       assert(
-        dut.io.write.toBoolean == false,
+        auxWrite.toBoolean == false,
         s"stop bit $i should stay low for first and second half"
       )
-      dut.clockDomain.waitSampling(clocksPerHalfBit)
+      clockDomain.waitSampling(clocksPerHalfBit)
       assert(
-        dut.io.write.toBoolean == false,
+        auxWrite.toBoolean == false,
         s"stop bit $i should stay low for first and second half"
       )
-      dut.clockDomain.waitSampling(clocksPerHalfBit)
+      clockDomain.waitSampling(clocksPerHalfBit)
     }
   }
 
   def checkBit(i: Int, value: Boolean) {
     assert(
-      dut.io.write.toBoolean == value,
+      auxWrite.toBoolean == value,
       s"data bit $i first half should be ${if (value) "high" else "low"}"
     )
-    dut.clockDomain.waitSampling(clocksPerHalfBit)
+    clockDomain.waitSampling(clocksPerHalfBit)
     assert(
-      dut.io.write.toBoolean == !value,
+      auxWrite.toBoolean == !value,
       s"data bit $i first half should be ${if (!value) "high" else "low"}"
     )
-    dut.clockDomain.waitSampling(clocksPerHalfBit)
+    clockDomain.waitSampling(clocksPerHalfBit)
   }
 
   def checkByte(byte: Int) {
@@ -280,8 +309,8 @@ case class AuxTxChecker(dut: AuxTx) {
   }
 
   def waitForPacketStart() {
-    waitUntil(dut.io.writeEnable.toBoolean)
-    dut.clockDomain.waitSampling(clocksPerHalfBit / 2)
+    waitUntil(auxWriteEnable.toBoolean)
+    clockDomain.waitSampling(clocksPerHalfBit / 2)
   }
 
   def checkPacket(bytes: Seq[Int]) {
