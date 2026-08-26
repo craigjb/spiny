@@ -37,17 +37,63 @@ import spinal.lib.fsm._
 
 import spiny._
 
-/** TX side of DisplayPort AUX channel */
+/** DisplayPort AUX channel transmitter IO
+ *
+ * @groupname ports SpinalHDL IO Ports
+ * @groupprio ports 0
+ */
+case class AuxTxIo() extends Bundle {
+  /** Input data stream to transmit
+   *
+   *  @group ports
+   */
+  val data = slave(Stream(Fragment(Bits(8 bits))))
+
+  /** Output AUX channel write wire
+   *
+   *  Connect to the write input of a differential IO buffer
+   *  (or TriState.write)
+   *  @group ports
+   */
+  val write = out(Bool())
+
+  /** Output to disable tristate for writes to AUX channel
+   *
+   *  Connect to the write enable input of a differential IO buffer
+   *  (or TriState.writeEnable)
+   *  @group ports
+   */
+  val writeEnable = out(Bool())
+
+  /** Output error pulse
+   *
+   *  Asserts for a single cycle on error and packet is dropped
+   *  (can be used for retry logic). The input data Stream must be reset when
+   *  this error pulse is asserted (e.g. clear the TX FIFO). AuxTx does not
+   *  drain the aborted packet, and will start transmitting the remaining data
+   *  as a new packet if not cleared.
+   *  @group ports
+   */
+  val error = out(Bool())
+}
+
+/** DisplayPort AUX channel transmitter
+ *  See [[AuxPhy]] for details
+ *
+ * @param dataRate Serial data rate (1 Mbps nominal, ~0.84-1.25 Mbps allowable).
+ *                 Sets the transmitted bit period directly. The resulting unit
+ *                 interval, which is half a bit period rounded up to a whole
+ *                 number of clocks, must land in the 0.4-0.6 µs of Table 3-3 or
+ *                 elaboration fails.
+ *
+ * @groupname ports SpinalHDL IO Ports
+ * @groupprio ports 0
+ */
 case class AuxTx(dataRate: HertzNumber = 1 MHz) extends Component {
-  val io = new Bundle {
-    val data = slave(Stream(Fragment(Bits(8 bits))))
-    val write = out(Bool())
-    val writeEnable = out(Bool())
-    // pulse on error and packet is dropped (e.g. for user retry or abort logic)
-    // note: remainder of the data Flow is not consumed and  must be
-    // reset by producer on error or another packet will start
-    val error = out(Bool())
-  }
+  /** SpinalHDL IO ports
+   *  @group ports */
+  val io = AuxTxIo()
+
   io.write.setAsReg().init(False)
   io.writeEnable.setAsReg().init(False)
   io.data.ready := False

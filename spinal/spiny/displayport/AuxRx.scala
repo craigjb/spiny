@@ -37,7 +37,63 @@ import spinal.lib.fsm._
 
 import spiny._
 
-/** RX side of DisplayPort AUX channel */
+/** DisplayPort AUX channel receiver IO
+ *
+ * @groupname ports SpinalHDL IO Ports
+ * @groupprio ports 0
+ */
+case class AuxRxIo() extends Bundle {
+  /** Input AUX channel read wire
+   *
+   *  Connect this to the read port of a differential IO buffer
+   *  (or TriState.read)
+   *  @group ports
+   */
+  val read = in(Bool())
+
+  /** Input read enable
+   *
+   *  Packets will not be read when deasserted. Packets in progress will
+   *  be dropped when deasserted. Typically this is the inverse of
+   *  writeEnable from AuxTx.
+   *  @group ports
+   */
+  val readEnable = in(Bool())
+
+  /** Output received data
+   *
+   *  Must be read when valid or data can be dropped.
+   *  @group ports
+   */
+  val data = master(Flow(Fragment(Bits(8 bits))))
+  
+  /** Output error pulse
+   *
+   *  Asserts for a single cycle on RX error when packet is dropped
+   *  (can be used for retry logic). Previously read data must be discarded.
+   *  @group ports
+   */
+  val error = out(Bool())
+}
+
+/** DisplayPort AUX channel receiver
+ *
+ *  See [[AuxPhy]] for details
+ *
+ * @param dataRate Expected serial data rate (1 Mbps nominal). Unlike [[AuxTx]]
+ *                 this only sets the nominal rate the half bit acquisition
+ *                 window is centred on. The actual rate is measured from the
+ *                 sync pulses of each packet, so a source anywhere in the
+ *                 0.4-0.6 µs unit interval range of Table 3-3 is decoded.
+ *
+ * @param filterWindow Width of the majority vote glitch filter
+ *                     (50 ns nominal). Needs at least three clocks to fit,
+ *                     so the filter is bypassed below about 60 MHz. Widening
+ *                     it rejects longer glitches but eats into signal margin.
+ *
+ * @groupname ports SpinalHDL IO Ports
+ * @groupprio ports 0
+ */
 case class AuxRx(
   dataRate: HertzNumber = 1 MHz,
   tolerance: BigDecimal = 0.15,
@@ -51,13 +107,9 @@ case class AuxRx(
     f"AuxRx tolerance ($tolerance) must be ≥0.1 to support DP spec " +
       "0.4-0.6 µs unit interval range")
 
-  val io = new Bundle {
-    val read = in(Bool())
-    val readEnable = in(Bool())
-    val data = master(Flow(Fragment(Bits(8 bits))))
-    // pulse on error and packet is dropped (e.g. for user retry or abort logic)
-    val error = out(Bool())
-  }
+  /** SpinalHDL IO ports
+   *  @group ports */
+  val io = AuxRxIo()
 
   val ratio = ClockDomain.current.frequency.getValue / dataRate
   // calculate and round each one separately to avoid cascading rounding error
@@ -272,6 +324,7 @@ object AuxRxFilter {
   }
 }
 
+/** Filter used internally by AuxRx to remove short glitches */
 case class AuxRxFilter(
   filterWindow: TimeNumber = AuxRxFilter.DefaultWindow
 ) extends Component {

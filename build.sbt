@@ -28,7 +28,8 @@ lazy val spiny = (project in file("."))
       "org.scalatest" %% "scalatest" % "3.2.17" % Test
     ),
     Test / fork := true,
-    Test / testForkedParallel := true
+    Test / testForkedParallel := true,
+    Compile / doc / scalacOptions += "-groups"
   )
 
 // Example projects

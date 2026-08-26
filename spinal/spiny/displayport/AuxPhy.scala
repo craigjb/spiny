@@ -35,17 +35,95 @@ import spinal.core._
 import spinal.lib._
 import spinal.lib.io._
 
+/** DisplayPort AUX channel PHY IO ports
+ *
+ * @groupname ports SpinalHDL IO Ports
+ * @groupprio ports 0
+ */
+case class AuxPhyIo() extends Bundle {
+  /** TriState-able AUX channel
+   *
+   *  Connect this to differential IO buffers
+   *  @group ports
+   */
+  val aux = master(TriState(Bool()))
+
+  /** Input data stream to transmit
+   *
+   *  Fragment.last indicates the end of a packet. Transmission starts upon
+   *  first valid byte and is aborted if this stream underruns (indicated by
+   *  txError).
+   *  @group ports
+   */
+  val txData = slave(Stream(Fragment(Bits(8 bits))))
+
+  /** Output transmitter error pulse
+   *
+   *  Asserts for a single cycle on error and packet is dropped
+   *  (can be used for retry logic). The input txData Stream must be reset when
+   *  this error pulse is asserted (e.g. clear the TX FIFO). AuxTx does not
+   *  drain the aborted packet, and will start transmitting the remaining data
+   *  as a new packet if not cleared.
+   *  @group ports
+   */
+  val txError = out(Bool())
+
+  /** Output received data
+   *
+   *  Must be read when valid or data can be dropped. Fragment.last indicates
+   *  end of packet. On error, packets are aborted (indicated by rxError) and
+   *  Fragment.last may not be asserted.
+   *  @group ports
+   */
+  val rxData = master(Flow(Fragment(Bits(8 bits))))
+
+  /** Output receiver error pulse
+   *
+   *  Asserts for a single cycle on RX error when packet is dropped
+   *  (can be used for retry logic). Previously read data must be discarded.
+   *  @group ports
+   */
+  val rxError = out(Bool())
+}
+
+/** DisplayPort AUX channel PHY
+ *
+ * AuxPhy implements half-duplex, bidirectional serial communication using
+ * Manchester encoding at 1 Mbps per the DisplayPort 1.1 spec. This component
+ * is agnostic of the device-specific IO. Users must instantiate appropriate
+ * differential IO buffers for the AUX ports.
+ *
+ * The transmitter will assert txError when a packet is aborted due to data
+ * underrun. In this case, the input txData Stream must be reset (e.g. clear
+ * the upstream write FIFO), otherwise AuxPhy will start transmitting the 
+ * remaining data as a new packet.
+ *
+ * The receiver uses interval decoding and measures the source bit period
+ * during the preamble and sync portion of a packet. If the clock domain is
+ * fast enough (> 60 MHz), a majority vote filter also removes spurious edges
+ * from crosstalk or EMI. Since the receiver uses oversampling, the clock must
+ * be at least 20 MHz.
+ *
+ * @param dataRate Serial data rate (1 Mbps nominal, ~0.84-1.25 Mbps allowable).
+ *                 Table 3-3 allows a 0.4-0.6 µs unit interval, which is half a
+ *                 bit period, so the allowable rates are the reciprocals of a
+ *                 0.8-1.2 µs bit period. The half bit tick count is rounded up
+ *                 to the clock, so the exact limits shift a little with clock
+ *                 frequency and elaboration asserts on the quantized value.
+ *
+ * @param tolerance Tolerance for receiver interval decoding 
+ *                  (0.15 nominal, ≥0.1 required, see [[AuxRx]] for details)
+ *
+ * @groupname ports SpinalHDL IO Ports
+ * @groupprio ports 0
+ */
 case class AuxPhy(
   dataRate: HertzNumber = 1 MHz,
   tolerance: BigDecimal = 0.15
 ) extends Component {
-  val io = new Bundle {
-    val aux = master(TriState(Bool()))
-    val txData = slave(Stream(Fragment(Bits(8 bits))))
-    val rxData = master(Flow(Fragment(Bits(8 bits))))
-    val txError = out(Bool())
-    val rxError = out(Bool())
-  }
+  /** SpinalHDL IO ports
+   *  @group ports */
+  val io = AuxPhyIo()
 
   val tx = AuxTx(dataRate = dataRate)
   io.txData >> tx.io.data
