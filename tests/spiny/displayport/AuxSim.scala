@@ -42,7 +42,10 @@ import spiny.SimClockDomainExt._
 
 /** Constants shared by AUX tests */
 object AuxSim {
-  val ClockFreqs = Seq(20 MHz, 20.33 MHz, 21.3 MHz, 25.3 MHz, 66.6 MHz, 100 MHz)
+  // at the nominal 1 Mbps these are also the oversampling ratios, so the
+  // lowest is AuxRx.MinOversampling. The odd ones are deliberate, to keep
+  // the clocks-per-bit rounding awkward.
+  val ClockFreqs = Seq(32 MHz, 33.33 MHz, 41.7 MHz, 50 MHz, 66.6 MHz, 100 MHz)
   val DataRate = 1 MHz
   val BitPeriod = DataRate.toTime
   val SyncBits = 16

@@ -76,6 +76,24 @@ case class AuxRxIo() extends Bundle {
   val error = out(Bool())
 }
 
+object AuxRx {
+  /** Width of the half bit window, as a fraction of a bit period
+    *
+    *  Determined empirically by sweeping tolerance against clock frequency
+    *  over the 0.4-0.6 µs unit interval range of Table 3-3. Only a narrow
+    *  band of values decodes the whole range, and the band shifts with the
+    *  oversampling ratio.
+    */
+  val Tolerance = BigDecimal(0.19)
+
+  /** Minimum clock cycles per bit period
+    *
+    *  Below this the interval windows quantize too coarsely to cover the
+    *  whole unit interval range.
+    */
+  val MinOversampling = 32
+}
+
 /** DisplayPort AUX channel receiver
  *
  *  See [[AuxPhy]] for details
@@ -85,6 +103,10 @@ case class AuxRxIo() extends Bundle {
  *                 window is centred on. The actual rate is measured from the
  *                 sync pulses of each packet, so a source anywhere in the
  *                 0.4-0.6 µs unit interval range of Table 3-3 is decoded.
+ *
+ *                 The clock must supply at least
+ *                 [[AuxRx.MinOversampling]] cycles per bit period, so
+ *                 raising the data rate also raises the required clock.
  *
  * @param filterWindow Width of the majority vote glitch filter
  *                     (50 ns nominal). Needs at least three clocks to fit,
@@ -96,26 +118,23 @@ case class AuxRxIo() extends Bundle {
  */
 case class AuxRx(
   dataRate: HertzNumber = 1 MHz,
-  tolerance: BigDecimal = 0.15,
   filterWindow: TimeNumber = AuxRxFilter.DefaultWindow
 ) extends Component {
+  val ratio = ClockDomain.current.frequency.getValue / dataRate
   assert(
-    ClockDomain.current.frequency.getValue >= 20.MHz,
-    "AuxRx must be clocked at ≥20 MHz")
-  assert(
-    tolerance >= 0.1,
-    f"AuxRx tolerance ($tolerance) must be ≥0.1 to support DP spec " +
-      "0.4-0.6 µs unit interval range")
+    ratio >= AuxRx.MinOversampling,
+    f"AuxRx needs ≥${AuxRx.MinOversampling} clocks per bit, but $dataRate%s " +
+      f"on a ${ClockDomain.current.frequency.getValue}%s clock gives $ratio%.1f")
 
   /** SpinalHDL IO ports
    *  @group ports */
   val io = AuxRxIo()
 
-  val ratio = ClockDomain.current.frequency.getValue / dataRate
   // calculate and round each one separately to avoid cascading rounding error
   val clocksPerBit = ratio.setScale(0, BigDecimal.RoundingMode.HALF_UP).toInt
   val clocksPerHalfBit = (ratio / 2).setScale(0, BigDecimal.RoundingMode.HALF_UP).toInt
-  val clocksPerTol = (tolerance * ratio).setScale(0, BigDecimal.RoundingMode.HALF_UP).toInt
+  val clocksPerTol =
+    (AuxRx.Tolerance * ratio).setScale(0, BigDecimal.RoundingMode.HALF_UP).toInt
 
   // synchronize external input
   val readSynced = BufferCC(io.read, init = False)

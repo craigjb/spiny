@@ -150,10 +150,12 @@ class AuxRxSpec extends AnyFunSuite {
 
   // Per Table 3-3 a source may use any unit interval from 0.4 to 0.6 µs, so
   // the receiver measures the rate from the sync pulses rather than assuming
-  // the nominal one. These are the extremes the spec allows, plus the middle.
-  for (unitInterval <- Seq(0.40 us, 0.45 us, 0.50 us, 0.55 us, 0.60 us)) {
-    test(f"AuxRx should decode a source at $unitInterval%.0s UI") {
-      SpinySimConfig(f"AuxRx_UnitInterval_$unitInterval%.0S", 100 MHz)
+  // the nominal one. Sweep against clock frequency, because the fixed
+  // AuxRx.Tolerance only covers the whole range at some oversampling ratios.
+  for (clockFreq <- ClockFreqs;
+       unitInterval <- Seq(0.40 us, 0.45 us, 0.50 us, 0.55 us, 0.60 us)) {
+    test(f"AuxRx should decode a source at $unitInterval%.0s UI @ $clockFreq%s") {
+      SpinySimConfig(f"AuxRx_UI_$unitInterval%.0S", clockFreq)
         .compile(AuxRx(dataRate = DataRate))
         .doSim { dut =>
           val dataTimeout = dut.clockDomain.cycles(400 us)
@@ -179,21 +181,24 @@ class AuxRxSpec extends AnyFunSuite {
     }
   }
 
+  // the requirement is clocks per bit, not an absolute frequency, so a fast
+  // clock is still rejected if the data rate outruns it
   test("AuxRx should reject a clock it cannot oversample") {
     assertThrows[AssertionError] {
       SpinalConfig(
         targetDirectory = ElaborationDir.path,
-        defaultClockDomainFrequency = FixedFrequency(19 MHz)
+        defaultClockDomainFrequency = FixedFrequency(31 MHz)
       ).generateVerilog(AuxRx(dataRate = DataRate))
     }
   }
 
-  test("AuxRx should reject a tolerance that cannot support the UI range") {
+  test("AuxRx should reject a data rate that outruns the clock") {
     assertThrows[AssertionError] {
+      // 50 MHz is plenty on its own, but only 25 clocks per bit at 2 Mbps
       SpinalConfig(
         targetDirectory = ElaborationDir.path,
-        defaultClockDomainFrequency = FixedFrequency(100 MHz)
-      ).generateVerilog(AuxRx(dataRate = DataRate, tolerance = 0.08))
+        defaultClockDomainFrequency = FixedFrequency(50 MHz)
+      ).generateVerilog(AuxRx(dataRate = 2 MHz))
     }
   }
 

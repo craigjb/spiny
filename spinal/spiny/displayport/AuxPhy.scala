@@ -102,7 +102,8 @@ case class AuxPhyIo() extends Bundle {
  * during the preamble and sync portion of a packet. If the clock domain is
  * fast enough (> 60 MHz), a majority vote filter also removes spurious edges
  * from crosstalk or EMI. Since the receiver uses oversampling, the clock must
- * be at least 20 MHz.
+ * supply at least [[AuxRx.MinOversampling]] cycles per bit period, which is
+ * 32 MHz at the nominal 1 Mbps.
  *
  * @param dataRate Serial data rate (1 Mbps nominal, ~0.84-1.25 Mbps allowable).
  *                 Table 3-3 allows a 0.4-0.6 µs unit interval, which is half a
@@ -111,15 +112,11 @@ case class AuxPhyIo() extends Bundle {
  *                 to the clock, so the exact limits shift a little with clock
  *                 frequency and elaboration asserts on the quantized value.
  *
- * @param tolerance Tolerance for receiver interval decoding 
- *                  (0.15 nominal, ≥0.1 required, see [[AuxRx]] for details)
- *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
  */
 case class AuxPhy(
-  dataRate: HertzNumber = 1 MHz,
-  tolerance: BigDecimal = 0.15
+  dataRate: HertzNumber = 1 MHz
 ) extends Component {
   /** SpinalHDL IO ports
    *  @group ports */
@@ -131,7 +128,7 @@ case class AuxPhy(
   io.aux.writeEnable := tx.io.writeEnable
   io.txError := tx.io.error
 
-  val rx = AuxRx(dataRate = dataRate, tolerance = tolerance)
+  val rx = AuxRx(dataRate = dataRate)
   rx.io.read := io.aux.read
   rx.io.readEnable := !tx.io.writeEnable
   rx.io.data >> io.rxData
