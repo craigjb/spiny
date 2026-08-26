@@ -43,6 +43,12 @@ object SpinySimConfig {
       // sbt clean will clean-up simWorkspace now
       .workspacePath("target/simWorkspace")
       .workspaceName(testName)
+      // One verilator cache per suite. SpinalHDL sorts the whole cache by
+      // lastModified on every compile, which throws "Comparison method
+      // violates its general contract" when a parallel suite writes an entry
+      // mid-sort. Suites run their own tests serially, so a cache per suite
+      // means nothing else is modifying the directory being sorted.
+      .cachePath(s"target/simWorkspace/.cache/${testName.takeWhile(_ != '_')}")
   }
 
   // same, but for tests repeated at multiple clock frequencies.
