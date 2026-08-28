@@ -48,9 +48,11 @@ class DpTest() extends Component {
     val UNUSED_P = in(Bool())
     val UNUSED_N = in(Bool())
 
-    val DBG_AUX_WRITE = out(Bool())
+    // four PMOD debug signals, plus the byte bus
     val DBG_AUX_READ = out(Bool())
-    val DBG_VALID = out(Bool())
+    val DBG_AUX_WRITE_EN = out(Bool())
+    val DBG_BUSY = out(Bool())
+    val DBG_DATA_CLK = out(Bool())
     val DBG_DATA = out(Bits(8 bits))
   }
 
@@ -79,20 +81,37 @@ class DpTest() extends Component {
     val leds = Reg(Bits(8 bits)) init(B"8'0")
     io.LEDS := leds
 
+    val auxLink = AuxLinkSource(maxTimeout = 1 ms, retryLimit = 7)
+    auxLink.io.phy <> auxPhy.io.data
+    auxLink.io.replyTimeout := AuxLinkSource.timeoutCycles(300 us)
+    auxLink.io.maxRetries := 7
+
     // native AUX read of 16 bytes from 0x00000
     val auxRequest = Seq(0x90, 0x00, 0x00, 0x0f)
     val requestBytes = Vec(auxRequest.map(b => B(b, 8 bits)))
     val txIndex = Reg(UInt(log2Up(auxRequest.length) bits)) init(0)
     val rxIndex = Reg(UInt(8 bits)) init(0)
 
-    auxPhy.io.data.txData.valid := False
-    auxPhy.io.data.txData.fragment := requestBytes(txIndex)
-    auxPhy.io.data.txData.last := txIndex === (auxRequest.length - 1)
+    auxLink.io.request.valid := False
+    auxLink.io.request.payload := requestBytes(txIndex)
+    auxLink.io.start := False
+    auxLink.io.reply.ready := False
+
+    val dbgBytePeriod = 1 us
+    val dbgByteCycles =
+      (dbgBytePeriod.toBigDecimal *
+        ClockDomain.current.frequency.getValue.toBigDecimal)
+        .setScale(0, BigDecimal.RoundingMode.CEILING)
+        .toInt
+    val dbgCounter = Counter(dbgByteCycles)
+    val dbgData = Reg(Bits(8 bits)) init (B"8'0")
+    val dbgDataValid = Reg(Bool()) init (False)
 
     io.DBG_AUX_READ := auxIoBuf.O
-    io.DBG_AUX_WRITE := auxPhy.io.aux.write && auxPhy.io.aux.writeEnable
-    io.DBG_DATA := auxPhy.io.data.rxData.fragment
-    io.DBG_VALID := auxPhy.io.data.rxData.valid
+    io.DBG_AUX_WRITE_EN := auxPhy.io.aux.writeEnable
+    io.DBG_BUSY := auxLink.io.busy
+    io.DBG_DATA := dbgData
+    io.DBG_DATA_CLK := dbgDataValid && dbgCounter >= (dbgByteCycles / 2)
 
     val settleDelay = Timeout(5 ms)
 
@@ -122,15 +141,16 @@ class DpTest() extends Component {
         }
       }
 
+      // load the request into the replay buffer, a byte at a time
       val stateRequest: State = new State {
         onEntry {
           txIndex := 0
         }
         whenIsActive {
-          auxPhy.io.data.txData.valid := True
-          when(auxPhy.io.data.txData.fire) {
-            when(auxPhy.io.data.txData.last) {
-              goto(stateReply)
+          auxLink.io.request.valid := True
+          when(auxLink.io.request.fire) {
+            when(txIndex === (auxRequest.length - 1)) {
+              goto(stateStart)
             } otherwise {
               txIndex := txIndex + 1
             }
@@ -138,21 +158,44 @@ class DpTest() extends Component {
         }
       }
 
+      val stateStart: State = new State {
+        whenIsActive {
+          auxLink.io.start := True
+          goto(stateWait)
+        }
+      }
+
+      // AuxLinkSource handles the reply timeout and any retries
+      val stateWait: State = new State {
+        whenIsActive {
+          when(auxLink.io.done) {
+            goto(stateReply)
+          }
+        }
+      }
+
       val stateReply: State = new State {
         onEntry {
           rxIndex := 0
+          dbgCounter.clear()
+          dbgDataValid := False
         }
         whenIsActive {
-          when(auxPhy.io.data.rxData.valid) {
-            // second byte of the reply is the data byte
+          dbgCounter.increment()
+          // one byte per debug period, so the analyser can sample it
+          auxLink.io.reply.ready := dbgCounter.willOverflow
+          when(auxLink.io.reply.fire) {
+            dbgData := auxLink.io.reply.payload
+            dbgDataValid := True
+            // second byte of the reply is the first byte of DPCD data
             when(rxIndex === 1) {
-              leds := auxPhy.io.data.rxData.fragment
+              leds := auxLink.io.reply.payload
             }
             rxIndex := rxIndex + 1
-
-            when(auxPhy.io.data.rxData.last) {
-              goto(stateDone)
-            }
+          }
+          // the buffer never bubbles, so the first idle beat means drained
+          when(dbgCounter.willOverflow && !auxLink.io.reply.valid) {
+            goto(stateDone)
           }
         }
       }

@@ -80,7 +80,7 @@ set_property -dict { \
 set_property -dict { \
   PACKAGE_PIN AB21 \
   IOSTANDARD LVCMOS33 \
-} [get_ports { DBG_AUX_WRITE }];
+} [get_ports { DBG_AUX_WRITE_EN }];
 
 set_property -dict { \
   PACKAGE_PIN V9 \
@@ -118,4 +118,8 @@ set_property -dict { \
 set_property -dict { \
   PACKAGE_PIN AB20 \
   IOSTANDARD LVCMOS33 \
-} [get_ports { DBG_VALID }];
+} [get_ports { DBG_DATA_CLK }];
+set_property -dict { \
+  PACKAGE_PIN AB18 \
+  IOSTANDARD LVCMOS33 \
+} [get_ports { DBG_BUSY }];
