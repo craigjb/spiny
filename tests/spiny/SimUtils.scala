@@ -51,9 +51,20 @@ object SpinySimConfig {
       .cachePath(s"target/simWorkspace/.cache/${testName.takeWhile(_ != '_')}")
   }
 
-  // same, but for tests repeated at multiple clock frequencies.
+  // same, but for tests repeated at multiple clock frequencies. The
+  // frequency is appended to keep the sim directory unique per test.
   def apply(testName: String, clockFreq: HertzNumber): SpinalSimConfig = {
-    SpinySimConfig(f"${testName}_$clockFreq%S")
+    fixedClock(f"${testName}_$clockFreq%S", clockFreq)
+  }
+
+  /** Sets the clock frequency without naming the directory after it
+    *
+    *  For a component with no frequency derived constants, the frequency is
+    *  only a simulation timebase for forkStimulus and cycles(). Naming the
+    *  directory after it would imply a sweep that isn't there.
+    */
+  def fixedClock(testName: String, clockFreq: HertzNumber): SpinalSimConfig = {
+    SpinySimConfig(testName)
       .withConfig(SpinalConfig(
         defaultClockDomainFrequency = FixedFrequency(clockFreq)))
   }
