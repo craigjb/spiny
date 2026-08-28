@@ -202,6 +202,31 @@ class AuxLinkSourceSpec extends AnyFunSuite {
     }
   }
 
+  test("AuxLinkSource should accept a reply that outlasts the timeout") {
+    // The timeout is the sink's turnaround budget, not a deadline for the
+    // whole reply. A 16 byte read answered near the limit still takes another
+    // ~130 us to arrive, so only the gaps between bytes are timed.
+    val longReply = 0x00 +: Seq.tabulate(16)(i => 0x10 + i)
+    withLink("AuxLinkSource_SlowReply", replyTimeout = 300 us) {
+      (dut, sink, reply) =>
+        sink.replies = List(longReply)
+        sink.replyDelay = (200 us)
+        sink.replyByteGap = (10 us)
+        sink.start()
+
+        sendRequest(dut, Request)
+        waitDone(dut)
+
+        assert(dut.io.result.toEnum == AuxLinkResult.ack,
+          s"result should be ack, was ${dut.io.result.toEnum}")
+        assert(sink.requests.length == 1,
+          s"the reply started in time, so it should not have retried, but " +
+            s"the sink saw ${sink.requests.length} requests")
+        assert(reply.toSeq == longReply,
+          s"reply bytes should be $longReply, were $reply")
+    }
+  }
+
   test("AuxLinkSource should report defer once retries run out") {
     withLink("AuxLinkSource_DeferExhausted", maxRetries = 2) {
       (dut, sink, reply) =>

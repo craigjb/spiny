@@ -427,6 +427,9 @@ case class AuxLinkSinkModel(
   /** Sink turnaround before answering */
   var replyDelay: TimeNumber = 20 us
 
+  /** Gap between reply bytes, standing in for their time on the wire */
+  var replyByteGap: TimeNumber = 0 us
+
   phy.txData.ready #= true
   phy.rxData.valid #= false
   phy.txError #= false
@@ -457,6 +460,10 @@ case class AuxLinkSinkModel(
         if (reply.nonEmpty) {
           sleep(replyDelay)
           for ((byte, i) <- reply.zipWithIndex) {
+            if (i > 0 && replyByteGap.toBigDecimal > 0) {
+              phy.rxData.valid #= false
+              sleep(replyByteGap)
+            }
             phy.rxData.valid #= true
             phy.rxData.fragment #= byte
             phy.rxData.last #= (i == reply.length - 1)

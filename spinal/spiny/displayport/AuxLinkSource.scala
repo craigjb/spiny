@@ -187,7 +187,11 @@ case class AuxLinkSourceIo(
    *  @group ports */
   val replyLength = out UInt (log2Up(replyDepth + 1) bits)
 
-  /** Clocks to wait for a reply before retrying (300 µs per the spec)
+  /** Clocks to wait for reply progress before retrying
+   *
+   *  This is the turnaround budget, 300 µs per the spec, and it restarts on
+   *  every reply byte. A long reply may therefore take much longer than this
+   *  in total, as long as the sink keeps sending.
    *  @group ports */
   val replyTimeout = in UInt (timeoutWidth bits)
 
@@ -213,16 +217,24 @@ object AuxLinkSource {
     * @param requestDepth Request bytes buffered (4 header + 16 data)
     * @param replyDepth Reply bytes buffered (1 header + 16 data)
     */
+  /** Converts a timeout to clocks, for driving the replyTimeout port
+    *
+    *  The port counts clocks, so what to write depends on the clock the
+    *  component sits in. This works it out from the elaborating domain.
+    */
+  def timeoutCycles(timeout: TimeNumber): BigInt = {
+    (timeout.toBigDecimal * ClockDomain.current.frequency.getValue.toBigDecimal)
+      .setScale(0, BigDecimal.RoundingMode.CEILING)
+      .toBigInt
+  }
+
   def apply(
     maxTimeout: TimeNumber = 300 us,
     retryLimit: Int = 7,
     requestDepth: Int = 20,
     replyDepth: Int = 17
   ): AuxLinkSource = {
-    val clockFreq = ClockDomain.current.frequency.getValue
-    val maxCycles = (maxTimeout.toBigDecimal * clockFreq.toBigDecimal)
-      .setScale(0, BigDecimal.RoundingMode.CEILING)
-      .toBigInt
+    val maxCycles = timeoutCycles(maxTimeout)
     AuxLinkSource(
       requestDepth = requestDepth,
       replyDepth = replyDepth,
@@ -343,6 +355,11 @@ case class AuxLinkSource(
     val stateWait: State = new State {
       whenIsActive {
         when(io.phy.rxData.valid) {
+          // The sink only owes us a prompt turnaround, not a prompt whole
+          // reply. A 16 byte read takes another ~176 us on the wire after
+          // the first byte, so re-arm on every byte and let the timeout
+          // catch a reply that stalls or never starts.
+          timer := io.replyTimeout
           when(reply.capture(io.phy.rxData.fragment, io.phy.rxData.last)) {
             io.rxOverrun := True
           }
