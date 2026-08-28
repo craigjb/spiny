@@ -47,6 +47,11 @@ class DpTest() extends Component {
     val AUX_N = inout(Analog(Bool))
     val UNUSED_P = in(Bool())
     val UNUSED_N = in(Bool())
+
+    val DBG_AUX_WRITE = out(Bool())
+    val DBG_AUX_READ = out(Bool())
+    val DBG_VALID = out(Bool())
+    val DBG_DATA = out(Bits(8 bits))
   }
 
   noIoPrefix()
@@ -74,8 +79,8 @@ class DpTest() extends Component {
     val leds = Reg(Bits(8 bits)) init(B"8'0")
     io.LEDS := leds
 
-    // native AUX read of 1 byte from 0x00000 (DPCD revision)
-    val auxRequest = Seq(0x90, 0x00, 0x00, 0x00)
+    // native AUX read of 16 bytes from 0x00000
+    val auxRequest = Seq(0x90, 0x00, 0x00, 0x0f)
     val requestBytes = Vec(auxRequest.map(b => B(b, 8 bits)))
     val txIndex = Reg(UInt(log2Up(auxRequest.length) bits)) init(0)
     val rxIndex = Reg(UInt(8 bits)) init(0)
@@ -83,6 +88,11 @@ class DpTest() extends Component {
     auxPhy.io.txData.valid := False
     auxPhy.io.txData.fragment := requestBytes(txIndex)
     auxPhy.io.txData.last := txIndex === (auxRequest.length - 1)
+
+    io.DBG_AUX_READ := auxIoBuf.O
+    io.DBG_AUX_WRITE := auxPhy.io.aux.write && auxPhy.io.aux.writeEnable
+    io.DBG_DATA := auxPhy.io.rxData.fragment
+    io.DBG_VALID := auxPhy.io.rxData.valid
 
     val settleDelay = Timeout(5 ms)
 

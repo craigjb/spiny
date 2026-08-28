@@ -71,3 +71,51 @@ set_property -dict { \
   PACKAGE_PIN AA11 \
   IOSTANDARD LVDS_25 \
 } [get_ports { UNUSED_N }];
+
+
+set_property -dict { \
+  PACKAGE_PIN AB22 \
+  IOSTANDARD LVCMOS33 \
+} [get_ports { DBG_AUX_READ }];
+set_property -dict { \
+  PACKAGE_PIN AB21 \
+  IOSTANDARD LVCMOS33 \
+} [get_ports { DBG_AUX_WRITE }];
+
+set_property -dict { \
+  PACKAGE_PIN V9 \
+  IOSTANDARD LVCMOS33 \
+} [get_ports { DBG_DATA[0] }];
+set_property -dict { \
+  PACKAGE_PIN V8 \
+  IOSTANDARD LVCMOS33 \
+} [get_ports { DBG_DATA[1] }];
+set_property -dict { \
+  PACKAGE_PIN V7 \
+  IOSTANDARD LVCMOS33 \
+} [get_ports { DBG_DATA[2] }];
+set_property -dict { \
+  PACKAGE_PIN W7 \
+  IOSTANDARD LVCMOS33 \
+} [get_ports { DBG_DATA[3] }];
+set_property -dict { \
+  PACKAGE_PIN W9 \
+  IOSTANDARD LVCMOS33 \
+} [get_ports { DBG_DATA[4] }];
+set_property -dict { \
+  PACKAGE_PIN Y9 \
+  IOSTANDARD LVCMOS33 \
+} [get_ports { DBG_DATA[5] }];
+set_property -dict { \
+  PACKAGE_PIN Y8 \
+  IOSTANDARD LVCMOS33 \
+} [get_ports { DBG_DATA[6] }];
+set_property -dict { \
+  PACKAGE_PIN Y7 \
+  IOSTANDARD LVCMOS33 \
+} [get_ports { DBG_DATA[7] }];
+
+set_property -dict { \
+  PACKAGE_PIN AB20 \
+  IOSTANDARD LVCMOS33 \
+} [get_ports { DBG_VALID }];
