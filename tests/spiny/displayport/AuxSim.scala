@@ -62,7 +62,7 @@ object AuxTxDriver {
 
   def apply(auxPhy: AuxPhy, timeout: Int): AuxTxDriver = {
     AuxTxDriver(
-      txData = auxPhy.io.txData,
+      txData = auxPhy.io.data.txData,
       timeout = timeout,
       clockDomain = auxPhy.clockDomain
     )
@@ -105,7 +105,7 @@ object AuxTxErrorMonitor {
 
   def apply(auxPhy: AuxPhy): SimPulseMonitor = {
     SimPulseMonitor(
-      signal = auxPhy.io.txError,
+      signal = auxPhy.io.data.txError,
       clockDomain = auxPhy.clockDomain,
       name = "AuxTx error"
     )
@@ -350,7 +350,7 @@ object AuxRxErrorMonitor {
 
   def apply(auxPhy: AuxPhy): SimPulseMonitor = {
     SimPulseMonitor(
-      signal = auxPhy.io.rxError,
+      signal = auxPhy.io.data.rxError,
       clockDomain = auxPhy.clockDomain,
       name = "AuxRx error"
     )
@@ -368,7 +368,7 @@ object AuxRxChecker {
 
   def apply(auxPhy: AuxPhy, dataTimeout: Int): AuxRxChecker = {
     AuxRxChecker(
-      rxData = auxPhy.io.rxData,
+      rxData = auxPhy.io.data.rxData,
       dataTimeout = dataTimeout,
       clockDomain = auxPhy.clockDomain
     )

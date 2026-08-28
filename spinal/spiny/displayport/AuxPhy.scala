@@ -35,6 +35,58 @@ import spinal.core._
 import spinal.lib._
 import spinal.lib.io._
 
+/** Packet data IO ports of AuxPhy
+ *
+ *  Connects to link layer components
+ *
+ * @groupname ports SpinalHDL IO Ports
+ * @groupprio ports 0
+ */
+case class AuxPhyDataIo() extends Bundle with IMasterSlave {
+  /** Data stream to transmit
+   *
+   *  Fragment.last indicates the end of a packet. Transmission starts upon
+   *  first valid byte and is aborted if this stream underruns (indicated by
+   *  txError).
+   *  @group ports
+   */
+  val txData = Stream(Fragment(Bits(8 bits)))
+
+  /** Transmitter error pulse
+   *
+   *  Asserts for a single cycle on error and packet is dropped
+   *  (can be used for retry logic). The txData Stream must be reset when
+   *  this error pulse is asserted (e.g. clear the TX FIFO). AuxTx does not
+   *  drain the aborted packet, and will start transmitting the remaining data
+   *  as a new packet if not cleared.
+   *  @group ports
+   */
+  val txError = Bool()
+
+  /** Received data
+   *
+   *  Must be read when valid or data can be dropped. Fragment.last indicates
+   *  end of packet. On error, packets are aborted (indicated by rxError) and
+   *  Fragment.last may not be asserted.
+   *  @group ports
+   */
+  val rxData = Flow(Fragment(Bits(8 bits)))
+
+  /** Receiver error pulse
+   *
+   *  Asserts for a single cycle on RX error when packet is dropped
+   *  (can be used for retry logic). Previously read data must be discarded.
+   *  @group ports
+   */
+  val rxError = Bool()
+
+  override def asMaster(): Unit = {
+    master(txData)
+    slave(rxData)
+    in(txError, rxError)
+  }
+}
+
 /** DisplayPort AUX channel PHY IO ports
  *
  * @groupname ports SpinalHDL IO Ports
@@ -48,42 +100,10 @@ case class AuxPhyIo() extends Bundle {
    */
   val aux = master(TriState(Bool()))
 
-  /** Input data stream to transmit
-   *
-   *  Fragment.last indicates the end of a packet. Transmission starts upon
-   *  first valid byte and is aborted if this stream underruns (indicated by
-   *  txError).
+  /** Packet data plane, driven by the layer above
    *  @group ports
    */
-  val txData = slave(Stream(Fragment(Bits(8 bits))))
-
-  /** Output transmitter error pulse
-   *
-   *  Asserts for a single cycle on error and packet is dropped
-   *  (can be used for retry logic). The input txData Stream must be reset when
-   *  this error pulse is asserted (e.g. clear the TX FIFO). AuxTx does not
-   *  drain the aborted packet, and will start transmitting the remaining data
-   *  as a new packet if not cleared.
-   *  @group ports
-   */
-  val txError = out(Bool())
-
-  /** Output received data
-   *
-   *  Must be read when valid or data can be dropped. Fragment.last indicates
-   *  end of packet. On error, packets are aborted (indicated by rxError) and
-   *  Fragment.last may not be asserted.
-   *  @group ports
-   */
-  val rxData = master(Flow(Fragment(Bits(8 bits))))
-
-  /** Output receiver error pulse
-   *
-   *  Asserts for a single cycle on RX error when packet is dropped
-   *  (can be used for retry logic). Previously read data must be discarded.
-   *  @group ports
-   */
-  val rxError = out(Bool())
+  val data = slave(AuxPhyDataIo())
 }
 
 /** DisplayPort AUX channel PHY
@@ -123,15 +143,15 @@ case class AuxPhy(
   val io = AuxPhyIo()
 
   val tx = AuxTx(dataRate = dataRate)
-  io.txData >> tx.io.data
+  io.data.txData >> tx.io.data
   io.aux.write := tx.io.write
   io.aux.writeEnable := tx.io.writeEnable
-  io.txError := tx.io.error
+  io.data.txError := tx.io.error
 
   val rx = AuxRx(dataRate = dataRate)
   rx.io.read := io.aux.read
   rx.io.readEnable := !tx.io.writeEnable
-  rx.io.data >> io.rxData
-  io.rxError := rx.io.error
+  rx.io.data >> io.data.rxData
+  io.data.rxError := rx.io.error
 }
 

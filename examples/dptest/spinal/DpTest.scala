@@ -85,14 +85,14 @@ class DpTest() extends Component {
     val txIndex = Reg(UInt(log2Up(auxRequest.length) bits)) init(0)
     val rxIndex = Reg(UInt(8 bits)) init(0)
 
-    auxPhy.io.txData.valid := False
-    auxPhy.io.txData.fragment := requestBytes(txIndex)
-    auxPhy.io.txData.last := txIndex === (auxRequest.length - 1)
+    auxPhy.io.data.txData.valid := False
+    auxPhy.io.data.txData.fragment := requestBytes(txIndex)
+    auxPhy.io.data.txData.last := txIndex === (auxRequest.length - 1)
 
     io.DBG_AUX_READ := auxIoBuf.O
     io.DBG_AUX_WRITE := auxPhy.io.aux.write && auxPhy.io.aux.writeEnable
-    io.DBG_DATA := auxPhy.io.rxData.fragment
-    io.DBG_VALID := auxPhy.io.rxData.valid
+    io.DBG_DATA := auxPhy.io.data.rxData.fragment
+    io.DBG_VALID := auxPhy.io.data.rxData.valid
 
     val settleDelay = Timeout(5 ms)
 
@@ -127,9 +127,9 @@ class DpTest() extends Component {
           txIndex := 0
         }
         whenIsActive {
-          auxPhy.io.txData.valid := True
-          when(auxPhy.io.txData.fire) {
-            when(auxPhy.io.txData.last) {
+          auxPhy.io.data.txData.valid := True
+          when(auxPhy.io.data.txData.fire) {
+            when(auxPhy.io.data.txData.last) {
               goto(stateReply)
             } otherwise {
               txIndex := txIndex + 1
@@ -143,14 +143,14 @@ class DpTest() extends Component {
           rxIndex := 0
         }
         whenIsActive {
-          when(auxPhy.io.rxData.valid) {
+          when(auxPhy.io.data.rxData.valid) {
             // second byte of the reply is the data byte
             when(rxIndex === 1) {
-              leds := auxPhy.io.rxData.fragment
+              leds := auxPhy.io.data.rxData.fragment
             }
             rxIndex := rxIndex + 1
 
-            when(auxPhy.io.rxData.last) {
+            when(auxPhy.io.data.rxData.last) {
               goto(stateDone)
             }
           }

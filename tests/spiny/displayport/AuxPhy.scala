@@ -77,7 +77,7 @@ class AuxPhySpec extends AnyFunSuite {
               dut.clockDomain.waitSampling()
               if (dut.io.aux.writeEnable.toBoolean) {
                 dut.io.aux.read #= dut.io.aux.write.toBoolean
-                if (dut.io.rxData.valid.toBoolean) {
+                if (dut.io.data.rxData.valid.toBoolean) {
                   receivedWhileTransmitting = true
                 }
               }
