@@ -53,12 +53,15 @@ object AuxLinkSourceSpec {
 class AuxLinkSourceSpec extends AnyFunSuite {
   import AuxLinkSourceSpec._
 
-  /** Drives the request stream, then pulses start */
+  /** Drives the request stream, then pulses start
+    */
   def sendRequest(dut: AuxLinkSource, bytes: Seq[Int]): Unit = {
     for (byte <- bytes) {
       dut.io.request.valid #= true
       dut.io.request.payload #= byte
-      dut.clockDomain.waitSamplingWhere(dut.io.request.ready.toBoolean)
+      dut.clockDomain.waitSamplingWhereOrFail(
+        dut.clockDomain.cycles(1 ms), f"the buffer to accept 0x$byte%02x"
+      )(dut.io.request.ready.toBoolean)
     }
     dut.io.request.valid #= false
     dut.io.start #= true
@@ -237,6 +240,104 @@ class AuxLinkSourceSpec extends AnyFunSuite {
       dut.clockDomain.waitSampling(3)
 
       unexpected.assertOne("receiving an unsolicited packet")
+    }
+  }
+
+  test("AuxLinkSource should drop a packet that arrives on top of a reply") {
+    withLink("AuxLinkSource_Overrun") { (dut, sink, reply) =>
+      val overrun = SimPulseMonitor(
+        dut.io.rxOverrun, dut.clockDomain, "rxOverrun")
+      // driving the reply by hand, so the sink model is left stopped
+      sendRequest(dut, Request)
+      dut.clockDomain.waitSampling(10)
+
+      // the reply, then a byte of a second packet with no gap, which lands
+      // while the first is still buffered
+      val burst = Seq((0x00, false), (0x12, true), (0x99, false))
+      for ((byte, last) <- burst) {
+        dut.io.phy.rxData.valid #= true
+        dut.io.phy.rxData.fragment #= byte
+        dut.io.phy.rxData.last #= last
+        dut.clockDomain.waitSampling()
+      }
+      dut.io.phy.rxData.valid #= false
+      waitDone(dut)
+
+      overrun.assertOne("a packet arriving on top of a buffered one")
+      assert(dut.io.result.toEnum == AuxLinkResult.ack,
+        s"the first reply should still be accepted, was " +
+          s"${dut.io.result.toEnum}")
+      // dropped rather than appended, so the held reply stays intact
+      assert(dut.io.replyLength.toInt == AckReply.length,
+        s"replyLength should still be ${AckReply.length}, was " +
+          s"${dut.io.replyLength.toInt}")
+      assert(reply.toSeq == AckReply,
+        s"the overrunning byte should not appear, got $reply")
+    }
+  }
+
+  test("AuxLinkSource should retry after a PHY error") {
+    withLink("AuxLinkSource_PhyErrorRetry", maxRetries = 1) {
+      (dut, sink, reply) =>
+        // first attempt gets no reply, it is failed by the PHY error instead
+        sink.replies = List(Seq(), AckReply)
+        sink.start()
+
+        sendRequest(dut, Request)
+        dut.clockDomain.waitSampling(10)
+        dut.io.phy.rxError #= true
+        dut.clockDomain.waitSampling()
+        dut.io.phy.rxError #= false
+        waitDone(dut)
+
+        assert(dut.io.result.toEnum == AuxLinkResult.ack,
+          s"the retry should have succeeded, was ${dut.io.result.toEnum}")
+        assert(sink.requests.length == 2,
+          s"a PHY error should be retried, but " +
+            s"${sink.requests.length} requests were sent")
+    }
+  }
+
+  test("AuxLinkSource should report a PHY error once retries run out") {
+    withLink("AuxLinkSource_PhyError", maxRetries = 0) { (dut, sink, reply) =>
+      sink.replies = Nil
+      sink.start()
+
+      sendRequest(dut, Request)
+      dut.clockDomain.waitSampling(10)
+      dut.io.phy.rxError #= true
+      dut.clockDomain.waitSampling()
+      dut.io.phy.rxError #= false
+      waitDone(dut)
+
+      assert(dut.io.result.toEnum == AuxLinkResult.phyError,
+        s"result should be phyError, was ${dut.io.result.toEnum}")
+      assert(sink.requests.length == 1,
+        s"no retries were allowed, but ${sink.requests.length} were sent")
+    }
+  }
+
+  test("AuxLinkSource should backpressure the request while busy") {
+    withLink("AuxLinkSource_Backpressure") { (dut, sink, reply) =>
+      sink.replies = List(AckReply)
+      sink.start()
+
+      // let the sim settle before reading a combinational output
+      dut.clockDomain.waitSampling(2)
+      assert(dut.io.request.ready.toBoolean,
+        "the buffer should accept bytes while idle")
+
+      sendRequest(dut, Request)
+      dut.clockDomain.waitSampling(2)
+      assert(dut.io.busy.toBoolean, "should be busy after start")
+      assert(!dut.io.request.ready.toBoolean,
+        "loading must be refused while a transaction is in flight, or a " +
+          "retry could replay corrupted bytes")
+
+      waitDone(dut)
+      assert(!dut.io.busy.toBoolean, "should be idle once settled")
+      assert(dut.io.request.ready.toBoolean,
+        "the buffer should accept the next request once settled")
     }
   }
 }

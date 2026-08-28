@@ -438,8 +438,13 @@ case class AuxLinkSinkModel(
         val bytes = mutable.ArrayBuffer[Int]()
         var last = false
         while (!last) {
-          clockDomain.waitSamplingWhere(
-            phy.txData.valid.toBoolean && phy.txData.ready.toBoolean)
+          // waitSampling rather than the single argument waitSamplingWhere,
+          // so only sampling edges count and reset is never mistaken for a
+          // transfer. No timeout, since waiting for the next transaction is
+          // a legitimate forever.
+          do {
+            clockDomain.waitSampling()
+          } while (!(phy.txData.valid.toBoolean && phy.txData.ready.toBoolean))
           bytes += phy.txData.fragment.toInt
           last = phy.txData.last.toBoolean
         }
