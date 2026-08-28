@@ -31,6 +31,7 @@
 
 package spiny.displayport
 
+import scala.collection.mutable
 import scala.util.Random
 
 import spinal.core._
@@ -402,5 +403,63 @@ case class AuxRxChecker(
       checkByte(byte, false, i)
     }
     checkByte(bytes.last, true, bytesWithIndex.length - 1)
+  }
+}
+
+/** Stream level model of an AUX sink, for testing the source link layer
+ *
+ *  Collects each request off the PHY data plane and answers it from a
+ *  scripted list of replies. An empty entry means "say nothing", which is
+ *  how a reply timeout is provoked.
+ */
+case class AuxLinkSinkModel(
+  phy: AuxPhyDataIo,
+  clockDomain: ClockDomain
+) {
+  /** Requests seen so far, in order */
+  val requests = mutable.ArrayBuffer[Seq[Int]]()
+
+  /** Replies to send, consumed one per request received. An empty Seq sends
+    * nothing. Running out also sends nothing.
+    */
+  var replies: List[Seq[Int]] = Nil
+
+  /** Sink turnaround before answering */
+  var replyDelay: TimeNumber = 20 us
+
+  phy.txData.ready #= true
+  phy.rxData.valid #= false
+  phy.txError #= false
+  phy.rxError #= false
+
+  def start(): Unit = {
+    fork {
+      while (true) {
+        val bytes = mutable.ArrayBuffer[Int]()
+        var last = false
+        while (!last) {
+          clockDomain.waitSamplingWhere(
+            phy.txData.valid.toBoolean && phy.txData.ready.toBoolean)
+          bytes += phy.txData.fragment.toInt
+          last = phy.txData.last.toBoolean
+        }
+        requests += bytes.toSeq
+
+        val reply = replies.headOption.getOrElse(Seq())
+        if (replies.nonEmpty) {
+          replies = replies.tail
+        }
+        if (reply.nonEmpty) {
+          sleep(replyDelay)
+          for ((byte, i) <- reply.zipWithIndex) {
+            phy.rxData.valid #= true
+            phy.rxData.fragment #= byte
+            phy.rxData.last #= (i == reply.length - 1)
+            clockDomain.waitSampling()
+          }
+          phy.rxData.valid #= false
+        }
+      }
+    }
   }
 }
