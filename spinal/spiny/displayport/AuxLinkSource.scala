@@ -299,7 +299,9 @@ case class AuxLinkSource(
     request.load(io.request.payload)
   }
 
-  io.reply.valid := reply.complete && !reply.isDrained
+  // gated on busy so the replies of intermediate attempts, a DEFER being the
+  // usual one, are never presented to the layer above
+  io.reply.valid := reply.complete && !reply.isDrained && !busyReg
   io.reply.payload := reply.readData
   when(io.reply.fire) {
     reply.drain()

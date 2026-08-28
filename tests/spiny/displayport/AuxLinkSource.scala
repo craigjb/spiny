@@ -42,13 +42,12 @@ import spiny._
 import spiny.SimClockDomainExt._
 
 object AuxLinkSourceSpec {
-  // AuxLinkSource has no frequency derived constants, so unlike the PHY
-  // specs this is not a swept dimension. It is only here to give the
-  // simulation a timebase, since forkStimulus and cycles() both need one.
   val ClockFreq = 100 MHz
   // native read of 1 byte from DPCD 0x00000
   val Request = Seq(0x90, 0x00, 0x00, 0x00)
   val AckReply = Seq(0x00, 0x12)
+  val NackReply = Seq(0x10)
+  val DeferReply = Seq(0x20)
 }
 
 class AuxLinkSourceSpec extends AnyFunSuite {
@@ -77,41 +76,168 @@ class AuxLinkSourceSpec extends AnyFunSuite {
     bytes
   }
 
-  def init(dut: AuxLinkSource, maxRetries: Int = 3): Unit = {
+  def init(
+    dut: AuxLinkSource,
+    maxRetries: Int = 3,
+    replyTimeout: TimeNumber = 300 us
+  ): Unit = {
     dut.io.start #= false
     dut.io.request.valid #= false
     dut.io.reply.ready #= false
     dut.io.clearFlags #= false
-    dut.io.replyTimeout #= dut.clockDomain.cycles(300 us)
+    dut.io.replyTimeout #= dut.clockDomain.cycles(replyTimeout)
     dut.io.maxRetries #= maxRetries
     dut.clockDomain.forkStimulus()
   }
 
-  test("AuxLinkSource should complete an acknowledged transaction") {
-    SpinySimConfig.fixedClock("AuxLinkSource_Ack", ClockFreq)
+  /** Builds the DUT, sink model and reply monitor, then runs the body */
+  def withLink(
+    name: String,
+    maxRetries: Int = 3,
+    replyTimeout: TimeNumber = 300 us
+  )(body: (AuxLinkSource, AuxLinkSinkModel, mutable.ArrayBuffer[Int]) => Unit
+  ): Unit = {
+    SpinySimConfig.fixedClock(name, ClockFreq)
       .compile(AuxLinkSource(maxTimeout = 1 ms, retryLimit = 7))
       .doSim { dut =>
-        val timeout = dut.clockDomain.cycles(2 ms)
-        init(dut)
+        init(dut, maxRetries, replyTimeout)
         val reply = monitorReply(dut)
         val sink = AuxLinkSinkModel(dut.io.phy, dut.clockDomain)
-        sink.replies = List(AckReply)
+        sink.replyDelay = (2 us)
+        body(dut, sink, reply)
+      }
+  }
+
+  /** Waits for the transaction to settle, then for the reply to drain
+    *
+    *  The reply stream is held back until busy drops, so nothing can be read
+    *  until after done.
+    */
+  def waitDone(dut: AuxLinkSource): Unit = {
+    dut.clockDomain.waitSamplingWhereOrFail(
+      dut.clockDomain.cycles(2 ms), "the transaction to settle"
+    )(dut.io.done.toBoolean)
+    dut.clockDomain.waitSampling(dut.io.replyLength.toInt + 4)
+  }
+
+  test("AuxLinkSource should complete an acknowledged transaction") {
+    withLink("AuxLinkSource_Ack") { (dut, sink, reply) =>
+      sink.replies = List(AckReply)
+      sink.start()
+
+      sendRequest(dut, Request)
+      waitDone(dut)
+
+      assert(dut.io.result.toEnum == AuxLinkResult.ack,
+        s"result should be ack, was ${dut.io.result.toEnum}")
+      assert(dut.io.replyLength.toInt == AckReply.length,
+        s"replyLength should be ${AckReply.length}")
+      assert(sink.requests.toSeq == Seq(Request),
+        s"sink should have seen one request, saw ${sink.requests}")
+      assert(reply.toSeq == AckReply,
+        s"reply bytes should be $AckReply, were $reply")
+      assert(!dut.io.rxOverrun.toBoolean && !dut.io.rxUnexpected.toBoolean,
+        "no sticky flags should be set")
+    }
+  }
+
+  test("AuxLinkSource should not retry a NACK") {
+    withLink("AuxLinkSource_Nack") { (dut, sink, reply) =>
+      sink.replies = List(NackReply)
+      sink.start()
+
+      sendRequest(dut, Request)
+      waitDone(dut)
+
+      assert(dut.io.result.toEnum == AuxLinkResult.nack,
+        s"result should be nack, was ${dut.io.result.toEnum}")
+      assert(sink.requests.length == 1,
+        s"a NACK is definitive, so it should not be retried, but " +
+          s"${sink.requests.length} requests were sent")
+    }
+  }
+
+  test("AuxLinkSource should replay the request on DEFER until acknowledged") {
+    withLink("AuxLinkSource_DeferRetry") { (dut, sink, reply) =>
+      sink.replies = List(DeferReply, DeferReply, AckReply)
+      sink.start()
+
+      sendRequest(dut, Request)
+      waitDone(dut)
+
+      assert(dut.io.result.toEnum == AuxLinkResult.ack,
+        s"result should be ack, was ${dut.io.result.toEnum}")
+      assert(sink.requests.length == 3,
+        s"should have taken 3 attempts, took ${sink.requests.length}")
+      // the whole point of the replay buffer
+      assert(sink.requests.forall(_ == Request),
+        s"every attempt should replay the same bytes, saw ${sink.requests}")
+      assert(reply.toSeq == AckReply,
+        s"only the accepted reply should surface, got $reply")
+    }
+  }
+
+  test("AuxLinkSource should report a timeout once retries run out") {
+    withLink("AuxLinkSource_Timeout", maxRetries = 2, replyTimeout = 10 us) {
+      (dut, sink, reply) =>
+        // a sink that never answers
+        sink.replies = Nil
         sink.start()
 
         sendRequest(dut, Request)
-        dut.clockDomain.waitSamplingWhereOrFail(timeout, "done")(
-          dut.io.done.toBoolean)
+        waitDone(dut)
 
-        assert(dut.io.result.toEnum == AuxLinkResult.ack,
-          s"result should be ack, was ${dut.io.result.toEnum}")
-        assert(dut.io.replyLength.toInt == AckReply.length,
-          s"replyLength should be ${AckReply.length}")
-        assert(sink.requests.toSeq == Seq(Request),
-          s"sink should have seen one request, saw ${sink.requests}")
-        assert(reply.toSeq == AckReply,
-          s"reply bytes should be $AckReply, were $reply")
-        assert(!dut.io.rxOverrun.toBoolean && !dut.io.rxUnexpected.toBoolean,
-          "no sticky flags should be set")
-      }
+        assert(dut.io.result.toEnum == AuxLinkResult.timeout,
+          s"result should be timeout, was ${dut.io.result.toEnum}")
+        assert(sink.requests.length == 3,
+          s"should be one attempt plus two retries, was " +
+            s"${sink.requests.length}")
+        assert(dut.io.replyLength.toInt == 0, "no reply should be buffered")
+    }
+  }
+
+  test("AuxLinkSource should report defer once retries run out") {
+    withLink("AuxLinkSource_DeferExhausted", maxRetries = 2) {
+      (dut, sink, reply) =>
+        sink.replies = List.fill(5)(DeferReply)
+        sink.start()
+
+        sendRequest(dut, Request)
+        waitDone(dut)
+
+        assert(dut.io.result.toEnum == AuxLinkResult.defer,
+          s"result should be defer, was ${dut.io.result.toEnum}")
+        assert(sink.requests.length == 3,
+          s"should be one attempt plus two retries, was " +
+            s"${sink.requests.length}")
+    }
+  }
+
+  test("AuxLinkSource should flag a packet arriving outside a transaction") {
+    withLink("AuxLinkSource_Unexpected") { (dut, sink, reply) =>
+      dut.io.phy.txData.ready #= true
+      dut.io.phy.rxData.valid #= false
+      dut.io.phy.txError #= false
+      dut.io.phy.rxError #= false
+      dut.clockDomain.waitSampling(5)
+      assert(!dut.io.rxUnexpected.toBoolean, "should start clear")
+
+      // a sink talking out of turn, with nothing outstanding
+      dut.io.phy.rxData.valid #= true
+      dut.io.phy.rxData.fragment #= 0x00
+      dut.io.phy.rxData.last #= true
+      dut.clockDomain.waitSampling()
+      dut.io.phy.rxData.valid #= false
+      dut.clockDomain.waitSampling(2)
+
+      assert(dut.io.rxUnexpected.toBoolean,
+        "an unsolicited packet should set the sticky flag")
+
+      dut.io.clearFlags #= true
+      dut.clockDomain.waitSampling()
+      dut.io.clearFlags #= false
+      dut.clockDomain.waitSampling()
+      assert(!dut.io.rxUnexpected.toBoolean, "clearFlags should clear it")
+    }
   }
 }
