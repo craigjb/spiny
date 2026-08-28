@@ -183,7 +183,7 @@ case class AuxLinkSourceIo(
    *  @group ports */
   val result = out(AuxLinkResult())
 
-  /** Bytes captured in the reply
+  /** Bytes captured in the reply, held alongside result
    *  @group ports */
   val replyLength = out UInt (log2Up(replyDepth + 1) bits)
 
@@ -195,17 +195,14 @@ case class AuxLinkSourceIo(
    *  @group ports */
   val maxRetries = in UInt (retryWidth bits)
 
-  /** Sticky: a packet arrived while one was already buffered, or overran it
+  /** Pulses when a packet arrives while one is already buffered, or
+   *  overruns it
    *  @group ports */
   val rxOverrun = out Bool()
 
-  /** Sticky: a packet arrived outside of a transaction
+  /** Pulses when a packet arrives outside of a transaction
    *  @group ports */
   val rxUnexpected = out Bool()
-
-  /** Clears the sticky flags
-   *  @group ports */
-  val clearFlags = in Bool()
 }
 
 object AuxLinkSource {
@@ -276,22 +273,17 @@ case class AuxLinkSource(
   val pendingResult = Reg(AuxLinkResult()) init (AuxLinkResult.timeout)
   val busyReg = RegInit(False)
   val doneReg = RegInit(False)
-  val overrunReg = RegInit(False)
-  val unexpectedReg = RegInit(False)
 
   io.busy := busyReg
   io.done := doneReg
   io.result := resultReg
   io.replyLength := reply.length
-  io.rxOverrun := overrunReg
-  io.rxUnexpected := unexpectedReg
 
   doneReg := False
 
-  when(io.clearFlags) {
-    overrunReg := False
-    unexpectedReg := False
-  }
+  // events
+  io.rxOverrun := False
+  io.rxUnexpected := False
 
   // loading is only allowed between transactions
   io.request.ready := !busyReg && !request.isFull
@@ -319,7 +311,7 @@ case class AuxLinkSource(
     val stateIdle: State = new State with EntryPoint {
       whenIsActive {
         when(io.phy.rxData.valid) {
-          unexpectedReg := True
+          io.rxUnexpected := True
         }
         when(io.start && !request.isEmpty) {
           retryCount := 0
@@ -352,7 +344,7 @@ case class AuxLinkSource(
       whenIsActive {
         when(io.phy.rxData.valid) {
           when(reply.capture(io.phy.rxData.fragment, io.phy.rxData.last)) {
-            overrunReg := True
+            io.rxOverrun := True
           }
         }
         when(io.phy.rxError) {

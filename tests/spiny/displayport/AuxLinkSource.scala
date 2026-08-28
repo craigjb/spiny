@@ -84,7 +84,6 @@ class AuxLinkSourceSpec extends AnyFunSuite {
     dut.io.start #= false
     dut.io.request.valid #= false
     dut.io.reply.ready #= false
-    dut.io.clearFlags #= false
     dut.io.replyTimeout #= dut.clockDomain.cycles(replyTimeout)
     dut.io.maxRetries #= maxRetries
     dut.clockDomain.forkStimulus()
@@ -122,6 +121,10 @@ class AuxLinkSourceSpec extends AnyFunSuite {
 
   test("AuxLinkSource should complete an acknowledged transaction") {
     withLink("AuxLinkSource_Ack") { (dut, sink, reply) =>
+      val overrun = SimPulseMonitor(
+        dut.io.rxOverrun, dut.clockDomain, "rxOverrun")
+      val unexpected = SimPulseMonitor(
+        dut.io.rxUnexpected, dut.clockDomain, "rxUnexpected")
       sink.replies = List(AckReply)
       sink.start()
 
@@ -136,8 +139,8 @@ class AuxLinkSourceSpec extends AnyFunSuite {
         s"sink should have seen one request, saw ${sink.requests}")
       assert(reply.toSeq == AckReply,
         s"reply bytes should be $AckReply, were $reply")
-      assert(!dut.io.rxOverrun.toBoolean && !dut.io.rxUnexpected.toBoolean,
-        "no sticky flags should be set")
+      overrun.assertNone("completing a clean transaction")
+      unexpected.assertNone("completing a clean transaction")
     }
   }
 
@@ -213,14 +216,17 @@ class AuxLinkSourceSpec extends AnyFunSuite {
     }
   }
 
-  test("AuxLinkSource should flag a packet arriving outside a transaction") {
+  test("AuxLinkSource should pulse rxUnexpected outside a transaction") {
     withLink("AuxLinkSource_Unexpected") { (dut, sink, reply) =>
       dut.io.phy.txData.ready #= true
       dut.io.phy.rxData.valid #= false
       dut.io.phy.txError #= false
       dut.io.phy.rxError #= false
+      // an interrupt register above latches this, so count the pulses
+      val unexpected = SimPulseMonitor(
+        dut.io.rxUnexpected, dut.clockDomain, "rxUnexpected")
       dut.clockDomain.waitSampling(5)
-      assert(!dut.io.rxUnexpected.toBoolean, "should start clear")
+      unexpected.assertNone("idle with nothing on the line")
 
       // a sink talking out of turn, with nothing outstanding
       dut.io.phy.rxData.valid #= true
@@ -228,16 +234,9 @@ class AuxLinkSourceSpec extends AnyFunSuite {
       dut.io.phy.rxData.last #= true
       dut.clockDomain.waitSampling()
       dut.io.phy.rxData.valid #= false
-      dut.clockDomain.waitSampling(2)
+      dut.clockDomain.waitSampling(3)
 
-      assert(dut.io.rxUnexpected.toBoolean,
-        "an unsolicited packet should set the sticky flag")
-
-      dut.io.clearFlags #= true
-      dut.clockDomain.waitSampling()
-      dut.io.clearFlags #= false
-      dut.clockDomain.waitSampling()
-      assert(!dut.io.rxUnexpected.toBoolean, "clearFlags should clear it")
+      unexpected.assertOne("receiving an unsolicited packet")
     }
   }
 }
