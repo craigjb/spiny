@@ -89,7 +89,7 @@ class AuxLinkSourceSpec extends AnyFunSuite {
 
   test("AuxLinkSource should complete an acknowledged transaction") {
     SpinySimConfig.fixedClock("AuxLinkSource_Ack", ClockFreq)
-      .compile(AuxLinkSource())
+      .compile(AuxLinkSource(maxTimeout = 1 ms, retryLimit = 7))
       .doSim { dut =>
         val timeout = dut.clockDomain.cycles(2 ms)
         init(dut)

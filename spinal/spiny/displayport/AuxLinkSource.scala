@@ -155,7 +155,7 @@ case class AuxLinkSourceIo(
 
   /** Request bytes to transmit
    *
-   *  Loaded into the replay buffer before start. Backpressures while a
+   *  Loaded into the paket buffer before start. Backpressures while a
    *  transaction is running, so an in flight retry cannot be corrupted.
    *  @group ports */
   val request = slave(Stream(Bits(8 bits)))
@@ -208,32 +208,57 @@ case class AuxLinkSourceIo(
   val clearFlags = in Bool()
 }
 
+object AuxLinkSource {
+  /** Automatically calculates timer and retry bit widths
+    *
+    * @param maxTimeout Longest reply timeout that replyTimeout can hold
+    * @param retryLimit Largest value that maxRetries can hold
+    * @param requestDepth Request bytes buffered (4 header + 16 data)
+    * @param replyDepth Reply bytes buffered (1 header + 16 data)
+    */
+  def apply(
+    maxTimeout: TimeNumber = 300 us,
+    retryLimit: Int = 7,
+    requestDepth: Int = 20,
+    replyDepth: Int = 17
+  ): AuxLinkSource = {
+    val clockFreq = ClockDomain.current.frequency.getValue
+    val maxCycles = (maxTimeout.toBigDecimal * clockFreq.toBigDecimal)
+      .setScale(0, BigDecimal.RoundingMode.CEILING)
+      .toBigInt
+    AuxLinkSource(
+      requestDepth = requestDepth,
+      replyDepth = replyDepth,
+      timeoutWidth = log2Up(maxCycles + 1),
+      retryWidth = log2Up(retryLimit + 1)
+    )
+  }
+}
+
 /** DisplayPort AUX source side link layer
  *
- *  Frames one transaction at a time onto an [[AuxPhy]]: send the loaded
- *  request, wait for a reply, and retry on timeout, AUX_DEFER, or a dropped
+ *  Frames one transaction at a time onto an [[AuxPhy]]: sends the loaded
+ *  request, waits for a reply, and retries on timeout, AUX_DEFER, or a dropped
  *  packet. AUX_NACK is a definitive answer and is never retried.
  *
  *  The request lives in a replay buffer, so a retry re-sends it without the
- *  layer above supplying the bytes again. That also means the PHY can never
- *  underrun, so its txError should not occur in practice.
+ *  layer above supplying the bytes again.
  *
- *  Only native AUX reply codes are decoded. I2C-over-AUX carries its reply
- *  code in different bits and would need this extended.
+ *  Only native AUX reply codes are decoded.
  *
- * @param requestDepth Request bytes buffered (4 header + 16 data)
- * @param replyDepth Reply bytes buffered (1 header + 16 data)
- * @param timeoutWidth Width of the reply timeout counter, in clocks
+ * @param requestDepth Request bytes buffered
+ * @param replyDepth Reply bytes buffered
+ * @param timeoutWidth Width of the reply timeout counter (counts clock cycles)
  * @param retryWidth Width of the retry counter
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
  */
 case class AuxLinkSource(
-  requestDepth: Int = 20,
-  replyDepth: Int = 17,
-  timeoutWidth: Int = 20,
-  retryWidth: Int = 4
+  requestDepth: Int,
+  replyDepth: Int,
+  timeoutWidth: Int,
+  retryWidth: Int
 ) extends Component {
   /** SpinalHDL IO ports
    *  @group ports */
