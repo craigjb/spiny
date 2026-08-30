@@ -43,15 +43,11 @@ import spiny.SimClockDomainExt._
 
 object AuxLinkSourceSpec {
   val ClockFreq = 100 MHz
-  // native read of 1 byte from DPCD 0x00000
-  val Request = Seq(0x90, 0x00, 0x00, 0x00)
-  val AckReply = Seq(0x00, 0x12)
-  val NackReply = Seq(0x10)
-  val DeferReply = Seq(0x20)
 }
 
 class AuxLinkSourceSpec extends AnyFunSuite {
   import AuxLinkSourceSpec._
+  import AuxSim._
 
   /** Drives the request stream, then pulses start
     */

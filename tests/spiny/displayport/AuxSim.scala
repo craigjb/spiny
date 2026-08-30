@@ -50,6 +50,12 @@ object AuxSim {
   val DataRate = 1 MHz
   val BitPeriod = DataRate.toTime
   val SyncBits = 16
+
+  // native read of 1 byte from DPCD 0x00000, and the replies to it
+  val Request = Seq(0x90, 0x00, 0x00, 0x00)
+  val AckReply = Seq(0x00, 0x12)
+  val NackReply = Seq(0x10)
+  val DeferReply = Seq(0x20)
 }
 
 object AuxTxDriver {

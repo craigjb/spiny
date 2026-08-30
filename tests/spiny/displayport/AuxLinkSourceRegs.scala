@@ -63,14 +63,9 @@ case class AuxLinkSourceRegsDut(addressWidth: Int = 8) extends Component {
 class AuxLinkSourceRegsSpec extends AnyFunSuite {
   import AuxSim._
 
-  // interrupt bits, in the order driveFrom passes the triggers
+  // interrupt bits, in the order AuxLinkSourceRegs passes the triggers
   val IntDone = 0
-  val IntRxOverrun = 1
-  val IntRxUnexpected = 2
   val IntRequestDropped = 3
-
-  val Request = Seq(0x90, 0x00, 0x00, 0x00)
-  val AckReply = Seq(0x00, 0x12)
 
   def busy(status: BigInt): Boolean = (status & 1) != 0
   def result(status: BigInt): Int = ((status >> 1) & 0x7).toInt
@@ -186,6 +181,57 @@ class AuxLinkSourceRegsSpec extends AnyFunSuite {
           s"${result(status)}")
       assert(sink.requests.toSeq == Seq(Request),
         s"sink should have seen the original request, saw ${sink.requests}")
+    }
+  }
+
+  test("AuxLinkSourceRegs should drop a request byte written past the end") {
+    withRegs("AuxLinkSourceRegs_DropWhenFull") { (dut, apb, sink) =>
+      val depth = dut.link.requestDepth
+      val oversized = Seq.tabulate(depth + 1)(index => index & 0xff)
+      sink.replies = List(AckReply)
+      sink.start()
+
+      oversized.foreach(byte => apb.write(dut.regs.request.addr, byte))
+      val raw = apb.read(dut.regs.interruptRaw)
+      assert(((raw >> IntRequestDropped) & 1) == 1,
+        "the byte past the end of the buffer should be flagged as dropped")
+
+      apb.write(dut.regs.control.addr, 1)
+      waitBusy(dut, apb)
+      waitIdle(dut, apb)
+      assert(sink.requests.toSeq == Seq(oversized.take(depth)),
+        s"the sink should have seen the buffer's worth of bytes, saw " +
+          s"${sink.requests}")
+    }
+  }
+
+  test("AuxLinkSourceRegs should hold result until the next start") {
+    withRegs("AuxLinkSourceRegs_StickyStatus") { (dut, apb, sink) =>
+      sink.replies = List(AckReply, NackReply)
+      sink.start()
+
+      Request.foreach(byte => apb.write(dut.regs.request.addr, byte))
+      apb.write(dut.regs.control.addr, 1)
+      waitBusy(dut, apb)
+      val settled = waitIdle(dut, apb)
+      AckReply.indices.foreach(_ => apb.read(dut.regs.reply.addr))
+
+      dut.clockDomain.waitSampling(200)
+      val later = apb.read(dut.regs.status.addr)
+      assert(later == settled,
+        s"status should still read 0x${settled.toString(16)} well after " +
+          s"done, was 0x${later.toString(16)}")
+
+      Request.foreach(byte => apb.write(dut.regs.request.addr, byte))
+      apb.write(dut.regs.control.addr, 1)
+      waitBusy(dut, apb)
+      val second = waitIdle(dut, apb)
+      assert(result(second) == AuxLinkResult.nack.position,
+        s"the next transaction should replace it, result was " +
+          s"${result(second)}")
+      assert(replyLength(second) == NackReply.length,
+        s"replyLength should be ${NackReply.length}, was " +
+          s"${replyLength(second)}")
     }
   }
 }
