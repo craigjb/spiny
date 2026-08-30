@@ -342,13 +342,26 @@ case class AuxLinkSource(
         when(io.phy.txData.fire) {
           request.advance()
           when(request.isLast) {
-            timer := io.replyTimeout
-            goto(stateWait)
+            goto(stateFlush)
           }
         }
         when(io.phy.txError) {
           pendingResult := AuxLinkResult.phyError
           goto(stateRetry)
+        }
+      }
+    }
+
+    // the spec measures the turnaround from the end of the request on the
+    // wire, so let the PHY drain before starting the clock on it
+    val stateFlush: State = new State {
+      whenIsActive {
+        when(io.phy.txError) {
+          pendingResult := AuxLinkResult.phyError
+          goto(stateRetry)
+        } elsewhen (!io.phy.txBusy) {
+          timer := io.replyTimeout
+          goto(stateWait)
         }
       }
     }

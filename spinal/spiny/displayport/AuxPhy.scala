@@ -63,6 +63,15 @@ case class AuxPhyDataIo() extends Bundle with IMasterSlave {
    */
   val txError = Bool()
 
+  /** High while a packet is still going out on the wire
+   *
+   *  txData.fire only means the PHY took the byte, not that it left. The
+   *  reply timeout is measured from the end of the request, so a sender has
+   *  to wait for this to fall before starting it.
+   *  @group ports
+   */
+  val txBusy = Bool()
+
   /** Received data
    *
    *  Must be read when valid or data can be dropped. Fragment.last indicates
@@ -83,7 +92,7 @@ case class AuxPhyDataIo() extends Bundle with IMasterSlave {
   override def asMaster(): Unit = {
     master(txData)
     slave(rxData)
-    in(txError, rxError)
+    in(txError, txBusy, rxError)
   }
 }
 
@@ -147,6 +156,7 @@ case class AuxPhy(
   io.aux.write := tx.io.write
   io.aux.writeEnable := tx.io.writeEnable
   io.data.txError := tx.io.error
+  io.data.txBusy := tx.io.writeEnable
 
   val rx = AuxRx(dataRate = dataRate)
   rx.io.read := io.aux.read

@@ -198,6 +198,39 @@ class AuxLinkSourceSpec extends AnyFunSuite {
     }
   }
 
+  test("AuxLinkSource should time the reply from the end of the request") {
+    // The turnaround budget starts when the request leaves the wire, not when
+    // its last byte reaches the PHY. Those differ by the time the PHY still
+    // needs for that byte and the stop condition.
+    withLink("AuxLinkSource_TimeoutFromWire", replyTimeout = 300 us) {
+      (dut, sink, reply) =>
+        sink.txBusyTime = (100 us)
+        // inside the budget measured from the end of the request, outside it
+        // measured from the last byte reaching the PHY
+        sink.replyDelay = (250 us)
+        sink.replies = List(AckReply)
+        sink.start()
+
+        // the model stops collecting while it waits, so a retried request
+        // never reaches sink.requests. Count packets off the PHY instead.
+        var packets = 0
+        StreamMonitor(dut.io.phy.txData, dut.clockDomain) { fragment =>
+          if (fragment.last.toBoolean) {
+            packets += 1
+          }
+        }
+
+        sendRequest(dut, Request)
+        waitDone(dut)
+
+        assert(dut.io.result.toEnum == AuxLinkResult.ack,
+          s"result should be ack, was ${dut.io.result.toEnum}")
+        assert(packets == 1,
+          s"the reply was inside the budget, so the request should have been " +
+            s"sent once, but the PHY saw $packets packets")
+    }
+  }
+
   test("AuxLinkSource should accept a reply that outlasts the timeout") {
     // The timeout is the sink's turnaround budget, not a deadline for the
     // whole reply. A 16 byte read answered near the limit still takes another

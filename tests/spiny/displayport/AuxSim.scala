@@ -436,7 +436,11 @@ case class AuxLinkSinkModel(
   /** Gap between reply bytes, standing in for their time on the wire */
   var replyByteGap: TimeNumber = 0 us
 
+  /** How long the request keeps going after its last byte reaches the PHY */
+  var txBusyTime: TimeNumber = 0 us
+
   phy.txData.ready #= true
+  phy.txBusy #= false
   phy.rxData.valid #= false
   phy.txError #= false
   phy.rxError #= false
@@ -459,6 +463,12 @@ case class AuxLinkSinkModel(
         }
         requests += bytes.toSeq
 
+        if (txBusyTime > (0 us)) {
+          phy.txBusy #= true
+          sleep(txBusyTime)
+          phy.txBusy #= false
+        }
+
         val reply = replies.headOption.getOrElse(Seq())
         if (replies.nonEmpty) {
           replies = replies.tail
@@ -466,7 +476,7 @@ case class AuxLinkSinkModel(
         if (reply.nonEmpty) {
           sleep(replyDelay)
           for ((byte, i) <- reply.zipWithIndex) {
-            if (i > 0 && replyByteGap.toBigDecimal > 0) {
+            if (i > 0 && replyByteGap > (0 us)) {
               phy.rxData.valid #= false
               sleep(replyByteGap)
             }
