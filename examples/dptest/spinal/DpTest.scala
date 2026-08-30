@@ -10,7 +10,7 @@
 **                | $$                    |  $$$$$$/                         **
 **                |__/                     \______/                          **
 **                                                                           **
-** Permission is hereby granted, free of charge, to any person obtaining a   ** 
+** Permission is hereby granted, free of charge, to any person obtaining a   **
 ** copy of this software and associated documentation files (the             **
 ** "Software"), to deal in the Software without restriction, including       **
 ** without limitation the rights to use, copy, modify, merge, publish,       **
@@ -31,184 +31,120 @@
 
 package spiny.examples.dptest
 
+import java.io.File
+import org.rogach.scallop._
+
 import spinal.core._
 import spinal.lib._
-import spinal.lib.fsm._
 import spinal.lib.blackbox.xilinx.s7._
 
+import spiny.ClockGen
+import spiny.blackbox.xilinx._
+import spiny.soc._
+import spiny.peripheral._
 import spiny.displayport._
 
-class DpTest() extends Component {
-  val io = new Bundle() {
+class DpTest(
+  numLeds: Int = 8,
+  socFreq: HertzNumber = 70.MHz,
+  firmwarePath: String = null
+) extends Component {
+  val io = new Bundle {
     val SYS_CLK = in(Bool())
-    val LEDS = out(Bits(8 bits))
+    val CPU_RESET_N = in(Bool())
+    val LEDS = out(Bits(numLeds bits))
     val HPD = in(Bool())
     val AUX_P = inout(Analog(Bool))
     val AUX_N = inout(Analog(Bool))
     val UNUSED_P = in(Bool())
     val UNUSED_N = in(Bool())
 
-    // four PMOD debug signals, plus the byte bus
-    val DBG_AUX_READ = out(Bool())
+    // enough to watch a transaction on a scope, the rest goes over defmt
+    val DBG_AUX_FILTERED = out(Bool())
     val DBG_AUX_WRITE_EN = out(Bool())
-    val DBG_BUSY = out(Bool())
-    val DBG_DATA_CLK = out(Bool())
-    val DBG_DATA = out(Bits(8 bits))
   }
 
   noIoPrefix()
 
-  val sysClkDomain = ClockDomain(
+  val inputClkDomain = ClockDomain(
     clock = io.SYS_CLK,
-    frequency = FixedFrequency(100 MHz),
-    config = ClockDomainConfig(
-      resetKind = BOOT
-    )
+    reset = io.CPU_RESET_N,
+    config = ClockDomainConfig(resetActiveLevel = LOW),
+    frequency = FixedFrequency(100 MHz)
   )
 
-  sysClkDomain on {
-    val auxPhy = AuxPhy()
-    val auxIoBuf = IOBUFDS()
-    auxIoBuf.I := auxPhy.io.aux.write
-    auxIoBuf.T := !auxPhy.io.aux.writeEnable
-    auxPhy.io.aux.read := auxIoBuf.O
-    io.AUX_P := auxIoBuf.IO
-    io.AUX_N := auxIoBuf.IOB
+  val clockGen = inputClkDomain on ClockGen()
+  val socClkDomain = clockGen.request(socFreq)
+  clockGen.build()
 
-    // HPD comes from the sink, so synchronize it
-    val hpd = BufferCC(io.HPD, init = False)
+  val soc = socClkDomain on new SpinySoC(
+    cpuProfile = SpinyRv32iRustCpuProfile(withXilinxDebug = true),
+    ramSize = 32 kB,
+    firmwarePath = firmwarePath
+  ) {
+    val timer = new SpinyTimer(
+      timerWidth = 32,
+      prescaleWidth = 16,
+      numCompares = 2,
+      isMachineTimer = true,
+    ).setName("Timer")
 
-    val leds = Reg(Bits(8 bits)) init(B"8'0")
-    io.LEDS := leds
+    val gpio = new SpinyGpio(
+      Seq(
+        SpinyGpioBankConfig(
+          width = numLeds,
+          direction = SpinyGpioDirection.Output,
+          name = "leds"
+        )
+      )
+    ).setName("Gpio")
+    io.LEDS := gpio.getBankBits("leds")
 
-    val auxLink = AuxLinkSource(maxTimeout = 1 ms, retryLimit = 7)
-    auxLink.io.phy <> auxPhy.io.data
-    auxLink.io.replyTimeout := AuxLinkSource.timeoutCycles(300 us)
-    auxLink.io.maxRetries := 7
+    val displayPort = new SpinyDisplayPortSource().setName("DisplayPort")
+    displayPort.io.hpd := io.HPD
 
-    // native AUX read of 16 bytes from 0x00000
-    val auxRequest = Seq(0x90, 0x00, 0x00, 0x0f)
-    val requestBytes = Vec(auxRequest.map(b => B(b, 8 bits)))
-    val txIndex = Reg(UInt(log2Up(auxRequest.length) bits)) init(0)
-    val rxIndex = Reg(UInt(8 bits)) init(0)
+    val auxIoBuf = IOBUFDS.on(displayPort.io.aux, io.AUX_P, io.AUX_N)
 
-    auxLink.io.request.valid := False
-    auxLink.io.request.payload := requestBytes(txIndex)
-    auxLink.io.start := False
-    auxLink.io.reply.ready := False
+    // pull the filtered line so captures are not full of glitches 
+    // that AuxRx already rejects
+    io.DBG_AUX_FILTERED := displayPort.phy.rx.readValue.pull()
+    io.DBG_AUX_WRITE_EN := displayPort.io.aux.writeEnable
 
-    val dbgBytePeriod = 1 us
-    val dbgByteCycles =
-      (dbgBytePeriod.toBigDecimal *
-        ClockDomain.current.frequency.getValue.toBigDecimal)
-        .setScale(0, BigDecimal.RoundingMode.CEILING)
-        .toInt
-    val dbgCounter = Counter(dbgByteCycles)
-    val dbgData = Reg(Bits(8 bits)) init (B"8'0")
-    val dbgDataValid = Reg(Bool()) init (False)
-
-    io.DBG_AUX_READ := auxIoBuf.O
-    io.DBG_AUX_WRITE_EN := auxPhy.io.aux.writeEnable
-    io.DBG_BUSY := auxLink.io.busy
-    io.DBG_DATA := dbgData
-    io.DBG_DATA_CLK := dbgDataValid && dbgCounter >= (dbgByteCycles / 2)
-
-    val settleDelay = Timeout(5 ms)
-
-    val fsm = new StateMachine {
-      always {
-        // any HPD drop restarts the whole test
-        when(!hpd) {
-          leds := B"8'0"
-          forceGoto(stateIdle)
-        }
-      }
-
-      val stateIdle: State = new State with EntryPoint {
-        whenIsActive {
-          settleDelay.clear()
-          when(hpd) {
-            goto(stateSettle)
-          }
-        }
-      }
-
-      val stateSettle: State = new State {
-        whenIsActive {
-          when(settleDelay) {
-            goto(stateRequest)
-          }
-        }
-      }
-
-      // load the request into the replay buffer, a byte at a time
-      val stateRequest: State = new State {
-        onEntry {
-          txIndex := 0
-        }
-        whenIsActive {
-          auxLink.io.request.valid := True
-          when(auxLink.io.request.fire) {
-            when(txIndex === (auxRequest.length - 1)) {
-              goto(stateStart)
-            } otherwise {
-              txIndex := txIndex + 1
-            }
-          }
-        }
-      }
-
-      val stateStart: State = new State {
-        whenIsActive {
-          auxLink.io.start := True
-          goto(stateWait)
-        }
-      }
-
-      // AuxLinkSource handles the reply timeout and any retries
-      val stateWait: State = new State {
-        whenIsActive {
-          when(auxLink.io.done) {
-            goto(stateReply)
-          }
-        }
-      }
-
-      val stateReply: State = new State {
-        onEntry {
-          rxIndex := 0
-          dbgCounter.clear()
-          dbgDataValid := False
-        }
-        whenIsActive {
-          dbgCounter.increment()
-          // one byte per debug period, so the analyser can sample it
-          auxLink.io.reply.ready := dbgCounter.willOverflow
-          when(auxLink.io.reply.fire) {
-            dbgData := auxLink.io.reply.payload
-            dbgDataValid := True
-            // second byte of the reply is the first byte of DPCD data
-            when(rxIndex === 1) {
-              leds := auxLink.io.reply.payload
-            }
-            rxIndex := rxIndex + 1
-          }
-          // the buffer never bubbles, so the first idle beat means drained
-          when(dbgCounter.willOverflow && !auxLink.io.reply.valid) {
-            goto(stateDone)
-          }
-        }
-      }
-
-      val stateDone: State = new State {
-        whenIsActive {}
-      }
-    }
+    build(peripherals = Seq(
+      timer,
+      gpio,
+      displayPort
+    ))
   }
 }
 
 object TopLevelVerilog extends App {
+  object Conf extends ScallopConf(args) {
+    val numLeds = opt[Int](default = Some(8))
+    val freqMhz = opt[BigDecimal](required = true)
+    val firmware = opt[File]()
+    validateFileExists(firmware)
+    validateFileIsFile(firmware)
+
+    verify()
+  }
+  println(f"[DpTest] TopLevelVerilog.Conf: ${Conf.summary}")
+
   val spinalReport = SpinalConfig(
     targetDirectory = "target/spinal",
-  ).generateVerilog(new DpTest())
+    inlineRom = true
+  ).generateVerilog(new DpTest(
+    numLeds = Conf.numLeds(),
+    socFreq = Conf.freqMhz().MHz,
+    firmwarePath = Conf.firmware.map(f => f.getAbsolutePath()).getOrElse(null)
+  ))
+
+  val soc = spinalReport.toplevel.soc
+  println(soc.peripheralMappings)
+  soc.dumpSvd("DpTest")
+  soc.dumpLinkerScript()
+  soc.dumpHalCrate(
+    "target/rust/dptest-hal", "dptest-hal",
+    "dptest-pac", "../dptest-pac", "../../../../../rust/spiny-hal"
+  )
 }

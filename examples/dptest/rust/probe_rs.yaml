@@ -1,0 +1,20 @@
+name: SpinySoC
+variants:
+- name: SpinySoC
+  cores:
+  - name: core0
+    type: riscv
+    core_access_options: !Riscv
+  # the DTM has no TAP of its own, it is tunneled through the BSCANE2
+  # USER4 register (0x23) of the 7 series TAP, whose IR is 6 bits
+  jtag:
+    riscv_tunnel:
+      ir_id: 0x23
+      ir_width: 6
+  memory_map:
+  - !Ram
+    range:
+      start: 0x00000000
+      end: 0x00008000
+    cores:
+    - core0

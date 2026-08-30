@@ -8,6 +8,22 @@ create_clock \
   -name SYS_CLK \
   [get_ports SYS_CLK]
 
+# internal BSCANE2 JTAG up to 50 MHz
+create_clock \
+  -period 20.000 \
+  -name JTAG_CLK \
+  [get_pins -hierarchical *jtagTap/TCK]
+
+# clocks are not related
+set_clock_groups \
+  -asynchronous \
+  -group [get_clocks -include_generated_clocks SYS_CLK] \
+  -group [get_clocks -include_generated_clocks JTAG_CLK]
+
+set_false_path -from [get_ports { CPU_RESET_N }]
+set_false_path -from [get_ports { HPD }]
+set_false_path -to [get_ports { LEDS[*] }]
+
 ###########################################################
 # Pins                                                    #
 ###########################################################
@@ -15,6 +31,10 @@ set_property -dict { \
   PACKAGE_PIN R4 \
   IOSTANDARD LVCMOS33 \
 } [get_ports { SYS_CLK }];
+set_property -dict { \
+  PACKAGE_PIN G4 \
+  IOSTANDARD LVCMOS15 \
+} [get_ports { CPU_RESET_N }];
 
 set_property -dict { \
   PACKAGE_PIN T14 \
@@ -76,50 +96,8 @@ set_property -dict { \
 set_property -dict { \
   PACKAGE_PIN AB22 \
   IOSTANDARD LVCMOS33 \
-} [get_ports { DBG_AUX_READ }];
+} [get_ports { DBG_AUX_FILTERED }];
 set_property -dict { \
   PACKAGE_PIN AB21 \
   IOSTANDARD LVCMOS33 \
 } [get_ports { DBG_AUX_WRITE_EN }];
-
-set_property -dict { \
-  PACKAGE_PIN V9 \
-  IOSTANDARD LVCMOS33 \
-} [get_ports { DBG_DATA[0] }];
-set_property -dict { \
-  PACKAGE_PIN V8 \
-  IOSTANDARD LVCMOS33 \
-} [get_ports { DBG_DATA[1] }];
-set_property -dict { \
-  PACKAGE_PIN V7 \
-  IOSTANDARD LVCMOS33 \
-} [get_ports { DBG_DATA[2] }];
-set_property -dict { \
-  PACKAGE_PIN W7 \
-  IOSTANDARD LVCMOS33 \
-} [get_ports { DBG_DATA[3] }];
-set_property -dict { \
-  PACKAGE_PIN W9 \
-  IOSTANDARD LVCMOS33 \
-} [get_ports { DBG_DATA[4] }];
-set_property -dict { \
-  PACKAGE_PIN Y9 \
-  IOSTANDARD LVCMOS33 \
-} [get_ports { DBG_DATA[5] }];
-set_property -dict { \
-  PACKAGE_PIN Y8 \
-  IOSTANDARD LVCMOS33 \
-} [get_ports { DBG_DATA[6] }];
-set_property -dict { \
-  PACKAGE_PIN Y7 \
-  IOSTANDARD LVCMOS33 \
-} [get_ports { DBG_DATA[7] }];
-
-set_property -dict { \
-  PACKAGE_PIN AB20 \
-  IOSTANDARD LVCMOS33 \
-} [get_ports { DBG_DATA_CLK }];
-set_property -dict { \
-  PACKAGE_PIN AB18 \
-  IOSTANDARD LVCMOS33 \
-} [get_ports { DBG_BUSY }];

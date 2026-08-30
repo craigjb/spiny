@@ -18,6 +18,31 @@ filesets:
       - craigjb:spiny:generators:0.1.0
 
 generate:
+  svd:
+    generator: spinalhdl
+    parameters:
+      sbt_dir: ../../
+      main: spiny.examples.dptest.TopLevelVerilog
+      project: dptest
+
+  rustpac:
+    generator: rustpac
+    parameters:
+      crate_name: dptest-pac
+      crate_version: 0.1.0
+      output_path: target/rust/dptest-pac
+
+  firmware:
+    generator: cargo
+    parameters:
+      project_dir: rust
+      args: [
+        "objcopy", "--release",
+        "--",
+        "-O", "binary",
+        "target/release/dptest.bin"
+      ]
+
   spinalhdl:
     generator: spinalhdl
     parameters:
@@ -30,8 +55,18 @@ generate:
 targets:
   nexys_video:
     filesets: [xdc_nexys_video, vivado_settings, dep]
-    generate: 
-      - spinalhdl
+    generate:
+      - svd:
+          args:
+            - --num-leds=8
+            - --freq-mhz=70
+      - rustpac
+      - firmware
+      - spinalhdl:
+          args:
+            - --num-leds=8
+            - --freq-mhz=70
+            - --firmware=rust/target/release/dptest.bin
     toplevel: DpTest
     flow: vivado
     flow_options:

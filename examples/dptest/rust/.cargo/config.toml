@@ -1,0 +1,15 @@
+[target.riscv32i-unknown-none-elf]
+rustflags = [
+    "-C", "link-arg=-Tpac.x",
+    "-C", "link-arg=-Tdevice.x",
+    "-C", "link-arg=-Tlink.x",
+    "-C", "link-arg=-Tdefmt.x"
+]
+# JTAG is on channel B of the board's FT2232H, hence the -1 interface suffix
+runner = 'probe-rs run --probe 0403:6010-1 --chip-description-path probe_rs.yaml --chip=SpinySoC'
+
+[build]
+target = "riscv32i-unknown-none-elf"
+
+[env]
+DEFMT_RTT_BUFFER_SIZE = "512"

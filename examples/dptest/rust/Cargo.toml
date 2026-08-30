@@ -1,0 +1,24 @@
+[package]
+name = "dptest"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+critical-section = "1.2"
+riscv = { version = "0.16.0", features = ["critical-section-single-hart"] }
+riscv-rt = { version = "0.17.0", features = ["single-hart"] }
+panic-halt = "1.0.0"
+defmt = "1.0"
+defmt-rtt = { version = "0.4", features = ["disable-blocking-mode"] }
+dptest-pac = { path = "../target/rust/dptest-pac", features = ["rt", "critical-section"] }
+dptest-hal = { path = "../target/rust/dptest-hal" }
+embassy-executor = { version = "0.10", features = ["platform-riscv32", "executor-thread"] }
+embassy-time = { version = "0.5", features = ["tick-hz-32_768"] }
+
+[profile.release]
+codegen-units = 1
+debug = 2
+lto = 'fat'
+debug-assertions = false
+incremental = false
+opt-level = 2
