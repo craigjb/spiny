@@ -73,19 +73,6 @@ async fn read_dpcd(dp: &dptest_pac::DisplayPort) {
     }
 
     read_edid(dp);
-
-    // The AUX pair floats when neither end drives it, so the receiver can see
-    // noise. rxUnexpected latches if any of it decoded into a byte while no
-    // transaction was running, which is the difference between ugly scope
-    // captures and noise actually reaching the link layer.
-    aux::clear_events(dp);
-    Timer::after_secs(2).await;
-    let idle = aux::events(dp);
-    if idle.any_unsolicited() {
-        defmt::println!("idle noise decoded into packets: {}", idle);
-    } else {
-        defmt::println!("2 s idle: no noise reached the link layer");
-    }
 }
 
 #[embassy_executor::main]

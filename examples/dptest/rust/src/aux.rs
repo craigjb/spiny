@@ -40,7 +40,7 @@ pub enum AuxError {
 pub const NATIVE_READ: u8 = 0x9;
 
 /// Clears the latched AUX events so the next transaction starts clean
-pub fn clear_events(dp: &DisplayPort) {
+fn clear_events(dp: &DisplayPort) {
     dp.aux_int_raw().write(|w| {
         w.done_raw()
             .clear_bit_by_one()
@@ -200,31 +200,4 @@ pub fn edid_read(dp: &DisplayPort, out: &mut [u8]) -> Result<(), AuxError> {
         offset += got;
     }
     Ok(())
-}
-
-/// Latched AUX events, read from the interrupt raw register
-#[derive(Debug, Clone, Copy, PartialEq, Eq, defmt::Format)]
-pub struct AuxEvents {
-    pub done: bool,
-    pub rx_overrun: bool,
-    pub rx_unexpected: bool,
-    pub request_dropped: bool,
-}
-
-impl AuxEvents {
-    /// Anything that says the link saw traffic it did not ask for
-    pub fn any_unsolicited(&self) -> bool {
-        self.rx_unexpected || self.rx_overrun
-    }
-}
-
-/// Reads the latched events without clearing them
-pub fn events(dp: &DisplayPort) -> AuxEvents {
-    let raw = dp.aux_int_raw().read();
-    AuxEvents {
-        done: raw.done_raw().bit_is_set(),
-        rx_overrun: raw.rx_overrun_raw().bit_is_set(),
-        rx_unexpected: raw.rx_unexpected_raw().bit_is_set(),
-        request_dropped: raw.request_dropped_raw().bit_is_set(),
-    }
 }
