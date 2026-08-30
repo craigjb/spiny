@@ -33,6 +33,7 @@ package spiny.displayport
 
 import spinal.core._
 import spinal.lib._
+import spinal.lib.bus.regif._
 import spinal.lib.fsm._
 
 /** Replayable byte buffer for one AUX packet
@@ -422,4 +423,131 @@ case class AuxLinkSource(
       }
     }
   }
+
+  /** Adds a register interface for this link to busIf and wires it up
+   *
+   *  The registers are built in the calling Component, so a peripheral does
+   *  `val regs = auxLink.driveFrom(busIf)` and wires regs.interrupt to its
+   *  own interrupt port.
+   *
+   *  @param defaultTimeout Reset value for replyTimeout, clamped to its width
+   */
+  def driveFrom(
+    busIf: BusIf,
+    defaultTimeout: TimeNumber = 300 us
+  ): AuxLinkSourceRegs = AuxLinkSourceRegs(this, busIf, defaultTimeout)
+}
+
+/** Register interface for an [[AuxLinkSource]]
+ *
+ *  Built by [[AuxLinkSource.driveFrom]] in the calling Component. The register
+ *  handles are exposed so a peripheral can read back the layout, and so tests
+ *  can look up addresses rather than hardcoding the map.
+ *
+ *  Request bytes are written one per bus access. The buffer only takes them
+ *  between transactions, and an APB write cannot be made to wait, so a byte
+ *  written while busy or past the end of the buffer is dropped. The
+ *  requestDropped interrupt latches that, and its raw bit is a sticky error
+ *  flag.
+ *
+ *  Reading the reply register pops a byte. Reading more than replyLength
+ *  raises a bus error rather than returning a stale byte.
+ *
+ *  @param link Link to wire the registers to
+ *  @param busIf Interface the registers are allocated from
+ *  @param defaultTimeout Reset value for replyTimeout, clamped to its width
+ */
+case class AuxLinkSourceRegs(
+  link: AuxLinkSource,
+  busIf: BusIf,
+  defaultTimeout: TimeNumber = 300 us
+) extends Area {
+  val control = busIf.newReg(doc = "AUX link control").setName("control")
+  link.io.start := control.field(
+    Bool(),
+    AccessType.W1P,
+    resetValue = 0,
+    doc = "Start a transaction using the buffered request"
+  )(SymbolName("start"))
+
+  val config = busIf.newReg(doc = "AUX link configuration").setName("config")
+  link.io.maxRetries := config.field(
+    UInt(link.retryWidth bits),
+    AccessType.RW,
+    resetValue = (BigInt(1) << link.retryWidth) - 1,
+    doc = "Extra attempts after the first, on timeout, DEFER or PHY error"
+  )(SymbolName("maxRetries"))
+  link.io.replyTimeout := config.field(
+    UInt(link.timeoutWidth bits),
+    AccessType.RW,
+    resetValue = AuxLinkSource
+      .timeoutCycles(defaultTimeout)
+      .min((BigInt(1) << link.timeoutWidth) - 1),
+    doc = "Clocks to wait for reply progress before retrying"
+  )(SymbolName("replyTimeout"))
+
+  val status = busIf.newReg(doc = "AUX link status").setName("status")
+  val busyField = status.field(
+    Bool(),
+    AccessType.RO,
+    doc = "A transaction is in progress"
+  )(SymbolName("busy"))
+  busyField := link.io.busy
+  val resultField = status.field(
+    AuxLinkResult(),
+    AccessType.RO,
+    doc = "Outcome of the last transaction, held until the next start"
+  )(SymbolName("result"))
+  resultField := link.io.result
+  val replyLengthField = status.field(
+    UInt(link.io.replyLength.getWidth bits),
+    AccessType.RO,
+    doc = "Reply bytes buffered, held alongside result"
+  )(SymbolName("replyLength"))
+  replyLengthField := link.io.replyLength
+
+  // a write only Flow, so the request stream's ready has to be checked here
+  val request = busIf.newWrFifo(
+    doc = "Request byte, one per write"
+  )(SymbolName("request"))
+  // a FIFO with no declared field reads as all reserved, and regif then
+  // skips generating its bus access entirely
+  request.field(8, doc = "Request byte")("data")
+  link.io.request.valid := request.bus.valid
+  link.io.request.payload := request.bus.payload(7 downto 0)
+  val requestDropped = request.bus.valid && !link.io.request.ready
+  requestDropped.setName("requestDropped")
+
+  // reading when empty raises a bus error, so firmware bounds its reads with
+  // replyLength
+  val reply = busIf.newRdFifo(
+    doc = "Reply byte, one per read"
+  )(SymbolName("reply"))
+  reply.field(8, doc = "Reply byte")("data")
+  reply.bus.valid := link.io.reply.valid
+  reply.bus.payload := link.io.reply.payload.resized
+  link.io.reply.ready := reply.bus.ready
+
+  // the factory returns only the interrupt, so the group's addresses have to
+  // be taken before it allocates them
+  private val interruptBase = busIf.getRegPtr()
+  /** Raw status, one W1C bit per event, and sticky error flags */
+  val interruptRaw = interruptBase
+  /** Write 1 to set the matching raw bit, for testing an ISR */
+  val interruptForce = interruptBase + busIf.wordAddressInc
+  /** 1 masks the event, and every bit resets masked */
+  val interruptMask = interruptBase + 2 * busIf.wordAddressInc
+  /** Raw and not masked, which is what drives the interrupt */
+  val interruptStatus = interruptBase + 3 * busIf.wordAddressInc
+
+  // every trigger is a single cycle pulse, so the group's raw bits are what
+  // firmware reads, and they clear on write 1
+  /** High while any unmasked event is pending */
+  val interrupt = busIf.interruptFactory(
+    "aux",
+    link.io.done,
+    link.io.rxOverrun,
+    link.io.rxUnexpected,
+    requestDropped
+  )
 }

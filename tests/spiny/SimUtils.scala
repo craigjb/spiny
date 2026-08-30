@@ -34,6 +34,8 @@ package spiny
 import spinal.core._
 import spinal.core.sim._
 import spinal.core.fiber.Handle
+import spinal.lib.bus.amba3.apb.Apb3
+import spinal.lib.bus.amba3.apb.sim.Apb3Driver
 
 /** Helper to ensure unique sim directory per test */
 object SpinySimConfig {
@@ -99,6 +101,30 @@ object SimClockDomainExt {
   // conversion, so this is needed to handle DUT ClockDomains
   implicit class SimClockDomainHandleExtension(clockDomain: Handle[ClockDomain])
     extends SimClockDomainExtension(clockDomain.get)
+}
+
+/** APB3 accesses that report PSLVERR, which Apb3Driver discards
+ *
+ *  regif raises a bus error for things like reading an empty read FIFO, and
+ *  the byte it returns alongside looks like ordinary data, so a test that
+ *  ignores the error cannot tell the difference.
+ */
+case class Apb3CheckedDriver(apb: Apb3, clockDomain: ClockDomain) {
+  val driver = Apb3Driver(apb, clockDomain)
+
+  def write(address: BigInt, data: BigInt): Unit = driver.write(address, data)
+
+  def read(address: BigInt): BigInt = driver.read(address)
+
+  /** Reads, returning the data and whether the slave signalled an error
+    *
+    *  PSLVERROR is registered alongside PRDATA, so both are sampled at the
+    *  same point, right after the access phase.
+    */
+  def readChecked(address: BigInt): (BigInt, Boolean) = {
+    val data = driver.read(address)
+    (data, apb.PSLVERROR.toBoolean)
+  }
 }
 
 /** Counts single cycle pulses on a signal, from construction onwards */
