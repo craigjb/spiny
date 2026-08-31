@@ -35,16 +35,12 @@ import spinal.core._
 import spinal.lib._
 import spinal.lib.blackbox.xilinx.s7.OBUFDS
 
+import spiny.DiffPair
 import spiny.platform.xilinx._
 
-case class TmdsDiffPair() extends Bundle {
-  val p = Bool()
-  val n = Bool()
-}
-
 case class HdmiLink() extends Bundle {
-  val clk = TmdsDiffPair()
-  val data = Vec(TmdsDiffPair(), 3)
+  val clk = DiffPair()
+  val data = Vec(DiffPair(), 3)
 }
 
 /** HDMI TX PHY using Xilinx OSERDESE2
@@ -80,7 +76,7 @@ case class XilinxSerDesHdmiChannel(serialClk: ClockDomain) extends Component {
   val io = new Bundle {
     val enable = in(Bool())
     val input = in(TmdsChar)
-    val output = out(TmdsDiffPair())
+    val output = out(DiffPair())
   }
 
   val pixelClkFreq = ClockDomain.current.frequency.getValue
