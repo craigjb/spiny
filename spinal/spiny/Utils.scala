@@ -36,6 +36,12 @@ import java.nio.file.{Files, Paths}
 import spinal.core._
 import spinal.lib._
 
+/** A differential signal pair */
+case class DiffPair() extends Bundle {
+  val p = Bool()
+  val n = Bool()
+}
+
 object Pulse {
   def apply(period: TimeNumber): Pulse = Pulse(period.toHertz)
 }
