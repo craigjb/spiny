@@ -201,7 +201,8 @@ case class Gtpe2PllConfig(
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
  */
-case class Gtpe2DrpIo(addressWidth: Int = 8) extends Bundle {
+case class Gtpe2DrpIo(addressWidth: Int = 8)
+  extends Bundle with IMasterSlave {
   /** DRP clock
    *  @group ports
    */
@@ -236,6 +237,11 @@ case class Gtpe2DrpIo(addressWidth: Int = 8) extends Bundle {
    *  @group ports
    */
   val ready = out Bool() setName("DRPRDY")
+
+  override def asMaster(): Unit = {
+    out(clk, addr, dataIn, enable, writeEnable)
+    in(dataOut, ready)
+  }
 
   /** Ties off the port when nothing reconfigures the primitive */
   def disable() = {
