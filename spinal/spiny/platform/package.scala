@@ -29,7 +29,7 @@
 ** OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE **
 ** USE OR OTHER DEALINGS IN THE SOFTWARE.                                    */
 
-package spiny.blackbox
+package spiny.platform
 
 import spinal.core._
 import spinal.lib.blackbox.xilinx.s7.IOBUFDS

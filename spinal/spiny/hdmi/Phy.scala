@@ -35,7 +35,7 @@ import spinal.core._
 import spinal.lib._
 import spinal.lib.blackbox.xilinx.s7.OBUFDS
 
-import spiny.blackbox.xilinx._
+import spiny.platform.xilinx._
 
 case class TmdsDiffPair() extends Bundle {
   val p = Bool()

@@ -39,7 +39,7 @@ import spinal.lib._
 import spinal.lib.blackbox.xilinx.s7._
 
 import spiny.ClockGen
-import spiny.blackbox.xilinx._
+import spiny.platform.xilinx._
 import spiny.soc._
 import spiny.peripheral._
 import spiny.displayport._
