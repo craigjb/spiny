@@ -37,7 +37,7 @@ import spinal.lib.bus.amba3.apb._
 import spinal.lib.bus.regif._
 import spinal.lib.com.eth._
 
-import spiny.platform.xilinx.ODDR
+import spiny.platform.xilinx.blackbox.ODDR
 
 /** 100BASE-X Ethernet peripheral
  *

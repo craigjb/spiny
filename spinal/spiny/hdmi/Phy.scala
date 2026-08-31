@@ -36,7 +36,7 @@ import spinal.lib._
 import spinal.lib.blackbox.xilinx.s7.OBUFDS
 
 import spiny.DiffPair
-import spiny.platform.xilinx._
+import spiny.platform.xilinx.blackbox._
 
 case class HdmiLink() extends Bundle {
   val clk = DiffPair()
