@@ -174,7 +174,38 @@ case class Gtpe2PllIo() extends Bundle {
 }
 
 object Gtpe2PllConfig {
+  /** VCO frequency range the PLL is specified for */
+  val VcoMin = 1.6 GHz
+  val VcoMax = 3.3 GHz
+
   def default() = Gtpe2PllConfig(refClkDiv = 1, fbDiv = 1, fbDiv45 = 4)
+
+  /** Finds dividers that hit a VCO frequency exactly
+   *
+   *  f_VCO = refClk / refClkDiv * fbDiv * fbDiv45, so there are only twenty
+   *  combinations to try. Returns None rather than settling for close.
+   */
+  def solve(
+    refClk: HertzNumber,
+    vco: HertzNumber,
+    vcoMin: HertzNumber = VcoMin,
+    vcoMax: HertzNumber = VcoMax
+  ): Option[Gtpe2PllConfig] = {
+    if (vco < vcoMin || vco > vcoMax) {
+      return None
+    }
+    // compared as products so the check stays exact, no division
+    val target = vco.toBigDecimal
+    val reference = refClk.toBigDecimal
+    val candidates = for {
+      refClkDiv <- Seq(1, 2)
+      fbDiv <- 1 to 5
+      fbDiv45 <- Seq(4, 5)
+      if reference * BigDecimal(fbDiv * fbDiv45) ==
+        target * BigDecimal(refClkDiv)
+    } yield Gtpe2PllConfig(refClkDiv, fbDiv, fbDiv45)
+    candidates.headOption
+  }
 }
 
 /** Raw divider settings for one PLL

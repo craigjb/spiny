@@ -38,105 +38,6 @@ import spinal.lib._
 
 import spiny.platform.xilinx.blackbox._
 
-/** A reference clock a PLL can run from
- *
- *  select names one of the primitive's inputs, freq is what it actually runs
- *  at, which is what the divider solver needs.
- */
-case class GtpRefClk(select: Gtpe2PllRefClk, freq: HertzNumber)
-
-/** What a PLL should be set to */
-sealed trait GtpPllConfig
-
-object GtpPllConfig {
-  /** Solve dividers for this VCO frequency */
-  case class Vco(freq: HertzNumber) extends GtpPllConfig
-
-  /** Use exactly these dividers, when a particular set behaves better */
-  case class Dividers(refClkDiv: Int, fbDiv: Int, fbDiv45: Int)
-    extends GtpPllConfig
-
-  /** The VCO a line rate needs at a given channel output divider */
-  def lineRate(rate: HertzNumber, outDiv: Int): Vco = {
-    Vco(rate * BigDecimal(outDiv) / BigDecimal(2))
-  }
-}
-
-object GtpPll {
-  /** Finds dividers that hit a VCO frequency exactly
-   *
-   *  f_VCO = refClk / refClkDiv * fbDiv * fbDiv45, so there are only twenty
-   *  combinations to try.
-   */
-  def solve(
-    refClk: HertzNumber,
-    vco: HertzNumber,
-    vcoMin: HertzNumber = GtpCommon.VcoMin,
-    vcoMax: HertzNumber = GtpCommon.VcoMax
-  ): Option[Gtpe2PllConfig] = {
-    if (vco < vcoMin || vco > vcoMax) {
-      return None
-    }
-    // compared as products so the check stays exact, no division
-    val target = vco.toBigDecimal
-    val reference = refClk.toBigDecimal
-    val candidates = for {
-      refClkDiv <- Seq(1, 2)
-      fbDiv <- 1 to 5
-      fbDiv45 <- Seq(4, 5)
-      if reference * BigDecimal(fbDiv * fbDiv45) ==
-        target * BigDecimal(refClkDiv)
-    } yield Gtpe2PllConfig(refClkDiv, fbDiv, fbDiv45)
-    candidates.headOption
-  }
-}
-
-/** One of the two PLLs, claimed from a [[GtpCommon]]
- *
- *  Index and dividers are only resolved once the common is built.
- */
-class GtpPll(
-  val refClk: GtpRefClk,
-  val config: GtpPllConfig,
-  val requestedIndex: Option[Int],
-  val io: GtpPllIo
-) {
-  private var assignedIndex = -1
-  private var assignedDividers: Gtpe2PllConfig = null
-
-  /** Which of the two PLLs this ended up on */
-  def index: Int = {
-    assert(assignedIndex >= 0, "PLL index is only known after build()")
-    assignedIndex
-  }
-
-  /** The dividers the solver settled on */
-  def dividers: Gtpe2PllConfig = {
-    assert(assignedDividers != null, "PLL dividers are only known after build()")
-    assignedDividers
-  }
-
-  /** Drives the control inputs to their idle values
-   *
-   *  For a consumer that never resets, powers down or re-selects the
-   *  reference clock. The inputs have no defaults, so anything that neither
-   *  drives them nor calls this fails elaboration rather than silently
-   *  running with them tied off.
-   */
-  def tieOff(): Unit = {
-    io.reset := False
-    io.powerDown := False
-    io.lockDetectClk := False
-    io.refClkSelect := refClk.select.asBits
-  }
-
-  private[xilinx] def assignIndex(index: Int): Unit = assignedIndex = index
-
-  private[xilinx] def assignDividers(dividers: Gtpe2PllConfig): Unit = {
-    assignedDividers = dividers
-  }
-}
-
 /** A PLL handed out by a [[GtpCommon]]
  *
  * @groupname ports SpinalHDL IO Ports
@@ -192,26 +93,27 @@ case class GtpPllIo() extends Bundle with IMasterSlave {
     out(outClk, outRefClk, lock, refClkLost, fbClkLost)
     in(reset, powerDown, lockDetectClk, refClkSelect)
   }
+
+  /** Drives the control inputs to their idle values
+   */
+  def tieOff(refClk: Gtpe2PllRefClk = Gtpe2PllRefClk.GtRefClk0): Unit = {
+    reset := False
+    powerDown := False
+    lockDetectClk := False
+    refClkSelect := refClk.asBits
+  }
 }
 
-object GtpCommon {
-  val VcoMin = 1.6 GHz
-  val VcoMax = 3.3 GHz
-}
-
-/** Hands out the two PLLs of a GTPE2_COMMON
+/** Allocates the two PLLs of a GTPE2_COMMON to consumers
  *
- *  Consumers claim a PLL with requestPll and wire to the returned handle. The
- *  primitive is instantiated by build(), once every claim is known, because
- *  the dividers are generics rather than ports.
+ *  Consumers claim a PLL with requestPll and wire to the returned port.
+ *  The primitive is instantiated once the enclosing component has elaborated,
+ *  so build() only has to be called by hand if this is the toplevel.
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
  */
-case class GtpCommon(
-  vcoMin: HertzNumber = GtpCommon.VcoMin,
-  vcoMax: HertzNumber = GtpCommon.VcoMax
-) extends Component {
+case class GtpCommon() extends Component {
   val io = new Bundle {
     /** This quad's reference clock 0, from an IBUFDS_GTE2 with no BUFG
      *  @group ports
@@ -244,62 +146,48 @@ case class GtpCommon(
     val gtWestRefClk1 = in Bool() default(False)
   }
 
-  private val pending = mutable.ArrayBuffer[GtpPll]()
+  private val claims = mutable.ArrayBuffer[(Gtpe2PllConfig, GtpPllIo)]()
   private var built = false
 
-  /** Claims a PLL running from a given reference clock
-   *
-   *  index pins a particular one, otherwise the next free slot is used at
-   *  build time. refClk.select becomes the power-on value of refClkSelect,
-   *  which stays a runtime port so the PLL can be switched later.
-   */
-  def requestPll(
-    refClk: GtpRefClk,
-    config: GtpPllConfig,
-    index: Option[Int] = None
-  ): GtpPll = {
-    assert(!built, "Cannot call requestPll() after build()")
-    assert(pending.size < 2, "A GTPE2_COMMON has only two PLLs")
-    index.foreach { i =>
-      assert((0 to 1).contains(i), s"PLL index must be 0 or 1, was $i")
-      assert(
-        !pending.exists(_.requestedIndex.contains(i)),
-        s"PLL $i has already been claimed"
-      )
-    }
+  // The claims are only all known once the enclosing component has
+  // finished elaborating, so the build waits for the parent.
+  if (parent != null) parent.addPrePopTask(() => if (!built) build())
 
-    val slot = pending.size
+  /** Claims the next free PLL */
+  def requestPll(config: Gtpe2PllConfig): GtpPllIo = {
+    assert(!built,
+      "Cannot claim a PLL after the GTPE2_COMMON is built. The build runs " +
+        "when the enclosing component finishes elaborating, so a claim from " +
+        "a prePopTask or afterElaboration block is too late.")
+    assert(claims.size < 2, "A GTPE2_COMMON has only two PLLs")
+
+    val slot = claims.size
     val port = rework {
       master(GtpPllIo()).setName(s"pll_$slot")
     }
-
-    val pll = new GtpPll(refClk, config, index, port)
-    pending += pll
-    pll
+    claims += ((config, port))
+    port
   }
 
-  /** Resolves every claim and instantiates the primitive */
+  /** Instantiates the primitive with whatever was claimed
+   *
+   *  Runs automatically at the end of the enclosing component.
+   *  Calling explicitly is allowed.
+   */
   def build(): Unit = rework {
     assert(!built, "build() already called")
-    assert(pending.nonEmpty, "No PLL requests registered")
+    assert(claims.nonEmpty, "A GtpCommon was created but no PLL was claimed")
     built = true
 
-    assignIndices()
-    pending.foreach(pll => pll.assignDividers(solveFor(pll)))
-
-    pending.foreach { pll =>
-      val d = pll.dividers
-      val ref = pll.refClk.freq.toDouble
-      val vco = ref / d.refClkDiv * d.fbDiv * d.fbDiv45
+    claims.zipWithIndex.foreach { case ((config, _), i) =>
       println(
-        f"[GtpCommon] PLL${pll.index} ${ref / 1e6}%.3f MHz " +
-          f"(sel ${pll.refClk.select.code}) -> VCO ${vco / 1e6}%.3f MHz " +
-          f"(refClkDiv=${d.refClkDiv}, fbDiv=${d.fbDiv}, fbDiv45=${d.fbDiv45})"
+        s"[GtpCommon] PLL$i refClkDiv=${config.refClkDiv} " +
+          s"fbDiv=${config.fbDiv} fbDiv45=${config.fbDiv45}"
       )
     }
 
     val dividers = Array.fill(2)(Gtpe2PllConfig.default())
-    pending.foreach(pll => dividers(pll.index) = pll.dividers)
+    claims.zipWithIndex.foreach { case ((config, _), i) => dividers(i) = config }
     val common = Gtpe2Common(dividers(0), dividers(1))
 
     common.io.clocking.gtRefClk0 := io.gtRefClk0
@@ -308,50 +196,17 @@ case class GtpCommon(
     common.io.clocking.gtEastRefClk1 := io.gtEastRefClk1
     common.io.clocking.gtWestRefClk0 := io.gtWestRefClk0
     common.io.clocking.gtWestRefClk1 := io.gtWestRefClk1
-    // the arbiter that shares this between both PLLs comes later
+    // TODO: arbitrate between PLL bundles
     common.io.drp.disable()
 
-    val allocated = pending.map(_.index).toSet
     for (i <- 0 to 1) {
       val primitive = if (i == 0) common.io.pll0 else common.io.pll1
-      if (allocated.contains(i)) {
-        connect(pending.find(_.index == i).get.io, primitive)
+      if (i < claims.size) {
+        connect(claims(i)._2, primitive)
       } else {
         primitive.disable()
       }
     }
-  }
-
-  /** Explicit claims keep their slot, automatic ones fill what is left */
-  private def assignIndices(): Unit = {
-    val taken = mutable.Set[Int]()
-    pending.flatMap(_.requestedIndex).foreach(taken += _)
-    var next = 0
-    pending.foreach { pll =>
-      pll.assignIndex(pll.requestedIndex.getOrElse {
-        while (taken.contains(next)) {
-          next += 1
-        }
-        taken += next
-        next
-      })
-    }
-  }
-
-  private def solveFor(pll: GtpPll): Gtpe2PllConfig = {
-    val dividers = pll.config match {
-      case GtpPllConfig.Dividers(refClkDiv, fbDiv, fbDiv45) =>
-        Gtpe2PllConfig(refClkDiv, fbDiv, fbDiv45)
-      case GtpPllConfig.Vco(freq) =>
-        GtpPll.solve(pll.refClk.freq, freq, vcoMin, vcoMax).getOrElse {
-          SpinalError(
-            s"GtpCommon: no PLL dividers give a ${freq.toDouble / 1e6} MHz " +
-              s"VCO from a ${pll.refClk.freq.toDouble / 1e6} MHz reference " +
-              s"(VCO range ${vcoMin.toDouble / 1e6}-${vcoMax.toDouble / 1e6} MHz)"
-          )
-        }
-    }
-    dividers.copy(simRefClkSelect = pll.refClk.select)
   }
 
   private def connect(port: GtpPllIo, primitive: Gtpe2PllIo): Unit = {

@@ -37,55 +37,8 @@ import spinal.core._
 import spiny._
 import spiny.platform.xilinx.blackbox._
 
-class GtpPllSolverSpec extends AnyFunSuite {
-  test("GtpPll should solve a reference clock exactly") {
-    // x20, the multiplier the Slabware HDMI RX design uses
-    val solved: Option[Gtpe2PllConfig] =
-      GtpPll.solve(refClk = 135 MHz, vco = 2.7 GHz)
-    assert(solved.isDefined, "2.7 GHz from 135 MHz should be reachable")
-    val Some(Gtpe2PllConfig(refClkDiv, fbDiv, fbDiv45, _)) = solved
-    assert(refClkDiv == 1, s"refClkDiv should be 1, was $refClkDiv")
-    assert(fbDiv * fbDiv45 == 20,
-      s"the multiplier should be 20, was ${fbDiv * fbDiv45}")
-    // the solver must never settle for close
-    val vco = BigDecimal(135e6) / refClkDiv * fbDiv * fbDiv45
-    assert(vco == BigDecimal(2.7e9), s"the VCO should be exactly 2.7 GHz, was $vco")
-  }
-
-  test("GtpPll should solve the DisplayPort VCOs") {
-    // HBR and HBR2 share a VCO, at OUTDIV 2 and 1 respectively
-    val hbr = GtpPllConfig.lineRate(2.7 GHz, outDiv = 2)
-    val hbr2 = GtpPllConfig.lineRate(5.4 GHz, outDiv = 1)
-    assert(hbr == hbr2, s"HBR and HBR2 should want the same VCO, $hbr vs $hbr2")
-    assert(GtpPll.solve(135 MHz, hbr.freq).isDefined,
-      "2.7 GHz should be reachable from 135 MHz")
-
-    // Every OUTDIV is a power of two, but HBR/RBR is 2.7/1.62 = 5/3, so no
-    // single VCO serves both. That is why a rate change is a PLL change.
-    val rbr = GtpPllConfig.lineRate(1.62 GHz, outDiv = 2)
-    assert(rbr != hbr, "RBR should need a different VCO from HBR")
-    assert(GtpPllConfig.lineRate(1.62 GHz, outDiv = 4) != hbr,
-      "RBR at OUTDIV 4 should not reach HBR's VCO either")
-    assert(GtpPll.solve(135 MHz, rbr.freq).isDefined,
-      "1.62 GHz should be reachable from 135 MHz")
-  }
-
-  test("GtpPll should reject a VCO outside the range") {
-    assert(GtpPll.solve(135 MHz, 1.35 GHz).isEmpty, "1.35 GHz is below the range")
-    assert(GtpPll.solve(135 MHz, 4.0 GHz).isEmpty, "4 GHz is above the range")
-  }
-
-  test("GtpPll should reject a VCO the dividers cannot reach") {
-    // in range, but 135 MHz * n where n is fbDiv * fbDiv45 never lands here
-    assert(GtpPll.solve(135 MHz, 2.0 GHz).isEmpty,
-      "2 GHz is not a whole multiple of any divider combination")
-  }
-}
-
 /** Gives GtpCommon somewhere to live for the allocation tests */
-case class GtpCommonHarness(
-  claims: Seq[(GtpRefClk, GtpPllConfig, Option[Int])]
-) extends Component {
+case class GtpCommonHarness(claims: Seq[Gtpe2PllConfig]) extends Component {
   val io = new Bundle {
     val refClk = in(DiffPair())
     val outClk = out Vec(Bool(), claims.size)
@@ -95,25 +48,20 @@ case class GtpCommonHarness(
 
   val common = GtpCommon()
   common.io.gtRefClk0 := buf.io.O
-  val plls = claims.map { case (refClk, config, index) =>
-    common.requestPll(refClk, config, index)
-  }
-  common.build()
+  val plls = claims.map(common.requestPll)
 
   plls.zipWithIndex.foreach { case (pll, i) =>
     pll.tieOff()
-    io.outClk(i) := pll.io.outClk
+    io.outClk(i) := pll.outClk
   }
 }
 
 class GtpCommonSpec extends AnyFunSuite {
-  val Ref = GtpRefClk(Gtpe2PllRefClk.GtRefClk0, 135 MHz)
-  val Hbr = GtpPllConfig.Vco(2.7 GHz)
-  val Rbr = GtpPllConfig.Vco(1.62 GHz)
+  // x20 for a 2.7 GHz VCO, and x12 for 1.62 GHz, from a 135 MHz reference
+  val Hbr = Gtpe2PllConfig(refClkDiv = 1, fbDiv = 4, fbDiv45 = 5)
+  val Rbr = Gtpe2PllConfig(refClkDiv = 1, fbDiv = 3, fbDiv45 = 4)
 
-  def elaborate(
-    claims: Seq[(GtpRefClk, GtpPllConfig, Option[Int])]
-  ): GtpCommonHarness = {
+  def elaborate(claims: Seq[Gtpe2PllConfig]): GtpCommonHarness = {
     SpinalConfig(
       targetDirectory = ElaborationDir.path,
       defaultClockDomainFrequency = FixedFrequency(100 MHz)
@@ -121,80 +69,59 @@ class GtpCommonSpec extends AnyFunSuite {
   }
 
   test("GtpCommon should hand out one PLL") {
-    val dut = elaborate(Seq((Ref, Hbr, None)))
-    assert(dut.plls.head.index == 0, "the first automatic claim should take PLL0")
+    val dut = elaborate(Seq(Hbr))
+    assert(dut.plls.size == 1, "one claim should give one port")
   }
 
   test("GtpCommon should hand out both PLLs") {
-    val dut = elaborate(Seq((Ref, Hbr, None), (Ref, Rbr, None)))
-    assert(dut.plls.map(_.index) == Seq(0, 1),
-      s"claims should land on PLL0 and PLL1, got ${dut.plls.map(_.index)}")
-    assert(dut.plls(0).dividers != dut.plls(1).dividers,
-      "different VCOs should give different dividers")
+    val dut = elaborate(Seq(Hbr, Rbr))
+    assert(dut.plls.size == 2, "two claims should give two ports")
   }
 
-  test("GtpCommon should fit an automatic claim around an explicit one") {
-    // The explicit claim takes PLL0, so the automatic one made before it has
-    // to be pushed to PLL1. With the explicit claim on PLL1 instead, the
-    // automatic claim would land on PLL0 whether or not it looked ahead.
-    val dut = elaborate(Seq((Ref, Hbr, None), (Ref, Rbr, Some(0))))
-    assert(dut.plls.map(_.index) == Seq(1, 0),
-      s"the automatic claim should be pushed off PLL0, " +
-        s"got ${dut.plls.map(_.index)}")
+  /** The generated Verilog is the only place slot assignment is visible now */
+  def generated(): String = {
+    scala.io.Source.fromFile(s"${ElaborationDir.path}/GtpCommonHarness.v").mkString
   }
 
-  test("GtpCommon should solve each PLL against its own reference clock") {
-    val slow = GtpRefClk(Gtpe2PllRefClk.GtRefClk0, 135 MHz)
-    val fast = GtpRefClk(Gtpe2PllRefClk.GtRefClk1, 200 MHz)
-    val dut = elaborate(Seq(
-      (slow, GtpPllConfig.Vco(2.7 GHz), None),
-      (fast, GtpPllConfig.Vco(2.0 GHz), None)
-    ))
+  test("GtpCommon should give each PLL its own config") {
+    // distinct multipliers, so a swap between slots is visible
+    elaborate(Seq(Hbr, Rbr))
+    val v = generated()
+    assert(v.contains(".PLL0_FBDIV") && v.contains(".PLL1_FBDIV"),
+      "both PLLs should be configured")
+    def divider(pll: Int, name: String): String =
+      raw"""\.PLL${pll}_${name}\s*\(\s*(\d+)""".r
+        .findFirstMatchIn(v).map(_.group(1)).getOrElse("missing")
+    assert(divider(0, "FBDIV") == "4" && divider(0, "FBDIV_45") == "5",
+      s"PLL0 should be x20, got ${divider(0, "FBDIV")}/${divider(0, "FBDIV_45")}")
+    assert(divider(1, "FBDIV") == "3" && divider(1, "FBDIV_45") == "4",
+      s"PLL1 should be x12, got ${divider(1, "FBDIV")}/${divider(1, "FBDIV_45")}")
+  }
 
-    // 135 MHz x20 and 200 MHz x10, so solving both against one reference
-    // would give the wrong dividers for at least one of them
-    val a = dut.plls(0).dividers
-    val b = dut.plls(1).dividers
-    assert(a.fbDiv * a.fbDiv45 == 20,
-      s"135 MHz to 2.7 GHz needs x20, got ${a.fbDiv * a.fbDiv45}")
-    assert(b.fbDiv * b.fbDiv45 == 10,
-      s"200 MHz to 2.0 GHz needs x10, got ${b.fbDiv * b.fbDiv45}")
-
-    // and each carries its own reference clock into the sim generic
-    assert(a.simRefClkSelect == Gtpe2PllRefClk.GtRefClk0,
-      s"PLL0 should select refclk 0, got ${a.simRefClkSelect}")
-    assert(b.simRefClkSelect == Gtpe2PllRefClk.GtRefClk1,
-      s"PLL1 should select refclk 1, got ${b.simRefClkSelect}")
+  test("GtpCommon should power down an unclaimed PLL") {
+    elaborate(Seq(Hbr))
+    val v = generated()
+    assert(raw"\.PLL1PD\s*\(\s*1'b1".r.findFirstIn(v).isDefined,
+      "the unclaimed PLL1 should be powered down")
+    assert(raw"\.PLL0PD\s*\(\s*pll_0_powerDown".r.findFirstIn(v).isDefined,
+      "the claimed PLL0 should be driven from its boundary port")
   }
 
   test("GtpCommon should reject a third claim") {
     assertThrows[AssertionError] {
-      elaborate(Seq((Ref, Hbr, None), (Ref, Rbr, None), (Ref, Hbr, None)))
+      elaborate(Seq(Hbr, Rbr, Hbr))
     }
   }
 
-  test("GtpCommon should reject two claims on the same index") {
+  test("GtpCommon should reject a claim after build") {
     assertThrows[AssertionError] {
-      elaborate(Seq((Ref, Hbr, Some(0)), (Ref, Rbr, Some(0))))
+      SpinalConfig(targetDirectory = ElaborationDir.path)
+        .generateVerilog(new Component {
+          val common = GtpCommon()
+          common.requestPll(Hbr)
+          common.build()
+          common.requestPll(Rbr)
+        })
     }
-  }
-
-  test("GtpCommon should reject an out of range index") {
-    assertThrows[AssertionError] {
-      elaborate(Seq((Ref, Hbr, Some(2))))
-    }
-  }
-
-  test("GtpCommon should reject a VCO it cannot reach") {
-    assertThrows[SpinalExit] {
-      elaborate(Seq((Ref, GtpPllConfig.Vco(2.0 GHz), None)))
-    }
-  }
-
-  test("GtpCommon should pass explicit dividers through unsolved") {
-    val dut = elaborate(Seq((Ref, GtpPllConfig.Dividers(2, 5, 5), None)))
-    val d = dut.plls.head.dividers
-    assert((d.refClkDiv, d.fbDiv, d.fbDiv45) == (2, 5, 5),
-      s"dividers should be used as given, got $d")
   }
 }
