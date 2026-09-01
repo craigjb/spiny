@@ -61,7 +61,6 @@ class HdmiTest extends Component {
     tolerance = videoMode.pixelClkTolerance
   )
   val pixelClkDomain = clockGen.requestDivided(pixelClk5XDomain, divisor = 5)
-  clockGen.build()
 
   pixelClkDomain on {
     val timingGen = VideoTimingGen.static(videoMode)

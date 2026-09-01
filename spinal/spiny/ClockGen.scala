@@ -90,6 +90,10 @@ case class ClockGen(
   private val pending = ArrayBuffer[PendingOutput]()
   private var built = false
 
+  // The requests are only all known once the enclosing component has finished
+  // elaborating, so the build waits for the parent.
+  if (parent != null) parent.addPrePopTask(() => if (!built) build())
+
   def request(
     freq: HertzNumber,
     tolerance: Double = 0.0,
@@ -256,9 +260,13 @@ case class ClockGen(
     }
   }
 
+  /** Solves the MMCM and instantiates it with whatever was requested
+   *
+   *  Runs automatically at the end of the enclosing component.
+   */
   def build(): Unit = rework {
     assert(!built, "build() already called")
-    assert(pending.nonEmpty, "No clock requests registered")
+    assert(pending.nonEmpty, "A ClockGen was created but no clock was requested")
     built = true
 
     val inputFreqHz = ClockDomain.current.frequency.getValue.toDouble

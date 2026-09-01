@@ -75,7 +75,6 @@ class DpTest(
 
   val clockGen = inputClkDomain on ClockGen()
   val socClkDomain = clockGen.request(socFreq)
-  clockGen.build()
 
   val soc = socClkDomain on new SpinySoC(
     cpuProfile = SpinyRv32iRustCpuProfile(withXilinxDebug = true),

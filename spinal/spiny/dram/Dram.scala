@@ -108,6 +108,11 @@ case class SpinyDram(
 
   // --- Dynamic port collection ---
   private val axiPorts = mutable.LinkedHashMap[String, Axi4]()
+  private var built = false
+
+  // The ports are only all known once the enclosing component has finished
+  // elaborating, so the build waits for the parent.
+  if (parent != null) parent.addPrePopTask(() => if (!built) build())
 
   /**
    * Add an AXI port with automatic width adaptation.
@@ -118,9 +123,13 @@ case class SpinyDram(
    * in the caller's clock domain and returns the bus-width Axi4 for
    * connection to the crossbar.
    *
-   * Must be called before build() (i.e., during SoC body).
+   * Must be called during the enclosing component's body.
    */
   def axi4Port(name: String, busConfig: Axi4Config): Axi4 = {
+    assert(!built,
+      "Cannot add an AXI port after the DRAM controller is built. The build " +
+        "runs when the enclosing component finishes elaborating, so a port " +
+        "added from a prePopTask or afterElaboration block is too late.")
     require(!axiPorts.contains(name), s"AXI port '$name' already defined")
 
     val rawAxiConfig = Axi4Config(
@@ -155,9 +164,13 @@ case class SpinyDram(
 
   /**
    * Finalize: create BlackBox, connect all ports.
-   * Call after all axi4Port() calls are complete.
+   *
+   * Runs automatically at the end of the enclosing component.
    */
   def build(): Unit = this.rework {
+    assert(!built, "build() already called")
+    built = true
+
     val fullConfig = liteDramFullConfig
     val liteDram = inputClockDomain on LiteDram(fullConfig, sim)
 

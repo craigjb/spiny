@@ -204,8 +204,6 @@ class DdrTest(
       )
     )
   }
-
-  dram.build()
 }
 
 object TopLevelVerilog extends App {

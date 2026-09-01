@@ -142,7 +142,6 @@ class Graphics2D extends Component {
     tolerance = GraphicsDemo.DisplayMode.pixelClkTolerance
   )
   val pixelClkDomain = clockGen.requestDivided(pixelClk5XDomain, divisor = 5)
-  clockGen.build()
 
   pixelClkDomain on {
     val demo = GraphicsDemo()
