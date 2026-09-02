@@ -873,6 +873,18 @@ case class Gtpe2TxClockingIo() extends Bundle {
   val usrClk2 = in Bool() setName("TXUSRCLK2")
   val usrReady = in Bool() setName("TXUSERRDY")
 
+  def staticSysClk(pmaClkPll: Int, txOutClkPll: Int) = {
+    assert(
+      (0 to 1).contains(pmaClkPll),
+      "sysClkSelect must be PLL0 or PLL1"
+    )
+    assert(
+      (0 to 1).contains(txOutClkPll),
+      "sysClkSelect must be PLL0 or PLL1"
+    )
+    sysClkSelect(0) := Bool(pmaClkPll == 1)
+    sysClkSelect(1) := Bool(txOutClkPll == 1)
+  }
 
   def disable() = {
     sysClkSelect := B"2'0"
