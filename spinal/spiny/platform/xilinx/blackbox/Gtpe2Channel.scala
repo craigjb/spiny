@@ -51,19 +51,39 @@ case class Gtpe2ChannelClocking() extends Bundle {
 }
 
 
+/** CLK25_DIV, the reference clock divided down to 25 MHz or just under for
+ *  the transceiver's internal use
+ */
+private[xilinx] object Gtpe2Clk25Div {
+  def apply(side: String, refClkFreq: HertzNumber): Int = {
+    val div = (refClkFreq.toBigDecimal / BigDecimal(25e6))
+      .setScale(0, BigDecimal.RoundingMode.CEILING)
+      .toInt
+    assert(
+      (1 to 32).contains(div),
+      s"$side refClkFreq needs a CLK25_DIV of $div, outside the legal 1 to 32"
+    )
+    div
+  }
+}
+
 /** Receive side settings for a [[Gtpe2Channel]]
  *
+ *  @param refClkFreq Reference clock of the PLL this half selects at runtime
  *  @param usrClkDomain Drives RXUSRCLK
  *  @param usrClk2Domain Drives RXUSRCLK2, equal to usrClkDomain at 20 bits
  *  @param dataWidth PCS to PMA width, 16, 20, 32 or 40
  *  @param outDivider Serial clock divider, 1, 2, 4 or 8
  */
 case class Gtpe2RxConfig(
+  refClkFreq: HertzNumber,
   usrClkDomain: ClockDomain = null,
   usrClk2Domain: ClockDomain = null,
   dataWidth: Int = 20,
   outDivider: Int = 4
 ) {
+  val clk25Div = Gtpe2Clk25Div("rx", refClkFreq)
+
   assert(Seq(16, 20, 32, 40).contains(dataWidth),
     s"rx dataWidth must be 16, 20, 32, or 40, was $dataWidth")
   assert(Seq(1, 2, 4, 8).contains(outDivider),
@@ -72,17 +92,21 @@ case class Gtpe2RxConfig(
 
 /** Transmit side settings for a [[Gtpe2Channel]]
  *
+ *  @param refClkFreq Reference clock of the PLL this half selects at runtime
  *  @param usrClkDomain Drives TXUSRCLK
  *  @param usrClk2Domain Drives TXUSRCLK2, equal to usrClkDomain at 20 bits
  *  @param dataWidth PCS to PMA width, 16, 20, 32 or 40
  *  @param outDivider Serial clock divider, 1, 2, 4 or 8
  */
 case class Gtpe2TxConfig(
+  refClkFreq: HertzNumber,
   usrClkDomain: ClockDomain = null,
   usrClk2Domain: ClockDomain = null,
   dataWidth: Int = 20,
   outDivider: Int = 2
 ) {
+  val clk25Div = Gtpe2Clk25Div("tx", refClkFreq)
+
   assert(Seq(16, 20, 32, 40).contains(dataWidth),
     s"tx dataWidth must be 16, 20, 32, or 40, was $dataWidth")
   assert(Seq(1, 2, 4, 8).contains(outDivider),
@@ -1193,29 +1217,14 @@ case class Gtpe2ChannelIo(
   val reserved = Gtpe2ChannelReservedIo()
 }
 
-/** GTPE2_CHANNEL primitive: one transceiver lane
- *
- *  @param refClkFreq The reference clock the PLL runs from, which sets CLK25_DIV
- */
+/** GTPE2_CHANNEL primitive: one transceiver lane */
 case class Gtpe2Channel(
-  refClkFreq: HertzNumber,
-  rxConfig: Gtpe2RxConfig = Gtpe2RxConfig(),
-  txConfig: Gtpe2TxConfig = Gtpe2TxConfig(),
+  rxConfig: Gtpe2RxConfig,
+  txConfig: Gtpe2TxConfig,
   drpClkDomain: ClockDomain = null,
   simResetSpeedup: Boolean = false
 ) extends BlackBox {
   val generic = new Generic {
-    // The reference clock is divided down to 25 MHz or just under for the
-    // transceiver's internal use. Vivado's own PCIe configs bear this out:
-    // 250, 125 and 100 MHz map to 10, 5 and 4. Shared by both directions.
-    val clk25Div = (refClkFreq.toBigDecimal / BigDecimal(25e6))
-      .setScale(0, BigDecimal.RoundingMode.CEILING)
-      .toInt
-    assert(
-      (1 to 32).contains(clk25Div),
-      s"refClkFreq needs a CLK25_DIV of $clk25Div, outside the legal 1 to 32"
-    )
-
     // Simulation
     val SIM_RECEIVER_DETECT_PASS = "TRUE"
     val SIM_TX_EIDLE_DRIVE_LEVEL = "X"
@@ -1356,7 +1365,7 @@ case class Gtpe2Channel(
     val RXCDR_LOCK_CFG = B"6'b001001"
 
     // RX Initialization and Reset
-    val RX_CLK25_DIV = clk25Div
+    val RX_CLK25_DIV = rxConfig.clk25Div
     val RXCDRFREQRESET_TIME = B"5'b00001"
     val RXCDRPHRESET_TIME = B"5'b00001"
     val RXISCANRESET_TIME = B"5'b00001"
@@ -1431,7 +1440,7 @@ case class Gtpe2Channel(
     val TXGEARBOX_EN = "FALSE"
 
     // TX Initialization and Reset
-    val TX_CLK25_DIV = clk25Div
+    val TX_CLK25_DIV = txConfig.clk25Div
     val TXPCSRESET_TIME = B"5'b00001"
     val TXPMARESET_TIME = B"5'b00001"
 

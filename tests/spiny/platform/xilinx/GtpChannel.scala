@@ -42,8 +42,8 @@ import spiny.platform.xilinx.blackbox._
 case class GtpChannelHarness(
   claimTx: Boolean,
   claimRx: Boolean,
-  txConfig: Gtpe2TxConfig = Gtpe2TxConfig(),
-  rxConfig: Gtpe2RxConfig = Gtpe2RxConfig(),
+  txConfig: Gtpe2TxConfig = Gtpe2TxConfig(135 MHz),
+  rxConfig: Gtpe2RxConfig = Gtpe2RxConfig(135 MHz),
   txPll: Option[Int] = None,
   rxPll: Option[Int] = None
 ) extends Component {
@@ -58,7 +58,7 @@ case class GtpChannelHarness(
   val pll = common.requestPll(Gtpe2PllConfig(refClkDiv = 1, fbDiv = 4, fbDiv45 = 5))
   pll.tieOff()
 
-  val channel = GtpChannel(refClkFreq = 135 MHz)
+  val channel = GtpChannel()
   channel.io.clocking.pll0Clk := pll.outClk
   channel.io.clocking.pll0RefClk := pll.outRefClk
   channel.io.clocking.pll1Clk := False
@@ -81,8 +81,8 @@ class GtpChannelSpec extends AnyFunSuite {
   def elaborate(
     claimTx: Boolean,
     claimRx: Boolean,
-    txConfig: Gtpe2TxConfig = Gtpe2TxConfig(),
-    rxConfig: Gtpe2RxConfig = Gtpe2RxConfig(),
+    txConfig: Gtpe2TxConfig = Gtpe2TxConfig(135 MHz),
+    rxConfig: Gtpe2RxConfig = Gtpe2RxConfig(135 MHz),
     txPll: Option[Int] = None,
     rxPll: Option[Int] = None
   ): String = {
@@ -130,8 +130,8 @@ class GtpChannelSpec extends AnyFunSuite {
     // distinct widths and dividers, so a swap between halves is visible
     val v = elaborate(
       claimTx = true, claimRx = true,
-      txConfig = Gtpe2TxConfig(dataWidth = 20, outDivider = 2),
-      rxConfig = Gtpe2RxConfig(dataWidth = 40, outDivider = 8)
+      txConfig = Gtpe2TxConfig(135 MHz, dataWidth = 20, outDivider = 2),
+      rxConfig = Gtpe2RxConfig(135 MHz, dataWidth = 40, outDivider = 8)
     )
     def generic(name: String): String =
       raw"\.$name\s*\(\s*(\d+)".r.findFirstMatchIn(v).map(_.group(1)).getOrElse("missing")
@@ -139,6 +139,19 @@ class GtpChannelSpec extends AnyFunSuite {
     assert(generic("RX_DATA_WIDTH") == "40", s"RX width was ${generic("RX_DATA_WIDTH")}")
     assert(generic("TXOUT_DIV") == "2", s"TXOUT_DIV was ${generic("TXOUT_DIV")}")
     assert(generic("RXOUT_DIV") == "8", s"RXOUT_DIV was ${generic("RXOUT_DIV")}")
+  }
+
+  test("GtpChannel should give each half its own CLK25_DIV") {
+    // each half can select a different PLL, and so a different reference
+    val v = elaborate(
+      claimTx = true, claimRx = true,
+      txConfig = Gtpe2TxConfig(135 MHz),
+      rxConfig = Gtpe2RxConfig(100 MHz)
+    )
+    def generic(name: String): String =
+      raw"\.$name\s*\(\s*(\d+)".r.findFirstMatchIn(v).map(_.group(1)).getOrElse("missing")
+    assert(generic("TX_CLK25_DIV") == "6", s"TX_CLK25_DIV was ${generic("TX_CLK25_DIV")}")
+    assert(generic("RX_CLK25_DIV") == "4", s"RX_CLK25_DIV was ${generic("RX_CLK25_DIV")}")
   }
 
   /** The select is assigned whole then per bit, so read it back from the function */
@@ -168,9 +181,9 @@ class GtpChannelSpec extends AnyFunSuite {
     assertThrows[AssertionError] {
       SpinalConfig(targetDirectory = ElaborationDir.path)
         .generateVerilog(new Component {
-          val channel = GtpChannel(refClkFreq = 135 MHz)
-          channel.requestTx()
-          channel.requestTx()
+          val channel = GtpChannel()
+          channel.requestTx(Gtpe2TxConfig(135 MHz))
+          channel.requestTx(Gtpe2TxConfig(135 MHz))
         })
     }
   }
@@ -179,10 +192,10 @@ class GtpChannelSpec extends AnyFunSuite {
     assertThrows[AssertionError] {
       SpinalConfig(targetDirectory = ElaborationDir.path)
         .generateVerilog(new Component {
-          val channel = GtpChannel(refClkFreq = 135 MHz)
-          channel.requestTx()
+          val channel = GtpChannel()
+          channel.requestTx(Gtpe2TxConfig(135 MHz))
           channel.build()
-          channel.requestRx()
+          channel.requestRx(Gtpe2RxConfig(135 MHz))
         })
     }
   }

@@ -45,13 +45,11 @@ import spiny.platform.xilinx.blackbox._
  *  has elaborated, so build() only has to be called by hand if this is the
  *  toplevel.
  *
- * @param refClkFreq Reference clock the PLLs run from, which sets CLK25_DIV
  * @param drpClkDomain Clock domain for the dynamic reconfiguration port
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
  */
 case class GtpChannel(
-  refClkFreq: HertzNumber,
   drpClkDomain: ClockDomain = null
 ) extends Component {
   val io = new Bundle {
@@ -70,7 +68,7 @@ case class GtpChannel(
   if (parent != null) parent.addPrePopTask(() => if (!built) build())
 
   /** Claims the transmit half */
-  def requestTx(config: Gtpe2TxConfig = Gtpe2TxConfig()): Gtpe2TxIo = {
+  def requestTx(config: Gtpe2TxConfig): Gtpe2TxIo = {
     assert(!built, GtpChannel.lateClaim)
     assert(txClaim.isEmpty, "The transmit half is already claimed")
 
@@ -80,7 +78,7 @@ case class GtpChannel(
   }
 
   /** Claims the receive half */
-  def requestRx(config: Gtpe2RxConfig = Gtpe2RxConfig()): Gtpe2RxIo = {
+  def requestRx(config: Gtpe2RxConfig): Gtpe2RxIo = {
     assert(!built, GtpChannel.lateClaim)
     assert(rxClaim.isEmpty, "The receive half is already claimed")
 
@@ -104,10 +102,14 @@ case class GtpChannel(
         s"rx=${describe(rxClaim.map(_._1.dataWidth), rxClaim.map(_._1.outDivider))}"
     )
 
+    // A powered down half still needs a legal CLK25_DIV, so it borrows the
+    // claimed half's reference clock. One of the two is always claimed.
+    val refClkFreq =
+      txClaim.map(_._1.refClkFreq).orElse(rxClaim.map(_._1.refClkFreq)).get
+
     val channel = Gtpe2Channel(
-      refClkFreq = refClkFreq,
-      rxConfig = rxClaim.map(_._1).getOrElse(Gtpe2RxConfig()),
-      txConfig = txClaim.map(_._1).getOrElse(Gtpe2TxConfig()),
+      rxConfig = rxClaim.map(_._1).getOrElse(Gtpe2RxConfig(refClkFreq)),
+      txConfig = txClaim.map(_._1).getOrElse(Gtpe2TxConfig(refClkFreq)),
       drpClkDomain = drpClkDomain
     )
 
