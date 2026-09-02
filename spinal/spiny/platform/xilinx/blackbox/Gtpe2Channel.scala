@@ -97,15 +97,23 @@ case class Gtpe2RxConfig(
  *  @param usrClk2Domain Drives TXUSRCLK2, equal to usrClkDomain at 20 bits
  *  @param dataWidth PCS to PMA width, 16, 20, 32 or 40
  *  @param outDivider Serial clock divider, 1, 2, 4 or 8
+ *  @param bufferEnabled Send TX through the buffer rather than bypassing it
  */
 case class Gtpe2TxConfig(
   refClkFreq: HertzNumber,
   usrClkDomain: ClockDomain = null,
   usrClk2Domain: ClockDomain = null,
   dataWidth: Int = 20,
-  outDivider: Int = 2
+  outDivider: Int = 2,
+  bufferEnabled: Boolean = true
 ) {
   val clk25Div = Gtpe2Clk25Div("tx", refClkFreq)
+
+  // TXBUF_EN, TX_XCLK_SEL and TXSYNC_OVRD only mean anything together, so
+  // they are derived here.
+  val bufEnable = if (bufferEnabled) "TRUE" else "FALSE"
+  val xclkSelect = if (bufferEnabled) "TXOUT" else "TXUSR"
+  val syncOverride = !bufferEnabled
 
   assert(Seq(16, 20, 32, 40).contains(dataWidth),
     s"tx dataWidth must be 16, 20, 32, or 40, was $dataWidth")
@@ -1404,7 +1412,7 @@ case class Gtpe2Channel(
     val TRANS_TIME_RATE = B"8'h0E"
 
     // TX Buffer
-    val TXBUF_EN = "FALSE"
+    val TXBUF_EN = txConfig.bufEnable
     val TXBUF_RESET_ON_RATE_CHANGE = "TRUE"
     val TXDLY_CFG = B"16'h001F"
     val TXDLY_LCFG = B"9'h030"
@@ -1412,7 +1420,7 @@ case class Gtpe2Channel(
     val TXPH_CFG = B"16'h0780"
     val TXPHDLY_CFG = B"24'h084020"
     val TXPH_MONITOR_SEL = B"5'b00000"
-    val TX_XCLK_SEL = "TXUSR"
+    val TX_XCLK_SEL = txConfig.xclkSelect
 
     // FPGA TX Interface
     val TX_DATA_WIDTH = txConfig.dataWidth
@@ -1537,7 +1545,7 @@ case class Gtpe2Channel(
 
     // TX Buffer
     val TXSYNC_MULTILANE = B"1'b0"
-    val TXSYNC_OVRD = B"1'b1"
+    val TXSYNC_OVRD = B(if (txConfig.syncOverride) 1 else 0, 1 bits)
     val TXSYNC_SKIP_DA = B"1'b0"
   }
 

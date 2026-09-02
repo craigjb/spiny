@@ -154,6 +154,31 @@ class GtpChannelSpec extends AnyFunSuite {
     assert(generic("RX_CLK25_DIV") == "4", s"RX_CLK25_DIV was ${generic("RX_CLK25_DIV")}")
   }
 
+  test("GtpChannel should keep the TX buffer generics consistent") {
+    // TXBUF_EN, TX_XCLK_SEL and TXSYNC_OVRD are one decision, not three
+    def generic(v: String, name: String): String =
+      raw"\.$name\s*\(\s*([^\s)]+)".r
+        .findFirstMatchIn(v).map(_.group(1)).getOrElse("missing")
+
+    val buffered = elaborate(claimTx = true, claimRx = false,
+      txConfig = Gtpe2TxConfig(135 MHz, bufferEnabled = true))
+    assert(generic(buffered, "TXBUF_EN") == "\"TRUE\"",
+      s"buffered TXBUF_EN was ${generic(buffered, "TXBUF_EN")}")
+    assert(generic(buffered, "TX_XCLK_SEL") == "\"TXOUT\"",
+      s"buffered TX_XCLK_SEL was ${generic(buffered, "TX_XCLK_SEL")}")
+    assert(generic(buffered, "TXSYNC_OVRD") == "1'b0",
+      s"buffered TXSYNC_OVRD was ${generic(buffered, "TXSYNC_OVRD")}")
+
+    val bypassed = elaborate(claimTx = true, claimRx = false,
+      txConfig = Gtpe2TxConfig(135 MHz, bufferEnabled = false))
+    assert(generic(bypassed, "TXBUF_EN") == "\"FALSE\"",
+      s"bypassed TXBUF_EN was ${generic(bypassed, "TXBUF_EN")}")
+    assert(generic(bypassed, "TX_XCLK_SEL") == "\"TXUSR\"",
+      s"bypassed TX_XCLK_SEL was ${generic(bypassed, "TX_XCLK_SEL")}")
+    assert(generic(bypassed, "TXSYNC_OVRD") == "1'b1",
+      s"bypassed TXSYNC_OVRD was ${generic(bypassed, "TXSYNC_OVRD")}")
+  }
+
   /** The select is assigned whole then per bit, so read it back from the function */
   def selectBits(verilog: String, name: String): String = {
     val body = raw"(?s)zz_channel_${name}\(input dummy\);(.*?)endfunction".r
