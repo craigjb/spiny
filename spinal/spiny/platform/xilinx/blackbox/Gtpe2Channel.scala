@@ -660,6 +660,19 @@ case class Gtpe2RxClockingIo() extends Bundle {
   val sysClkSelect = in Bits(2 bits) setName("RXSYSCLKSEL")
   val usrClk = in Bool() setName("RXUSRCLK")
   val usrClk2 = in Bool() setName("RXUSRCLK2")
+
+  /** Drives RXUSRCLK and RXUSRCLK2 from the owner's domains
+   *
+   *  @param usrClkDomain Drives RXUSRCLK
+   *  @param usrClk2Domain Drives RXUSRCLK2, the same domain at 20 bits
+   */
+  def connectClocks(
+    usrClkDomain: ClockDomain,
+    usrClk2Domain: ClockDomain = null
+  ): Unit = {
+    usrClk := usrClkDomain.readClockWire
+    usrClk2 := Option(usrClk2Domain).getOrElse(usrClkDomain).readClockWire
+  }
   val usrReady = in Bool() setName("RXUSERRDY")
 
 
@@ -788,6 +801,12 @@ case class Gtpe2TxFabricClockOutputIo() extends Bundle {
   val outClkSelect = in Bits(3 bits) setName("TXOUTCLKSEL")
   val outClk = out Bool() setName("TXOUTCLK")
 
+  /** Takes TXOUTCLK from the PMA, the source a serial link wants */
+  def txOutClkPma(): Bool = {
+    outClkSelect := B"3'010"
+    outClk
+  }
+
   def disable() = {
     outClkSelect := B"3'011"
     rate.disable()
@@ -903,6 +922,19 @@ case class Gtpe2TxClockingIo() extends Bundle {
   val sysClkSelect = in Bits(2 bits) setName("TXSYSCLKSEL")
   val usrClk = in Bool() setName("TXUSRCLK")
   val usrClk2 = in Bool() setName("TXUSRCLK2")
+
+  /** Drives TXUSRCLK and TXUSRCLK2 from the owner's domains
+   *
+   *  @param usrClkDomain Drives TXUSRCLK
+   *  @param usrClk2Domain Drives TXUSRCLK2, the same domain at 20 bits
+   */
+  def connectClocks(
+    usrClkDomain: ClockDomain,
+    usrClk2Domain: ClockDomain = null
+  ): Unit = {
+    usrClk := usrClkDomain.readClockWire
+    usrClk2 := Option(usrClk2Domain).getOrElse(usrClkDomain).readClockWire
+  }
   val usrReady = in Bool() setName("TXUSERRDY")
 
   def staticSysClk(pmaClkPll: Int, txOutClkPll: Int) = {
@@ -1554,18 +1586,10 @@ case class Gtpe2Channel(
   if (drpClkDomain != null) {
     mapClockDomain(drpClkDomain, io.drp.clk)
   }
-  if (rxConfig.usrClkDomain != null) {
-    mapClockDomain(rxConfig.usrClkDomain, io.rx.clocking.usrClk)
-  }
-  if (rxConfig.usrClk2Domain != null) {
-    mapClockDomain(rxConfig.usrClk2Domain, io.rx.clocking.usrClk2)
-  }
-  if (txConfig.usrClkDomain != null) {
-    mapClockDomain(txConfig.usrClkDomain, io.tx.clocking.usrClk)
-  }
-  if (txConfig.usrClk2Domain != null) {
-    mapClockDomain(txConfig.usrClk2Domain, io.tx.clocking.usrClk2)
-  }
+
+  // RXUSRCLK and TXUSRCLK are driven by whoever owns that half, through
+  // connectClocks on its clocking bundle. Mapping them here as well would
+  // drive the pins a second time.
 
   noIoPrefix()
   setBlackBoxName("GTPE2_CHANNEL")
