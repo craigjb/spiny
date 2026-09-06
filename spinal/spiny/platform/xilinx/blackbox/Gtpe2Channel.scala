@@ -70,15 +70,11 @@ private[xilinx] object Gtpe2Clk25Div {
 /** Receive side settings for a [[Gtpe2Channel]]
  *
  *  @param refClkFreq Reference clock of the PLL this half selects at runtime
- *  @param usrClkDomain Drives RXUSRCLK
- *  @param usrClk2Domain Drives RXUSRCLK2, equal to usrClkDomain at 20 bits
  *  @param dataWidth PCS to PMA width, 16, 20, 32 or 40
  *  @param outDivider Serial clock divider, 1, 2, 4 or 8
  */
 case class Gtpe2RxConfig(
   refClkFreq: HertzNumber,
-  usrClkDomain: ClockDomain = null,
-  usrClk2Domain: ClockDomain = null,
   dataWidth: Int = 20,
   outDivider: Int = 4
 ) {
@@ -93,16 +89,12 @@ case class Gtpe2RxConfig(
 /** Transmit side settings for a [[Gtpe2Channel]]
  *
  *  @param refClkFreq Reference clock of the PLL this half selects at runtime
- *  @param usrClkDomain Drives TXUSRCLK
- *  @param usrClk2Domain Drives TXUSRCLK2, equal to usrClkDomain at 20 bits
  *  @param dataWidth PCS to PMA width, 16, 20, 32 or 40
  *  @param outDivider Serial clock divider, 1, 2, 4 or 8
  *  @param bufferEnabled Send TX through the buffer rather than bypassing it
  */
 case class Gtpe2TxConfig(
   refClkFreq: HertzNumber,
-  usrClkDomain: ClockDomain = null,
-  usrClk2Domain: ClockDomain = null,
   dataWidth: Int = 20,
   outDivider: Int = 2,
   bufferEnabled: Boolean = true
@@ -192,16 +184,17 @@ case class Gtpe2RxBufferBypassPhaseAlignmentIo() extends Bundle {
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
  */
-case class Gtpe2RxFabricClockOutputRateIo(config: Gtpe2RxConfig) extends Bundle {
+case class Gtpe2RxFabricClockOutputRateIo() extends Bundle {
     val mode = in Bool() setName("RXRATEMODE")
     val divider = in Bits(3 bits) setName("RXRATE")
     val done = out Bool() setName("RXRATEDONE")
 
-    ClockDomainTag(config.usrClk2Domain)(done)
-
-    def syncMode() = {
+    /** RXRATE is synchronous to RXUSRCLK2 in this mode, asynchronous in the
+     *  other, so only this path tags it
+     */
+    def syncMode(usrClk2Domain: ClockDomain) = {
       mode := False
-      ClockDomainTag(config.usrClk2Domain)(divider)
+      ClockDomainTag(usrClk2Domain)(divider)
     }
 
     def disable() = {
@@ -234,6 +227,14 @@ case class Gtpe2TxFabricClockOutputRateIo() extends Bundle {
     val mode = in Bool() setName("TXRATEMODE")
     val divider = in Bits(3 bits) setName("TXRATE")
     val done = out Bool() setName("TXRATEDONE")
+
+    /** TXRATE is synchronous to TXUSRCLK2 in this mode, asynchronous in the
+     *  other, so only this path tags it
+     */
+    def syncMode(usrClk2Domain: ClockDomain) = {
+      mode := False
+      ClockDomainTag(usrClk2Domain)(divider)
+    }
 
     def disable() = {
       mode := False
@@ -294,16 +295,11 @@ case class Gtpe2TxBufferBypassPhaseAlignmentIo() extends Bundle {
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
  */
-case class Gtpe2RxPcieIo(config: Gtpe2RxConfig) extends Bundle {
+case class Gtpe2RxPcieIo() extends Bundle {
   val valid = out Bool() setName("RXVALID")
   val status = out Bits(3 bits) setName("RXSTATUS")
   val phyStatus = out Bool() setName("PHYSTATUS")
 
-  ClockDomainTag(config.usrClk2Domain)(
-    valid,
-    phyStatus,
-    status
-  )
 }
 
 /** Gearbox ports on the receive side
@@ -311,7 +307,7 @@ case class Gtpe2RxPcieIo(config: Gtpe2RxConfig) extends Bundle {
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
  */
-case class Gtpe2RxGearboxIo(config: Gtpe2RxConfig) extends Bundle {
+case class Gtpe2RxGearboxIo() extends Bundle {
   // the gearbox is disabled (RXGEARBOX_EN is FALSE), so slip never needs
   // driving. Make this conditional again if the gearbox becomes optional.
   val slip = in Bool() setName("RXGEARBOXSLIP") default(False)
@@ -319,14 +315,6 @@ case class Gtpe2RxGearboxIo(config: Gtpe2RxConfig) extends Bundle {
   val headerValid = out Bool() setName("RXHEADERVALID")
   val header = out Bits(3 bits) setName("RXHEADER")
   val startOfSeq = out Bits(2 bits) setName("RXSTARTOFSEQ")
-
-  ClockDomainTag(config.usrClk2Domain)(
-    slip,
-    dataValid,
-    headerValid,
-    header,
-    startOfSeq
-  )
 
   def disable() = {
     slip := False
@@ -338,7 +326,7 @@ case class Gtpe2RxGearboxIo(config: Gtpe2RxConfig) extends Bundle {
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
  */
-case class Gtpe2RxChannelBondingIo(config: Gtpe2RxConfig) extends Bundle {
+case class Gtpe2RxChannelBondingIo() extends Bundle {
   val enable = in Bool() setName("RXCHBONDEN")
   val master = in Bool() setName("RXCHBONDMASTER")
   val slave = in Bool() setName("RXCHBONDSLAVE")
@@ -348,21 +336,6 @@ case class Gtpe2RxChannelBondingIo(config: Gtpe2RxConfig) extends Bundle {
   val level = in Bits(3 bits) setName("RXCHBONDLEVEL")
   val output = out Bits(4 bits) setName("RXCHBONDO")
   val input = in Bits(4 bits) setName("RXCHBONDI")
-
-  ClockDomainTag(config.usrClkDomain)(
-    output,
-    input
-  )
-
-  ClockDomainTag(config.usrClk2Domain)(
-    enable,
-    master,
-    slave,
-    seqDetected,
-    isAligned,
-    realign,
-    level
-  )
 
   def disable() = {
     enable := False
@@ -378,9 +351,8 @@ case class Gtpe2RxChannelBondingIo(config: Gtpe2RxConfig) extends Bundle {
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
  */
-case class Gtpe2RxClockCorrectionIo(config: Gtpe2RxConfig) extends Bundle {
+case class Gtpe2RxClockCorrectionIo() extends Bundle {
   val status = out Bits(2 bits) setName("RXCLKCORCNT")
-  ClockDomainTag(config.usrClk2Domain)(status)
 }
 
 /** ElasticBuffer ports on the receive side
@@ -388,11 +360,10 @@ case class Gtpe2RxClockCorrectionIo(config: Gtpe2RxConfig) extends Bundle {
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
  */
-case class Gtpe2RxElasticBufferIo(config: Gtpe2RxConfig) extends Bundle {
+case class Gtpe2RxElasticBufferIo() extends Bundle {
   val reset = in Bool() setName("RXBUFRESET")
   val status = out Bits(3 bits) setName("RXBUFSTATUS")
 
-  ClockDomainTag(config.usrClk2Domain)(status)
 
   def disable() = {
     reset := False
@@ -429,20 +400,12 @@ case class Gtpe2RxBufferBypassIo() extends Bundle {
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
  */
-case class Gtpe2RxDecoder8b10bIo(config: Gtpe2RxConfig) extends Bundle {
+case class Gtpe2RxDecoder8b10bIo() extends Bundle {
   val enable = in Bool() setName("RX8B10BEN")
   val charIsComma = out Bits(4 bits) setName("RXCHARISCOMMA")
   val charIsK = out Bits(4 bits) setName("RXCHARISK")
   val disparityErr = out Bits(4 bits) setName("RXDISPERR")
   val notInTable = out Bits(4 bits) setName("RXNOTINTABLE")
-
-  ClockDomainTag(config.usrClk2Domain)(
-    enable,
-    charIsComma,
-    charIsK,
-    disparityErr,
-    notInTable
-  )
 
   def disable() = {
     enable := False
@@ -454,20 +417,12 @@ case class Gtpe2RxDecoder8b10bIo(config: Gtpe2RxConfig) extends Bundle {
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
  */
-case class Gtpe2RxCommaAlignmentIo(config: Gtpe2RxConfig) extends Bundle {
+case class Gtpe2RxCommaAlignmentIo() extends Bundle {
   val detectEnable = in Bool() setName("RXCOMMADETEN")
   val detect = out Bool() setName("RXCOMMADET")
   val mCommaEnable = in Bool() setName("RXMCOMMAALIGNEN")
   val pCommaEnable = in Bool() setName("RXPCOMMAALIGNEN")
   val slide = in Bool() setName("RXSLIDE")
-
-  ClockDomainTag(config.usrClk2Domain)(
-    detectEnable,
-    detect,
-    mCommaEnable,
-    pCommaEnable,
-    slide
-  )
 
   def disable() = {
     detectEnable := False
@@ -482,14 +437,10 @@ case class Gtpe2RxCommaAlignmentIo(config: Gtpe2RxConfig) extends Bundle {
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
  */
-case class Gtpe2RxByteAlignmentIo(config: Gtpe2RxConfig) extends Bundle {
+case class Gtpe2RxByteAlignmentIo() extends Bundle {
   val isAligned = out Bool() setName("RXBYTEISALIGNED")
   val realign = out Bool() setName("RXBYTEREALIGN")
 
-  ClockDomainTag(config.usrClk2Domain)(
-    isAligned,
-    realign
-  )
 }
 
 /** PatternChecker ports on the receive side
@@ -497,16 +448,10 @@ case class Gtpe2RxByteAlignmentIo(config: Gtpe2RxConfig) extends Bundle {
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
  */
-case class Gtpe2RxPatternCheckerIo(config: Gtpe2RxConfig) extends Bundle {
+case class Gtpe2RxPatternCheckerIo() extends Bundle {
   val prbsErrCounterReset = in Bool() setName("RXPRBSCNTRESET")
   val prbsPatternSelect = in Bits(3 bits) setName("RXPRBSSEL")
   val prbsErr = out Bool() setName("RXPRBSERR")
-
-  ClockDomainTag(config.usrClk2Domain)(
-    prbsErrCounterReset,
-    prbsPatternSelect,
-    prbsErr
-  )
 
   def disable() = {
     prbsErrCounterReset := False
@@ -532,13 +477,11 @@ case class Gtpe2RxPolarityIo() extends Bundle {
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
  */
-case class Gtpe2RxMarginAnalysisIo(config: Gtpe2RxConfig) extends Bundle {
+case class Gtpe2RxMarginAnalysisIo() extends Bundle {
   val reset = in Bool() setName("EYESCANRESET")
   val mode = in Bool() setName("EYESCANMODE")
   val trigger = in Bool() setName("EYESCANTRIGGER")
   val dataErr = out Bool() setName("EYESCANDATAERROR")
-
-  ClockDomainTag(config.usrClk2Domain)(trigger)
 
   def disable() = {
     reset := False
@@ -552,7 +495,7 @@ case class Gtpe2RxMarginAnalysisIo(config: Gtpe2RxConfig) extends Bundle {
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
  */
-case class Gtpe2RxFabricClockOutputIo(config: Gtpe2RxConfig) extends Bundle {
+case class Gtpe2RxFabricClockOutputIo() extends Bundle {
   val outClkSelect = in Bits(3 bits) setName("RXOUTCLKSEL")
   val outClk = out Bool() setName("RXOUTCLK")
 
@@ -566,7 +509,7 @@ case class Gtpe2RxFabricClockOutputIo(config: Gtpe2RxConfig) extends Bundle {
     rate.disable()
   }
 
-  val rate = Gtpe2RxFabricClockOutputRateIo(config)
+  val rate = Gtpe2RxFabricClockOutputRateIo()
 }
 
 /** ClockDataRecovery ports on the receive side
@@ -612,7 +555,7 @@ case class Gtpe2RxEqualizerIo() extends Bundle {
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
  */
-case class Gtpe2RxOutOfBandIo(config: Gtpe2RxConfig) extends Bundle {
+case class Gtpe2RxOutOfBandIo() extends Bundle {
   val reset = in Bool() setName("RXOOBRESET")
   val comInitDetect = out Bool() setName("RXCOMINITDET")
   val comSasDetect = out Bool() setName("RXCOMSASDET")
@@ -620,13 +563,6 @@ case class Gtpe2RxOutOfBandIo(config: Gtpe2RxConfig) extends Bundle {
   val electricalIdle = out Bool() setName("RXELECIDLE")
   val electricalIdleMode = in Bits(2 bits) setName("RXELECIDLEMODE")
   val sigValidClk = in Bool() setName("SIGVALIDCLK")
-
-  ClockDomainTag(config.usrClk2Domain)(
-    comInitDetect,
-    comSasDetect,
-    comWakeDetect,
-    electricalIdle
-  )
 
   def disable() = {
     reset := False
@@ -1112,6 +1048,55 @@ case class Gtpe2TxIo(config: Gtpe2TxConfig) extends Bundle {
   val pcie = Gtpe2TxPcieIo()
 
   val outOfBand = Gtpe2TxOutOfBandIo()
+
+  /** The domain TXUSRCLK2 puts the synchronous pins in, taken from the pin
+   *  itself so the tag follows whatever the owner of this half wires up
+   */
+  val usrClk2Domain = ClockDomain(clocking.usrClk2)
+
+  // The TXUSRCLK2 ports of UG482. Anything not listed here is asynchronous,
+  // which is why the driver levels and the reset handshake cross without one.
+  ClockDomainTag(usrClk2Domain)(
+    rawData,
+    resetDone,
+    powerDown,
+
+    encoder8b10b.enable,
+    encoder8b10b.bypass,
+    encoder8b10b.charDisparityMode,
+    encoder8b10b.charDisparityValue,
+    encoder8b10b.charIsK,
+
+    gearbox.ready,
+    gearbox.header,
+    gearbox.sequence,
+    gearbox.startSeq,
+
+    buffer.status,
+
+    patternGenerator.prbsPatternSelect,
+    patternGenerator.prbsForceErr,
+
+    polarity.invert,
+
+    fabricClockOutput.rate.done,
+
+    phaseInterpolator.enable,
+    phaseInterpolator.overrideEn,
+    phaseInterpolator.stepSize,
+
+    driver.deEmphasis,
+    driver.electricalIdle,
+    driver.inhibit,
+
+    pcie.detectReceiver,
+
+    outOfBand.comInit,
+    outOfBand.comSas,
+    outOfBand.comWake,
+    outOfBand.comFinish,
+    outOfBand.electricalIdleMode
+  )
 }
 
 /** Receive half of a GTPE2_CHANNEL
@@ -1124,7 +1109,6 @@ case class Gtpe2RxIo(config: Gtpe2RxConfig) extends Bundle {
 
   val reset = in Bool() setName("GTRXRESET")
   val resetDone = out Bool() setName("RXRESETDONE")
-  ClockDomainTag(config.usrClk2Domain)(resetDone)
 
   val pmaReset = in Bool() setName("RXPMARESET")
   val pmaResetDone = out Bool() setName("RXPMARESETDONE")
@@ -1158,43 +1142,42 @@ case class Gtpe2RxIo(config: Gtpe2RxConfig) extends Bundle {
 
   val analogFrontEnd = Gtpe2RxAnalogFrontEndIo()
 
-  val outOfBand = Gtpe2RxOutOfBandIo(config)
+  val outOfBand = Gtpe2RxOutOfBandIo()
 
   val equalizer = Gtpe2RxEqualizerIo()
 
   val clockDataRecovery = Gtpe2RxClockDataRecoveryIo()
 
-  val fabricClockOutput = Gtpe2RxFabricClockOutputIo(config)
+  val fabricClockOutput = Gtpe2RxFabricClockOutputIo()
 
-  val marginAnalysis = Gtpe2RxMarginAnalysisIo(config)
+  val marginAnalysis = Gtpe2RxMarginAnalysisIo()
 
   val polarity = Gtpe2RxPolarityIo()
 
-  val patternChecker = Gtpe2RxPatternCheckerIo(config)
+  val patternChecker = Gtpe2RxPatternCheckerIo()
 
   // Byte alignment
-  val byteAlignment = Gtpe2RxByteAlignmentIo(config)
+  val byteAlignment = Gtpe2RxByteAlignmentIo()
 
   // Comma alignment
-  val commaAlignment = Gtpe2RxCommaAlignmentIo(config)
+  val commaAlignment = Gtpe2RxCommaAlignmentIo()
 
   // 8b/10b decoder (not TMDS compatible)
-  val decoder8b10b = Gtpe2RxDecoder8b10bIo(config)
+  val decoder8b10b = Gtpe2RxDecoder8b10bIo()
 
   val bufferBypass = Gtpe2RxBufferBypassIo()
 
-  val elasticBuffer = Gtpe2RxElasticBufferIo(config)
+  val elasticBuffer = Gtpe2RxElasticBufferIo()
 
-  val clockCorrection = Gtpe2RxClockCorrectionIo(config)
+  val clockCorrection = Gtpe2RxClockCorrectionIo()
 
-  val channelBonding = Gtpe2RxChannelBondingIo(config)
+  val channelBonding = Gtpe2RxChannelBondingIo()
 
-  val gearbox = Gtpe2RxGearboxIo(config)
+  val gearbox = Gtpe2RxGearboxIo()
 
-  val pcie = Gtpe2RxPcieIo(config)
+  val pcie = Gtpe2RxPcieIo()
 
   val rawData = out Bits(32 bits) setName("RXDATA")
-  ClockDomainTag(config.usrClk2Domain)(rawData)
 
   def data(decoder8b10bBypass: Boolean): Bits = {
     if (decoder8b10bBypass) {
@@ -1216,6 +1199,71 @@ case class Gtpe2RxIo(config: Gtpe2RxConfig) extends Bundle {
       rawData
     }
   }
+
+  /** The domains RXUSRCLK and RXUSRCLK2 put the synchronous pins in, taken
+   *  from the pins themselves so the tags follow whatever the owner wires up
+   */
+  val usrClkDomain = ClockDomain(clocking.usrClk)
+  val usrClk2Domain = ClockDomain(clocking.usrClk2)
+
+  ClockDomainTag(usrClkDomain)(
+    channelBonding.output,
+    channelBonding.input
+  )
+
+  ClockDomainTag(usrClk2Domain)(
+    rawData,
+    resetDone,
+
+    decoder8b10b.enable,
+    decoder8b10b.charIsComma,
+    decoder8b10b.charIsK,
+    decoder8b10b.disparityErr,
+    decoder8b10b.notInTable,
+
+    commaAlignment.detectEnable,
+    commaAlignment.detect,
+    commaAlignment.mCommaEnable,
+    commaAlignment.pCommaEnable,
+    commaAlignment.slide,
+
+    byteAlignment.isAligned,
+    byteAlignment.realign,
+
+    elasticBuffer.status,
+    clockCorrection.status,
+
+    channelBonding.enable,
+    channelBonding.master,
+    channelBonding.slave,
+    channelBonding.seqDetected,
+    channelBonding.isAligned,
+    channelBonding.realign,
+    channelBonding.level,
+
+    gearbox.slip,
+    gearbox.dataValid,
+    gearbox.headerValid,
+    gearbox.header,
+    gearbox.startOfSeq,
+
+    patternChecker.prbsErrCounterReset,
+    patternChecker.prbsPatternSelect,
+    patternChecker.prbsErr,
+
+    marginAnalysis.trigger,
+
+    fabricClockOutput.rate.done,
+
+    pcie.valid,
+    pcie.phyStatus,
+    pcie.status,
+
+    outOfBand.comInitDetect,
+    outOfBand.comSasDetect,
+    outOfBand.comWakeDetect,
+    outOfBand.electricalIdle
+  )
 }
 
 /** GTPE2_CHANNEL IO ports
@@ -1588,8 +1636,7 @@ case class Gtpe2Channel(
   }
 
   // RXUSRCLK and TXUSRCLK are driven by whoever owns that half, through
-  // connectClocks on its clocking bundle. Mapping them here as well would
-  // drive the pins a second time.
+  // connectClocks on its clocking bundle.
 
   noIoPrefix()
   setBlackBoxName("GTPE2_CHANNEL")
