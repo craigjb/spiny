@@ -43,7 +43,9 @@ import spiny.platform.xilinx.blackbox._
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
  */
-case class GtpPllIo() extends Bundle with IMasterSlave {
+case class GtpPllIo(index: Int) extends Bundle with IMasterSlave {
+  assert((0 to 1).contains(index), s"a GTPE2_COMMON has PLL 0 and 1, not $index")
+
   /** PLL output clock, feeds a channel's clock select
    *  @group ports
    */
@@ -163,7 +165,7 @@ case class GtpCommon() extends Component {
 
     val slot = claims.size
     val port = rework {
-      master(GtpPllIo()).setName(s"pll_$slot")
+      master(GtpPllIo(slot)).setName(s"pll_$slot")
     }
     claims += ((config, port))
     port
