@@ -259,7 +259,7 @@ case class Gtpe2TxBufferBypassDelayAlignmentIo() extends Bundle {
     val upOrDown = in Bool() setName("TXDLYUPDOWN")
 
     def disable() = {
-      bypass := False
+      bypass := True
       softReset := False
       enable := False
       counterOverrideEn := False
@@ -308,8 +308,6 @@ case class Gtpe2RxPcieIo() extends Bundle {
  * @groupprio ports 0
  */
 case class Gtpe2RxGearboxIo() extends Bundle {
-  // the gearbox is disabled (RXGEARBOX_EN is FALSE), so slip never needs
-  // driving. Make this conditional again if the gearbox becomes optional.
   val slip = in Bool() setName("RXGEARBOXSLIP") default(False)
   val dataValid = out Bits(2 bits) setName("RXDATAVALID")
   val headerValid = out Bool() setName("RXHEADERVALID")
@@ -721,7 +719,7 @@ case class Gtpe2TxPhaseInterpolatorIo() extends Bundle {
   val stepSize = in Bits(5 bits) setName("TXPIPPMSTEPSIZE")
 
   def disable() = {
-    powerDown := True
+    powerDown := False
     enable := False
     overrideEn := False
     stepSize := B"5'0"
@@ -789,7 +787,7 @@ case class Gtpe2TxBufferBypassIo() extends Bundle {
   val reset = in Bool() setName("TXPHDLYRESET")
 
   def disable() = {
-    powerDown := True
+    powerDown := False
     reset := False
 
     phaseAlignment.disable()
@@ -995,14 +993,6 @@ case class Gtpe2TxIo(config: Gtpe2TxConfig) extends Bundle {
 
   val pcsReset = in Bool() setName("TXPCSRESET")
 
-  /** The primitive's full 32 bit port
-   *
-   *  Only part of it carries data. With 8b/10b enabled that is one byte
-   *  per symbol, so config.dataWidth 20 uses bits 15..0 with charIsK 1..0, and
-   *  40 uses all 32 with charIsK 3..0. With the encoder bypassed the
-   *  symbols are split across this and the encoder's disparity fields, as
-   *  they are on the RX side.
-   */
   val rawData = in Bits(32 bits) setName("TXDATA")
 
   def disable() = {
@@ -1054,8 +1044,7 @@ case class Gtpe2TxIo(config: Gtpe2TxConfig) extends Bundle {
    */
   val usrClk2Domain = ClockDomain(clocking.usrClk2)
 
-  // The TXUSRCLK2 ports of UG482. Anything not listed here is asynchronous,
-  // which is why the driver levels and the reset handshake cross without one.
+  // The TXUSRCLK2 ports per UG482. Anything not listed here is asynchronous.
   ClockDomainTag(usrClk2Domain)(
     rawData,
     resetDone,
@@ -1200,17 +1189,16 @@ case class Gtpe2RxIo(config: Gtpe2RxConfig) extends Bundle {
     }
   }
 
-  /** The domains RXUSRCLK and RXUSRCLK2 put the synchronous pins in, taken
-   *  from the pins themselves so the tags follow whatever the owner wires up
-   */
   val usrClkDomain = ClockDomain(clocking.usrClk)
   val usrClk2Domain = ClockDomain(clocking.usrClk2)
 
+  // The RXUSRCLK ports per UG482. Anything not listed here is asynchronous.
   ClockDomainTag(usrClkDomain)(
     channelBonding.output,
     channelBonding.input
   )
 
+  // The RXUSRCLK2 ports per UG482. Anything not listed here is asynchronous.
   ClockDomainTag(usrClk2Domain)(
     rawData,
     resetDone,
