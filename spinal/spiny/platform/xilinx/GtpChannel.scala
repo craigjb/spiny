@@ -45,6 +45,12 @@ import spiny.platform.xilinx.blackbox._
  *  has elaborated, so build() only has to be called by hand if this is the
  *  toplevel.
  *
+ *  Notes:
+ *  - Reset is set to sequential
+ *  - DRP is disabled (not implemented yet)
+ *  - Loopback is disabled (not implemented yet)
+ *  - Digital monitor is disabled (not implemented yet)
+ *
  * @param drpClkDomain Clock domain for the dynamic reconfiguration port
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
@@ -114,10 +120,8 @@ case class GtpChannel(
     )
 
     channel.io.clocking := io.clocking
-    // sequential reset mode, the one the reset sequence in UG482 describes
+    // sequential reset mode
     channel.io.resetSelection := False
-    // Nothing needs the DRP yet: rate switching rides TXRATE/RXRATE and the
-    // sysclk select, all ports. Only a runtime RXCDR_CFG would need it.
     channel.io.drp.disable()
     channel.io.loopback.disable()
     channel.io.digitalMonitor.disable()
