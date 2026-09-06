@@ -67,6 +67,34 @@ private[xilinx] object Gtpe2Clk25Div {
   }
 }
 
+/** Organization of the fabric to TX or RX data port
+ *  @param count Symbols moved per user clock
+ *  @param width Bits of each symbol the fabric sees, 8 or 10
+ */
+private[xilinx] case class Gtpe2SymbolFormat(count: Int, width: Int)
+
+private[xilinx] object Gtpe2SymbolFormat {
+  /** Symbol format per UG482 Table 3-1
+   *  @param side Which half, only to name the error
+   *  @param dataWidth TX or RX datapath width (20 or 40 bits)
+   *  @param bypass8b10b Whether the 8b/10b encoder or decoder is bypassed,
+   *         which is what makes the difference between 8 and 10 bit symbols
+   */
+  def of(side: String, dataWidth: Int, bypass8b10b: Boolean): Gtpe2SymbolFormat = {
+    if (!bypass8b10b && !Seq(20, 40).contains(dataWidth)) {
+      SpinalError(
+        s"$side 8b/10b needs a data width of 20 or 40, not $dataWidth"
+      )
+    }
+    val count = dataWidth match {
+      case 16 | 20 => 2
+      case 32 | 40 => 4
+      case w => SpinalError(s"$side data width $w is not 16, 20, 32 or 40")
+    }
+    Gtpe2SymbolFormat(count, if (bypass8b10b && dataWidth % 10 == 0) 10 else 8)
+  }
+}
+
 /** Receive side settings for a [[Gtpe2Channel]]
  *
  *  @param refClkFreq Reference clock of the PLL this half selects at runtime
@@ -995,6 +1023,27 @@ case class Gtpe2TxIo(config: Gtpe2TxConfig) extends Bundle {
 
   val rawData = in Bits(32 bits) setName("TXDATA")
 
+  /** Data port based on config dataWidth and 8b10b encoding
+   *
+   *  This helper assumes 8b10b encoding is statically on or off. It automatically
+   *  handles wiring TXCHARDISPMODE and TXCHARDISPVAL if needed.
+   */
+  def data(bypass8b10b: Boolean = false): Vec[Bits] = {
+    val format = Gtpe2SymbolFormat.of("tx", config.dataWidth, bypass8b10b)
+    val port = Vec(Bits(format.width bits), format.count)
+
+    // per UG482 Table 3-2
+    rawData := Cat(port.map(_(7 downto 0))).resized
+    if (format.width == 10) {
+      encoder8b10b.charDisparityValue := Cat(port.map(_(8))).resized
+      encoder8b10b.charDisparityMode := Cat(port.map(_(9))).resized
+    } else {
+      encoder8b10b.charDisparityValue := B(0, 4 bits)
+      encoder8b10b.charDisparityMode := B(0, 4 bits)
+    }
+    port
+  }
+
   def disable() = {
     powerDown := B"2'11"
     reset := False
@@ -1168,25 +1217,22 @@ case class Gtpe2RxIo(config: Gtpe2RxConfig) extends Bundle {
 
   val rawData = out Bits(32 bits) setName("RXDATA")
 
-  def data(decoder8b10bBypass: Boolean): Bits = {
-    if (decoder8b10bBypass) {
-      Cat(
-        decoder8b10b.disparityErr(3),
-        decoder8b10b.charIsK(3),
-        rawData(31 downto 24),
-        decoder8b10b.disparityErr(2),
-        decoder8b10b.charIsK(2),
-        rawData(23 downto 16),
-        decoder8b10b.disparityErr(1),
-        decoder8b10b.charIsK(1),
-        rawData(15 downto 8),
-        decoder8b10b.disparityErr(0),
-        decoder8b10b.charIsK(0),
-        rawData(7 downto 0)
-      )
-    } else {
-      rawData
-    }
+  /** Data port based on config dataWidth and 8b10b encoding
+   *
+   *  This helper assumes 8b10b encoding is statically on or off. It automatically
+   *  handles wiring RXDISPERR and RXCHARISK if needed.
+   */
+  def data(bypass8b10b: Boolean = false): Vec[Bits] = {
+    val format = Gtpe2SymbolFormat.of("rx", config.dataWidth, bypass8b10b)
+    // per UG482 Table 3-2
+    Vec((0 until format.count).map { i =>
+      val character = rawData(8 * i + 7 downto 8 * i)
+      if (format.width == 10) {
+        decoder8b10b.disparityErr(i) ## decoder8b10b.charIsK(i) ## character
+      } else {
+        character
+      }
+    })
   }
 
   val usrClkDomain = ClockDomain(clocking.usrClk)
