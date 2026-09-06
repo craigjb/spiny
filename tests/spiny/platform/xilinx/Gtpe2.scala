@@ -34,6 +34,8 @@ package spiny.platform.xilinx.blackbox
 import org.scalatest.funsuite.AnyFunSuite
 import spinal.core._
 
+import spiny._
+
 class Gtpe2PllConfigSpec extends AnyFunSuite {
   test("Gtpe2PllConfig should solve a reference clock exactly") {
     // x20, the multiplier the Slabware HDMI RX design uses
@@ -76,5 +78,54 @@ class Gtpe2PllConfigSpec extends AnyFunSuite {
     // in range, but 135 MHz * n where n is fbDiv * fbDiv45 never lands here
     assert(Gtpe2PllConfig.solve(135 MHz, 2.0 GHz).isEmpty,
       "2 GHz is not a whole multiple of any divider combination")
+  }
+}
+
+/** The data port helpers per Table 3-1 */
+class Gtpe2DataPortSpec extends AnyFunSuite {
+  /** Symbol count and width, which only exist inside an elaboration */
+  def shape(dataWidth: Int, bypassed: Boolean): (Int, Int, Int, Int) = {
+    var t = (0, 0)
+    var r = (0, 0)
+    SpinalConfig(targetDirectory = ElaborationDir.path)
+      .generateVerilog(new Component {
+        // directionless, since these bundles normally live in a blackbox io
+        val txIo = Gtpe2TxIo(Gtpe2TxConfig(135 MHz, dataWidth = dataWidth))
+          .setAsDirectionLess()
+        val rxIo = Gtpe2RxIo(Gtpe2RxConfig(135 MHz, dataWidth = dataWidth))
+          .setAsDirectionLess()
+        rxIo.rawData := 0
+        rxIo.decoder8b10b.charIsK := 0
+        rxIo.decoder8b10b.disparityErr := 0
+        val txData = txIo.data(bypassed)
+        val rxData = rxIo.data(bypassed)
+        t = (txData.length, txData(0).getWidth)
+        r = (rxData.length, rxData(0).getWidth)
+        val used = out(Bits(r._2 bits))
+        used := rxData(0)
+        setDefinitionName(s"probe_${dataWidth}_$bypassed")
+      })
+    (t._1, t._2, r._1, r._2)
+  }
+
+  test("an 8b10b encoded port carries 8 bit characters") {
+    assert(shape(20, false) == (2, 8, 2, 8), s"20 bit was ${shape(20, false)}")
+    assert(shape(40, false) == (4, 8, 4, 8), s"40 bit was ${shape(40, false)}")
+  }
+
+  test("a 8b10b bypassed port carries whole 10 bit symbols") {
+    assert(shape(20, true) == (2, 10, 2, 10), s"20 bit was ${shape(20, true)}")
+    assert(shape(40, true) == (4, 10, 4, 10), s"40 bit was ${shape(40, true)}")
+  }
+
+  test("a 8b10b bypassed width with no encoding overhead stays 8 bit") {
+    // 16 and 32 are legal bypassed, they just carry plain bytes
+    assert(shape(16, true) == (2, 8, 2, 8), s"16 bit was ${shape(16, true)}")
+    assert(shape(32, true) == (4, 8, 4, 8), s"32 bit was ${shape(32, true)}")
+  }
+
+  test("the 8b10b encoder rejects a width not in UG482 Table 3-1") {
+    assertThrows[Throwable](shape(16, false))
+    assertThrows[Throwable](shape(32, false))
   }
 }
