@@ -56,6 +56,10 @@ object AuxSim {
   val AckReply = Seq(0x00, 0x12)
   val NackReply = Seq(0x10)
   val DeferReply = Seq(0x20)
+
+  // native write of 1 byte to DPCD 0x00100, acknowledged with just a header
+  val WriteRequest = Seq(0x80, 0x01, 0x00, 0x00, 0x0a)
+  val WriteAckReply = Seq(0x00)
 }
 
 object AuxTxDriver {

@@ -143,6 +143,27 @@ class AuxLinkSourceSpec extends AnyFunSuite {
     }
   }
 
+  test("AuxLinkSource should complete a write with a header only reply") {
+    // every other test reads, so the reply carries data. A native write is
+    // acknowledged with the header byte and nothing else.
+    withLink("AuxLinkSource_WriteAck") { (dut, sink, reply) =>
+      sink.replies = List(WriteAckReply)
+      sink.start()
+
+      sendRequest(dut, WriteRequest)
+      waitDone(dut)
+
+      assert(dut.io.result.toEnum == AuxLinkResult.ack,
+        s"result should be ack, was ${dut.io.result.toEnum}")
+      assert(dut.io.replyLength.toInt == WriteAckReply.length,
+        s"replyLength should be ${WriteAckReply.length}, was ${dut.io.replyLength.toInt}")
+      assert(sink.requests.toSeq == Seq(WriteRequest),
+        s"sink should have seen one request, saw ${sink.requests}")
+      assert(reply.toSeq == WriteAckReply,
+        s"reply bytes should be $WriteAckReply, were $reply")
+    }
+  }
+
   test("AuxLinkSource should not retry a NACK") {
     withLink("AuxLinkSource_Nack") { (dut, sink, reply) =>
       sink.replies = List(NackReply)
