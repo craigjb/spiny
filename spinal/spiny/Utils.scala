@@ -40,6 +40,22 @@ import spinal.lib._
 case class DiffPair() extends Bundle {
   val p = Bool()
   val n = Bool()
+
+  /** Drives two signals from this pair, usually a component's two pads */
+  def drive(p: Bool, n: Bool): Unit = {
+    p := this.p
+    n := this.n
+  }
+}
+
+object DiffPair {
+  /** A pair driven from two signals, usually a component's two pads */
+  def apply(p: Bool, n: Bool): DiffPair = {
+    val pair = DiffPair()
+    pair.p := p
+    pair.n := n
+    pair
+  }
 }
 
 object Pulse {
