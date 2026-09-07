@@ -43,12 +43,14 @@ object IBufDsGte2 {
    *  clkOut gets the BUFG'd copy for fabric use. The returned buffer's raw O
    *  is what feeds GTREFCLK, which must not go through a BUFG.
    */
-  def apply(clkIn: DiffPair, clkOut: Bool, enable: Bool) = {
+  def apply(clkIn: DiffPair, clkOut: Bool = null, enable: Bool = True) = {
     val buf = new IBufDsGte2()
     buf.io.I := clkIn.p
     buf.io.IB := clkIn.n
     buf.io.CEB := !enable
-    clkOut := BUFG.on(buf.io.O)
+    if (clkOut != null) {
+      clkOut := BUFG.on(buf.io.O)
+    }
     buf
   }
 }
