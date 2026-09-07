@@ -24,6 +24,24 @@ set_false_path -from [get_ports { CPU_RESET_N }]
 set_false_path -from [get_ports { HPD }]
 set_false_path -to [get_ports { LEDS[*] }]
 
+# 135 MHz reference clock input
+create_clock \
+  -period 7.407 \
+  -name GTP_REFCLK \
+  [get_ports GTP_REFCLK_P]
+
+# -1 speed grade GTP is capped at 3.75 Gbps, so 135 MHz is fasted TX_OUT_CLK
+create_clock \
+  -period 7.407 \
+  -name TX_OUT_CLK \
+  [get_pins -hierarchical -filter { NAME =~ *gtpe2Channel/TXOUTCLK }]
+
+# TX_OUT_CLK is independent, since it depends on GTP_REFCLK and DisplayPort rate
+set_clock_groups \
+  -asynchronous \
+  -group [get_clocks -include_generated_clocks SYS_CLK] \
+  -group [get_clocks -include_generated_clocks TX_OUT_CLK]
+
 ###########################################################
 # Pins                                                    #
 ###########################################################
@@ -92,7 +110,6 @@ set_property -dict { \
   IOSTANDARD LVDS_25 \
 } [get_ports { UNUSED_N }];
 
-
 set_property -dict { \
   PACKAGE_PIN AB22 \
   IOSTANDARD LVCMOS33 \
@@ -101,3 +118,8 @@ set_property -dict { \
   PACKAGE_PIN AB21 \
   IOSTANDARD LVCMOS33 \
 } [get_ports { DBG_AUX_WRITE_EN }];
+
+set_property PACKAGE_PIN F6 [get_ports { GTP_REFCLK_P }];
+set_property PACKAGE_PIN E6 [get_ports { GTP_REFCLK_N }];
+set_property PACKAGE_PIN B4 [get_ports { DP_TX_P }];
+set_property PACKAGE_PIN A4 [get_ports { DP_TX_N }];
