@@ -56,11 +56,7 @@ case class GtpChannelHarness(
   val pll = common.requestPll(Gtpe2PllConfig(refClkDiv = 1, fbDiv = 4, fbDiv45 = 5))
   pll.tieOff()
 
-  val channel = GtpChannel()
-  channel.io.clocking.pll0Clk := pll.outClk
-  channel.io.clocking.pll0RefClk := pll.outRefClk
-  channel.io.clocking.pll1Clk := False
-  channel.io.clocking.pll1RefClk := False
+  val channel = GtpChannel(common)
 
   val tx = if (claimTx) Some(channel.requestTx(txConfig)) else None
   val rx = if (claimRx) Some(channel.requestRx(rxConfig)) else None

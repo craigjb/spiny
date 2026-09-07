@@ -151,6 +151,14 @@ case class GtpCommon() extends Component {
      *  @group ports
      */
     val gtWestRefClk1 = in Bool() default(False)
+
+    /** The clocks a [[GtpChannel]] needs, both PLLs whether claimed or not
+     *
+     *  UG482 has every one of these wired to the channel even when the PLL
+     *  behind it goes unused, so all four are driven here.
+     *  @group ports
+     */
+    val channelClocking = out(Gtpe2ChannelClocking())
   }
 
   private val claims = mutable.ArrayBuffer[(Gtpe2PllConfig, GtpPllIo)]()
@@ -224,6 +232,8 @@ case class GtpCommon() extends Component {
     common.io.clocking.gtWestRefClk1 := io.gtWestRefClk1
     // TODO: arbitrate between PLL bundles
     common.io.drp.disable()
+
+    io.channelClocking.fromGtpe2Common(common)
 
     for (i <- 0 to 1) {
       val primitive = if (i == 0) common.io.pll0 else common.io.pll1

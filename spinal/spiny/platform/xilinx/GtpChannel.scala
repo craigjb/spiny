@@ -62,6 +62,8 @@ case class GtpChannel(
 ) extends Component {
   val io = new Bundle {
     /** Both PLL outputs from a [[GtpCommon]], either of which a half can use
+     *
+     *  All four are required whether or not the PLL behind them is used.
      *  @group ports
      */
     val clocking = in(Gtpe2ChannelClocking())
@@ -171,6 +173,23 @@ case class GtpChannel(
 }
 
 object GtpChannel {
+  /** Builds a channel clocked from its [[GtpCommon]]
+   *
+   *  @param common The common block, both of whose PLLs are wired in
+   *  @param drpClkDomain Clock domain for the dynamic reconfiguration port
+   */
+  def apply(common: GtpCommon, drpClkDomain: ClockDomain): GtpChannel = {
+    val channel = GtpChannel(drpClkDomain)
+    channel.io.clocking := common.io.channelClocking
+    channel
+  }
+
+  /** Builds a channel clocked from its [[GtpCommon]]
+   *
+   *  @param common The common block, both of whose PLLs are wired in
+   */
+  def apply(common: GtpCommon): GtpChannel = apply(common, null)
+
   private val lateClaim =
     "Cannot claim a half after the GTPE2_CHANNEL is built. The build runs " +
       "when the enclosing component finishes elaborating, so a claim from " +
