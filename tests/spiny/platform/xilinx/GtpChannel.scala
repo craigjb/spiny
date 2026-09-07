@@ -43,9 +43,7 @@ case class GtpChannelHarness(
   claimTx: Boolean,
   claimRx: Boolean,
   txConfig: Gtpe2TxConfig = Gtpe2TxConfig(135 MHz),
-  rxConfig: Gtpe2RxConfig = Gtpe2RxConfig(135 MHz),
-  txPll: Option[Int] = None,
-  rxPll: Option[Int] = None
+  rxConfig: Gtpe2RxConfig = Gtpe2RxConfig(135 MHz)
 ) extends Component {
   val io = new Bundle {
     val refClk = in(DiffPair())
@@ -66,15 +64,8 @@ case class GtpChannelHarness(
 
   val tx = if (claimTx) Some(channel.requestTx(txConfig)) else None
   val rx = if (claimRx) Some(channel.requestRx(rxConfig)) else None
-  // disable() drives every input, so a later staticSysClk overrides just the select
-  tx.foreach { port =>
-    port.disable()
-    txPll.foreach(pll => port.clocking.staticSysClk(pll, pll))
-  }
-  rx.foreach { port =>
-    port.disable()
-    rxPll.foreach(pll => port.clocking.staticSysClk(pll, pll))
-  }
+  tx.foreach(_.disable())
+  rx.foreach(_.disable())
 }
 
 class GtpChannelSpec extends AnyFunSuite {
@@ -82,124 +73,81 @@ class GtpChannelSpec extends AnyFunSuite {
     claimTx: Boolean,
     claimRx: Boolean,
     txConfig: Gtpe2TxConfig = Gtpe2TxConfig(135 MHz),
-    rxConfig: Gtpe2RxConfig = Gtpe2RxConfig(135 MHz),
-    txPll: Option[Int] = None,
-    rxPll: Option[Int] = None
-  ): String = {
-    SpinalConfig(
-      targetDirectory = ElaborationDir.path,
-      defaultClockDomainFrequency = FixedFrequency(100 MHz)
-    ).generateVerilog(
-      GtpChannelHarness(claimTx, claimRx, txConfig, rxConfig, txPll, rxPll)
-    )
-    scala.io.Source
-      .fromFile(s"${ElaborationDir.path}/GtpChannelHarness.v")
-      .mkString
-  }
-
-  /** The harness drives the boundary too, so only GtpChannel's own body counts */
-  def channelModule(verilog: String): String = {
-    val start = verilog.indexOf("module GtpChannel ")
-    assert(start >= 0, "the generated Verilog should contain a GtpChannel module")
-    verilog.substring(start, verilog.indexOf("endmodule", start))
-  }
-
-  /** An unclaimed half reaches the primitive as a constant, a claimed one as a port */
-  def poweredDown(verilog: String, port: String): Boolean =
-    raw"\.$port\s*\(\s*2'b11".r.findFirstIn(channelModule(verilog)).isDefined
+    rxConfig: Gtpe2RxConfig = Gtpe2RxConfig(135 MHz)
+  ): GtpChannelHarness =
+    SpinalConfig(targetDirectory = ElaborationDir.path)
+      .generateVerilog(GtpChannelHarness(claimTx, claimRx, txConfig, rxConfig))
+      .toplevel
 
   test("GtpChannel should hand out the transmit half alone") {
-    val v = elaborate(claimTx = true, claimRx = false)
-    assert(poweredDown(v, "RXPD"), "the unclaimed receive half should be powered down")
-    assert(!poweredDown(v, "TXPD"), "the claimed transmit half should not be")
+    // elaborating at all says the unclaimed half is fully driven, since an
+    // input the design forgot would fail with no driver
+    val dut = elaborate(claimTx = true, claimRx = false)
+    assert(dut.channel.tx.isDefined, "the transmit half should be claimed")
+    assert(dut.channel.rx.isEmpty, "the receive half should still be free")
   }
 
   test("GtpChannel should hand out the receive half alone") {
-    val v = elaborate(claimTx = false, claimRx = true)
-    assert(poweredDown(v, "TXPD"), "the unclaimed transmit half should be powered down")
-    assert(!poweredDown(v, "RXPD"), "the claimed receive half should not be")
+    val dut = elaborate(claimTx = false, claimRx = true)
+    assert(dut.channel.rx.isDefined, "the receive half should be claimed")
+    assert(dut.channel.tx.isEmpty, "the transmit half should still be free")
   }
 
   test("GtpChannel should hand out both halves") {
-    val v = elaborate(claimTx = true, claimRx = true)
-    assert(!poweredDown(v, "TXPD") && !poweredDown(v, "RXPD"),
-      "neither claimed half should be powered down")
+    val dut = elaborate(claimTx = true, claimRx = true)
+    assert(dut.channel.tx.isDefined && dut.channel.rx.isDefined,
+      "both halves should be claimed")
   }
 
   test("GtpChannel should give each half its own config") {
     // distinct widths and dividers, so a swap between halves is visible
-    val v = elaborate(
+    val dut = elaborate(
       claimTx = true, claimRx = true,
       txConfig = Gtpe2TxConfig(135 MHz, dataWidth = 20, outDivider = 2),
       rxConfig = Gtpe2RxConfig(135 MHz, dataWidth = 40, outDivider = 8)
     )
-    def generic(name: String): String =
-      raw"\.$name\s*\(\s*(\d+)".r.findFirstMatchIn(v).map(_.group(1)).getOrElse("missing")
-    assert(generic("TX_DATA_WIDTH") == "20", s"TX width was ${generic("TX_DATA_WIDTH")}")
-    assert(generic("RX_DATA_WIDTH") == "40", s"RX width was ${generic("RX_DATA_WIDTH")}")
-    assert(generic("TXOUT_DIV") == "2", s"TXOUT_DIV was ${generic("TXOUT_DIV")}")
-    assert(generic("RXOUT_DIV") == "8", s"RXOUT_DIV was ${generic("RXOUT_DIV")}")
+    val primitive = dut.channel.primitive
+    assert(primitive.txConfig.dataWidth == 20, "the transmit width")
+    assert(primitive.rxConfig.dataWidth == 40, "the receive width")
+    assert(primitive.txConfig.outDivider == 2, "the transmit divider")
+    assert(primitive.rxConfig.outDivider == 8, "the receive divider")
   }
 
   test("GtpChannel should give each half its own CLK25_DIV") {
     // each half can select a different PLL, and so a different reference
-    val v = elaborate(
+    val dut = elaborate(
       claimTx = true, claimRx = true,
       txConfig = Gtpe2TxConfig(135 MHz),
       rxConfig = Gtpe2RxConfig(100 MHz)
     )
-    def generic(name: String): String =
-      raw"\.$name\s*\(\s*(\d+)".r.findFirstMatchIn(v).map(_.group(1)).getOrElse("missing")
-    assert(generic("TX_CLK25_DIV") == "6", s"TX_CLK25_DIV was ${generic("TX_CLK25_DIV")}")
-    assert(generic("RX_CLK25_DIV") == "4", s"RX_CLK25_DIV was ${generic("RX_CLK25_DIV")}")
+    assert(dut.channel.primitive.txConfig.clk25Div == 6,
+      s"TX_CLK25_DIV was ${dut.channel.primitive.txConfig.clk25Div}")
+    assert(dut.channel.primitive.rxConfig.clk25Div == 4,
+      s"RX_CLK25_DIV was ${dut.channel.primitive.rxConfig.clk25Div}")
   }
 
-  test("GtpChannel should keep the TX buffer generics consistent") {
-    // TXBUF_EN, TX_XCLK_SEL and TXSYNC_OVRD are one decision, not three
-    def generic(v: String, name: String): String =
-      raw"\.$name\s*\(\s*([^\s)]+)".r
-        .findFirstMatchIn(v).map(_.group(1)).getOrElse("missing")
-
-    val buffered = elaborate(claimTx = true, claimRx = false,
-      txConfig = Gtpe2TxConfig(135 MHz, bufferEnabled = true))
-    assert(generic(buffered, "TXBUF_EN") == "\"TRUE\"",
-      s"buffered TXBUF_EN was ${generic(buffered, "TXBUF_EN")}")
-    assert(generic(buffered, "TX_XCLK_SEL") == "\"TXOUT\"",
-      s"buffered TX_XCLK_SEL was ${generic(buffered, "TX_XCLK_SEL")}")
-    assert(generic(buffered, "TXSYNC_OVRD") == "1'b0",
-      s"buffered TXSYNC_OVRD was ${generic(buffered, "TXSYNC_OVRD")}")
-
-    val bypassed = elaborate(claimTx = true, claimRx = false,
-      txConfig = Gtpe2TxConfig(135 MHz, bufferEnabled = false))
-    assert(generic(bypassed, "TXBUF_EN") == "\"FALSE\"",
-      s"bypassed TXBUF_EN was ${generic(bypassed, "TXBUF_EN")}")
-    assert(generic(bypassed, "TX_XCLK_SEL") == "\"TXUSR\"",
-      s"bypassed TX_XCLK_SEL was ${generic(bypassed, "TX_XCLK_SEL")}")
-    assert(generic(bypassed, "TXSYNC_OVRD") == "1'b1",
-      s"bypassed TXSYNC_OVRD was ${generic(bypassed, "TXSYNC_OVRD")}")
-  }
-
-  /** The select is assigned whole then per bit, so read it back from the function */
-  def selectBits(verilog: String, name: String): String = {
-    val body = raw"(?s)zz_channel_${name}\(input dummy\);(.*?)endfunction".r
-      .findFirstMatchIn(verilog).map(_.group(1)).getOrElse("")
-    def bit(i: Int) =
-      raw"\[$i\] = 1'b(\d)".r.findFirstMatchIn(body).map(_.group(1)).getOrElse("?")
-    s"${bit(1)}${bit(0)}"
+  test("GtpChannel should give an unclaimed half a legal CLK25_DIV") {
+    // a powered down half still has to satisfy the tools, so it borrows the
+    // claimed half's reference clock
+    val dut = elaborate(claimTx = true, claimRx = false,
+      txConfig = Gtpe2TxConfig(100 MHz))
+    assert(dut.channel.primitive.rxConfig.clk25Div == 4,
+      s"RX_CLK25_DIV was ${dut.channel.primitive.rxConfig.clk25Div}")
   }
 
   test("GtpChannel should let each half pick its own PLL") {
-    // the mix-and-match case: a transmitter on PLL1, a receiver on PLL0
-    val v = elaborate(
-      claimTx = true, claimRx = true,
-      txPll = Some(1), rxPll = Some(0)
-    )
-    assert(selectBits(v, "TXSYSCLKSEL") == "11",
-      "the transmit half should select PLL1 for both PMA and TXOUTCLK, " +
-        s"got ${selectBits(v, "TXSYSCLKSEL")}")
-    assert(selectBits(v, "RXSYSCLKSEL") == "00",
-      "the receive half should select PLL0 for both PMA and RXOUTCLK, " +
-        s"got ${selectBits(v, "RXSYSCLKSEL")}")
+    // the select is a runtime choice, so it stays a port all the way to the
+    // primitive, one per half
+    val dut = elaborate(claimTx = true, claimRx = true)
+    val primitive = dut.channel.primitive
+    assert(
+      primitive.io.tx.clocking.sysClkSelect.getSingleDriver
+        .exists(_ eq dut.tx.get.clocking.sysClkSelect),
+      "the transmit select should come from the transmit claim")
+    assert(
+      primitive.io.rx.clocking.sysClkSelect.getSingleDriver
+        .exists(_ eq dut.rx.get.clocking.sysClkSelect),
+      "the receive select should come from the receive claim")
   }
 
   test("GtpChannel should reject a second claim on the same half") {

@@ -129,3 +129,18 @@ class Gtpe2DataPortSpec extends AnyFunSuite {
     assertThrows[Throwable](shape(32, false))
   }
 }
+
+class Gtpe2TxConfigSpec extends AnyFunSuite {
+  test("Gtpe2TxConfig should keep the TX buffer settings consistent") {
+    // TXBUF_EN, TX_XCLK_SEL and TXSYNC_OVRD are one decision, not three
+    val buffered = Gtpe2TxConfig(135 MHz, bufferEnabled = true)
+    assert(buffered.bufEnable == "TRUE", s"was ${buffered.bufEnable}")
+    assert(buffered.xclkSelect == "TXOUT", s"was ${buffered.xclkSelect}")
+    assert(!buffered.syncOverride, "a buffered transmitter needs no override")
+
+    val bypassed = Gtpe2TxConfig(135 MHz, bufferEnabled = false)
+    assert(bypassed.bufEnable == "FALSE", s"was ${bypassed.bufEnable}")
+    assert(bypassed.xclkSelect == "TXUSR", s"was ${bypassed.xclkSelect}")
+    assert(bypassed.syncOverride, "a bypassed transmitter needs the override")
+  }
+}

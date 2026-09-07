@@ -70,6 +70,25 @@ case class GtpChannel(
   private var txClaim: Option[(Gtpe2TxConfig, Gtpe2TxIo)] = None
   private var rxClaim: Option[(Gtpe2RxConfig, Gtpe2RxIo)] = None
   private var built = false
+  private var builtPrimitive: Gtpe2Channel = null
+
+  /** The GTPE2_CHANNEL, once it has been built
+   *  @group spiny
+   */
+  def primitive: Gtpe2Channel = {
+    assert(builtPrimitive != null, "The GTPE2_CHANNEL has not been built yet")
+    builtPrimitive
+  }
+
+  /** The transmit half, if it has been claimed
+   *  @group spiny
+   */
+  def tx: Option[Gtpe2TxIo] = txClaim.map(_._2)
+
+  /** The receive half, if it has been claimed
+   *  @group spiny
+   */
+  def rx: Option[Gtpe2RxIo] = rxClaim.map(_._2)
 
   // The claims are only all known once the enclosing component has
   // finished elaborating, so the build waits for the parent.
@@ -125,6 +144,7 @@ case class GtpChannel(
       txConfig = txClaim.map(_._1).getOrElse(Gtpe2TxConfig(refClkFreq)),
       drpClkDomain = drpClkDomain
     )
+    builtPrimitive = channel
 
     channel.io.clocking := io.clocking
     // sequential reset mode
