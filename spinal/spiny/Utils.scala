@@ -56,6 +56,14 @@ object DiffPair {
     pair.n := n
     pair
   }
+
+  /** A pair that drives two signals differentially
+   */
+  def driving(p: Bool, n: Bool): DiffPair = {
+    val pair = DiffPair()
+    pair.drive(p, n)
+    pair
+  }
 }
 
 object Pulse {

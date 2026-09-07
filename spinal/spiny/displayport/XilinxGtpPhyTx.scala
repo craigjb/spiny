@@ -75,9 +75,14 @@ object XilinxGtpPhyTx extends MainLinkPhyTxType {
       .getOrElse(SpinalError(s"no GTP PLL divider set reaches $vco from $refClkFreq"))
   }
 
-  /** Claims a PLL from a [[GtpCommon]] and builds a transmitter on it
+  /** Builds a transmitter on a PLL and a transmit half it claims itself
+   *
+   *  A GTP transmitter needs both, and the transmit half has to be claimed
+   *  with the config this transmitter runs at, so it claims them here.
    *
    *  @param common The [[GtpCommon]] to claim a PLL from
+   *  @param channel The [[GtpChannel]] to claim the transmit half of
+   *  @param serial Where the lane goes, e.g. `DiffPair.driving(pinP, pinN)`
    *  @param refClkFreq Reference clock frequency (static)
    *  @param initialLineRate Serial rate the PLL is initialized for
    *  @param refClkSelect Which of reference clocks the PLL should use
@@ -86,6 +91,8 @@ object XilinxGtpPhyTx extends MainLinkPhyTxType {
    */
   def apply(
     common: GtpCommon,
+    channel: GtpChannel,
+    serial: DiffPair,
     refClkFreq: HertzNumber = 135 MHz,
     initialLineRate: HertzNumber = 2.7 GHz,
     refClkSelect: Gtpe2PllRefClk = Gtpe2PllRefClk.GtRefClk0,
@@ -102,6 +109,8 @@ object XilinxGtpPhyTx extends MainLinkPhyTxType {
       preEmphasisLevels
     )
     phy.io.pll <> claim
+    phy.io.tx <> channel.requestTx(phy.txConfig)
+    serial := phy.io.serial
     phy
   }
 }
