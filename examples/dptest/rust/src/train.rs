@@ -30,6 +30,12 @@ const DOWNSPREAD_NONE: u8 = 0x00;
 const CODING_8B10B: u8 = 0x01;
 /// LANE0_1_STATUS bit 0, the sink has recovered the clock on lane 0
 const CR_DONE: u8 = 0x01;
+/// LANE0_1_STATUS bit 1, lane 0 is equalized, which needs TPS2 or better
+const EQ_DONE: u8 = 0x02;
+/// LANE0_1_STATUS bit 2, the sink has found the 8b/10b symbol boundaries
+const SYMBOL_LOCKED: u8 = 0x04;
+/// SINK_STATUS bit 0, receive port 0 is in sync with the stream
+const RX_IN_SYNC: u8 = 0x01;
 
 /// The sink is given 100 us minimum to lock, so read back well after that
 const LOCK_WAIT_MS: u64 = 10;
@@ -181,6 +187,34 @@ async fn bring_up(dp: &DisplayPort) -> bool {
     false
 }
 
+/// Every byte of the sink's status block, 0x202 through 0x207
+fn dump_status(s: &[u8]) {
+    defmt::println!(
+        "  LANE0_1 {=u8:#04x} LANE2_3 {=u8:#04x} ALIGN {=u8:#04x} \
+         SINK_STATUS {=u8:#04x} ADJUST {=u8:#04x} {=u8:#04x}",
+        s[0], s[1], s[2], s[3], s[4], s[5]
+    );
+    defmt::println!(
+        "  CR_DONE {}, EQ_DONE {}, SYMBOL_LOCKED {}, in sync {}, \
+         wants swing {=u8} emphasis {=u8}",
+        s[0] & CR_DONE != 0,
+        s[0] & EQ_DONE != 0,
+        s[0] & SYMBOL_LOCKED != 0,
+        s[3] & RX_IN_SYNC != 0,
+        s[4] & 0x3,
+        (s[4] >> 2) & 0x3
+    );
+}
+
+/// CR_DONE as the sink reports it right now
+fn cr_done(dp: &DisplayPort) -> bool {
+    let mut reply = [0u8; 8];
+    match aux::dpcd_read(dp, STATUS_BLOCK, 6, &mut reply) {
+        Ok(status) => status[0] & CR_DONE != 0,
+        Err(_) => false,
+    }
+}
+
 /// Drives training pattern 1 on lane 0 and reports whether the sink locked
 pub async fn clock_recovery(dp: &DisplayPort) -> Result<bool, AuxError> {
     let result = attempt_clock_recovery(dp).await;
@@ -205,14 +239,6 @@ async fn attempt_clock_recovery(dp: &DisplayPort) -> Result<bool, AuxError> {
         return Ok(false);
     }
 
-    // AUX worked before the transmitter came up, so find out whether it is
-    // native writes that fail or AUX generally
-    let mut probe = [0u8; 2];
-    match aux::dpcd_read(dp, LINK_BW_SET, 1, &mut probe) {
-        Ok(value) => defmt::println!("LINK_BW_SET reads {=u8:#04x} after enable", value[0]),
-        Err(error) => defmt::println!("DPCD read after enable failed: {}", error),
-    }
-
     write_dpcd(dp, "LINK_BW_SET", LINK_BW_SET, LINK_BW_HBR).await?;
     write_dpcd(dp, "LANE_COUNT_SET", LANE_COUNT_SET, 1).await?;
     write_dpcd(dp, "DOWNSPREAD_CTRL", DOWNSPREAD_CTRL, DOWNSPREAD_NONE).await?;
@@ -223,6 +249,15 @@ async fn attempt_clock_recovery(dp: &DisplayPort) -> Result<bool, AuxError> {
         CODING_8B10B,
     )
     .await?;
+
+    // This sink holds its last verdict until the cable is unplugged, so a
+    // bit that is already set says nothing about the run about to start.
+    if cr_done(dp) {
+        defmt::println!(
+            "CR_DONE is set before training starts, left over from an earlier \
+             run. Unplug the sink to clear it, or treat a lock below as stale."
+        );
+    }
 
     // the spec has the pattern on the wire before the sink is told to look
     dp.main_link_control()
@@ -264,19 +299,12 @@ async fn attempt_clock_recovery(dp: &DisplayPort) -> Result<bool, AuxError> {
         let wants_swing = status[4] & 0x3;
         let wants_emphasis = (status[4] >> 2) & 0x3;
         defmt::println!(
-            "attempt {=u32}: sent swing {=u8} emphasis {=u8}, LANE0_1_STATUS {=u8:#04x}, CR_DONE {}",
+            "attempt {=u32}: sent swing {=u8} emphasis {=u8}",
             attempt,
             swing,
-            emphasis,
-            status[0],
-            locked
+            emphasis
         );
-        defmt::println!(
-            "  sink wants swing {=u8} emphasis {=u8}, SINK_STATUS {=u8:#04x}",
-            wants_swing,
-            wants_emphasis,
-            status[3]
-        );
+        dump_status(status);
         if locked {
             // clock recovery is done, and equalization starts from whatever
             // the sink is asking for by then
