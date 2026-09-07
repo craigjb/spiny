@@ -42,34 +42,72 @@ import spiny.peripheral._
 /** AUX channel settings for a [[SpinyDisplayPortSource]]
  *
  *  @param maxTimeout Longest reply timeout the timeout register can hold
- *  @param defaultTimeout Reset value of the reply timeout register
+ *  @param defaultTimeout Reset value of the reply timeout register. 300 µs
+ *         per the spec, but many sinks take longer, so give some margin.
  *  @param retryLimit Largest value the retry register can hold
  *  @param requestDepth Request bytes buffered
  *  @param replyDepth Reply bytes buffered
  */
 case class SourceAuxConfig(
   maxTimeout: TimeNumber = 1 ms,
-  defaultTimeout: TimeNumber = 300 us,
+  defaultTimeout: TimeNumber = 600 us,
   retryLimit: Int = 7,
   requestDepth: Int = 20,
   replyDepth: Int = 17
 )
 
-/** DisplayPort source peripheral, covering the AUX channel and HPD
+object SpinyDisplayPortSource {
+  /** Builds a source driving a transmit PHY, and wires the two together
+   *
+   *  The PHY says how many lanes it drives and what it adds to the control
+   *  bus, so neither has to be given again here.
+   *
+   *  @param phy The transmit PHY to drive
+   *  @param auxConfig AUX channel settings
+   *  @param hpdFilter How long HPD must be stable to count as a change
+   *  @param addressWidth Address width for the APB3 bus
+   */
+  def apply(
+    phy: MainLinkPhyTx,
+    auxConfig: SourceAuxConfig = SourceAuxConfig(),
+    hpdFilter: TimeNumber = 100 us,
+    addressWidth: Int = 8
+  ): SpinyDisplayPortSource = {
+    val source = new SpinyDisplayPortSource(
+      auxConfig = auxConfig,
+      hpdFilter = hpdFilter,
+      mainLinkLanes = phy.control.laneCount,
+      mainLinkPhy = MainLinkPhyTxType(phy.control.phyPorts),
+      addressWidth = addressWidth
+    )
+    source.io.mainLink <> phy.control
+    source
+  }
+}
+
+/** DisplayPort source peripheral
  *
  *  @param auxConfig AUX channel settings
  *  @param hpdFilter How long HPD must be stable to count as a change
+ *  @param mainLinkLanes Number of DisplayPort lanes to support (1, 2, or 4)
+ *  @param mainLinkPhy Which transmit PHY drives the main link, named by its
+ *         companion object, e.g. [[spiny.displayport.XilinxGtpPhyTx]]
  *  @param addressWidth Address width for the APB3 bus
  */
 class SpinyDisplayPortSource(
   auxConfig: SourceAuxConfig = SourceAuxConfig(),
   hpdFilter: TimeNumber = 100 us,
+  mainLinkLanes: Int = 0,
+  mainLinkPhy: MainLinkPhyTxType = NoMainLinkPhyTx,
   addressWidth: Int = 8
 ) extends Component with SpinyPeripheral {
   // an IRQ_HPD pulse is 0.5 ms at its shortest, so a filter anywhere near
   // that would swallow the event the sink is trying to signal
   assert(hpdFilter < (0.5 ms),
     "hpdFilter must be shorter than the 0.5 ms minimum IRQ_HPD pulse")
+
+  assert(Seq(0, 1, 2, 4).contains(mainLinkLanes),
+    s"mainLinkLanes must be 0 for no main link, or 1, 2 or 4, was $mainLinkLanes")
 
   val apb3Config = Apb3Config(
     addressWidth = addressWidth,
@@ -81,6 +119,11 @@ class SpinyDisplayPortSource(
     val aux = master(TriState(Bool()))
     val hpd = in Bool ()
     val interrupt = out Bool ()
+
+    /** Drives the main link transmit PHY, whichever platform provides it */
+    val mainLink =
+      (mainLinkLanes > 0) generate
+        master(MainLinkPhyTxControl(mainLinkLanes, mainLinkPhy.ports))
   }
 
   val busIf = createPeripheralBusInterface(io.apb)
@@ -139,6 +182,54 @@ class SpinyDisplayPortSource(
   io.aux <> phy.io.aux
 
   val auxRegs = link.driveFrom(busIf, auxConfig.defaultTimeout)
+
+  val mainLink = (mainLinkLanes > 0) generate new Area {
+    val control = busIf.newReg(doc = "Main link control").setName("mainLinkControl")
+    io.mainLink.enable := control.field(
+      Bool(),
+      AccessType.RW,
+      resetValue = 0,
+      doc = "Brings the transmit PHY up, low holds it in reset"
+    )(SymbolName("enable"))
+    io.mainLink.pattern := control.field(
+      MainLinkPattern(),
+      AccessType.RW,
+      resetValue = 0,
+      doc = "What the transmitter puts on the lanes"
+    )(SymbolName("pattern"))
+
+    val status = busIf.newReg(doc = "Main link status").setName("mainLinkStatus")
+    val readyField = status.field(
+      Bool(),
+      AccessType.RO,
+      doc = "The transmit PHY has finished its reset sequence"
+    )(SymbolName("ready"))
+    readyField := io.mainLink.ready
+
+    val drive = for (lane <- 0 until mainLinkLanes) yield {
+      val reg = busIf
+        .newReg(doc = s"Lane $lane drive levels")
+        .setName(s"lane${lane}Drive")
+      io.mainLink.drive(lane).swing := reg.field(
+        UInt(2 bits),
+        AccessType.RW,
+        resetValue = 0,
+        doc = "Voltage swing level, 0 to 3"
+      )(SymbolName("swing"))
+      io.mainLink.drive(lane).preEmphasis := reg.field(
+        UInt(2 bits),
+        AccessType.RW,
+        resetValue = 0,
+        doc = "Pre-emphasis level, 0 to 3"
+      )(SymbolName("preEmphasis"))
+      reg
+    }
+
+    // add PHY-specific registers
+    for (lane <- 0 until mainLinkLanes) {
+      io.mainLink.phy.driveFrom(busIf, lane)
+    }
+  }
 
   io.interrupt := auxRegs.interrupt || hpd.interrupt
 

@@ -40,7 +40,9 @@ import spiny.DiffPair
 import spiny.platform.xilinx._
 import spiny.platform.xilinx.blackbox._
 
-object XilinxGtpPhyTx {
+object XilinxGtpPhyTx extends MainLinkPhyTxType {
+  override def ports: HardType[MainLinkPhyPorts] = XilinxGtpPhyTxPorts()
+
   /** TXOUT_DIV, the same divider for RBR and HBR */
   val OutDivider = 2
 
@@ -227,7 +229,7 @@ case class XilinxGtpPhyTx(
   refClkSelect: Gtpe2PllRefClk,
   swingLevels: Seq[Int],
   preEmphasisLevels: Seq[Int]
-) extends Component {
+) extends Component with MainLinkPhyTx {
   assert(swingLevels.size == 4, "swingLevels needs one entry per DPCD level")
   assert(preEmphasisLevels.size == 4,
     "preEmphasisLevels needs one entry per DPCD level")
@@ -263,6 +265,8 @@ case class XilinxGtpPhyTx(
      */
     val serial = out(DiffPair())
   }
+
+  override def control: MainLinkPhyTxControl = io.control
 
   val pllConfig = XilinxGtpPhyTx.pllConfig(refClkFreq, initialLineRate)
 

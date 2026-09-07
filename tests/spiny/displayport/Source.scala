@@ -46,6 +46,14 @@ class SpinyDisplayPortSourceSpec extends AnyFunSuite {
   val IntRise = 0
   val IntFall = 1
 
+  test("SpinyDisplayPortSource should reject a lane count DisplayPort has no name for") {
+    assertThrows[Throwable] {
+      SpinalConfig(targetDirectory = ElaborationDir.path).generateVerilog(
+        new SpinyDisplayPortSource(mainLinkLanes = 3)
+      )
+    }
+  }
+
   def withSource(name: String)(
     body: (SpinyDisplayPortSource, Apb3CheckedDriver) => Unit
   ): Unit = {

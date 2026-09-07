@@ -73,6 +73,31 @@ case class NoMainLinkPhyPorts() extends MainLinkPhyPorts {
   override def driveFrom(busIf: BusIf, lane: Int): Unit = {}
 }
 
+/** Helper implemented by each PHY's companion object
+ */
+trait MainLinkPhyTxType {
+  /** Ports and registers this PHY adds, see [[MainLinkPhyPorts]] */
+  def ports: HardType[MainLinkPhyPorts]
+}
+
+object MainLinkPhyTxType {
+  def apply(phyPorts: HardType[MainLinkPhyPorts]): MainLinkPhyTxType =
+    new MainLinkPhyTxType {
+      override def ports: HardType[MainLinkPhyPorts] = phyPorts
+    }
+}
+
+/** No transmit PHY, for a source with no main link */
+object NoMainLinkPhyTx extends MainLinkPhyTxType {
+  override def ports: HardType[MainLinkPhyPorts] = NoMainLinkPhyPorts()
+}
+
+/** A main link PHY TX, implemented by concrete PHY TX classes
+ */
+trait MainLinkPhyTx { self: Component =>
+  def control: MainLinkPhyTxControl
+}
+
 /** Control bus from a main link controller to its transmit PHY
  *
  *  @param laneCount Number of lanes the link can drive
