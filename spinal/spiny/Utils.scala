@@ -49,6 +49,14 @@ case class DiffPair() extends Bundle {
 }
 
 object DiffPair {
+  /** A pair with two name pads (e.g. in a top-level IO bundle) */
+  def apply(p: String, n: String): DiffPair = {
+    val pair = DiffPair()
+    pair.p.setName(p)
+    pair.n.setName(n)
+    pair
+  }
+
   /** A pair driven from two signals, usually a component's two pads */
   def apply(p: Bool, n: Bool): DiffPair = {
     val pair = DiffPair()
