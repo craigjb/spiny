@@ -38,8 +38,9 @@ import spinal.core._
 import spinal.lib._
 import spinal.lib.blackbox.xilinx.s7._
 
-import spiny.ClockGen
+import spiny.{ClockGen, DiffPair}
 import spiny.platform.xilinx._
+import spiny.platform.xilinx.blackbox._
 import spiny.soc._
 import spiny.peripheral._
 import spiny.displayport._
@@ -58,6 +59,9 @@ class DpTest(
     val AUX_N = inout(Analog(Bool))
     val UNUSED_P = in(Bool())
     val UNUSED_N = in(Bool())
+
+    val GTP_REFCLK = in(DiffPair("GTP_REFCLK_P", "GTP_REFCLK_N"))
+    val DP_TX = out(DiffPair("DP_TX_P", "DP_TX_N"))
 
     // enough to watch a transaction on a scope, the rest goes over defmt
     val DBG_AUX_FILTERED = out(Bool())
@@ -99,7 +103,13 @@ class DpTest(
     ).setName("Gpio")
     io.LEDS := gpio.getBankBits("leds")
 
-    val displayPort = new SpinyDisplayPortSource().setName("DisplayPort")
+    val gtpRefClkBuf = IBufDsGte2(io.GTP_REFCLK)
+    val gtpCommon = GtpCommon()
+    gtpCommon.io.gtRefClk0 := gtpRefClkBuf.io.O
+
+    val gtpChannel = GtpChannel(gtpCommon)
+    val mainLinkPhy = XilinxGtpPhyTx(gtpCommon, gtpChannel, io.DP_TX)
+    val displayPort = SpinyDisplayPortSource(mainLinkPhy).setName("DisplayPort")
     displayPort.io.hpd := io.HPD
 
     val auxIoBuf = IOBUFDS.on(displayPort.io.aux, io.AUX_P, io.AUX_N)

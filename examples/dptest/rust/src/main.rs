@@ -3,6 +3,7 @@
 
 mod aux;
 mod edid;
+mod train;
 
 use defmt_rtt as _;
 use embassy_executor::Spawner;
@@ -69,7 +70,19 @@ async fn read_dpcd(dp: &dptest_pac::DisplayPort) {
             defmt::println!("  MAX_LINK_RATE   {=u8:#04x}", dpcd[1]);
             defmt::println!("  MAX_LANE_COUNT  {=u8:#04x}", dpcd[2] & 0x1f);
         }
-        Err(error) => defmt::println!("DPCD read failed: {}", error),
+        Err(error) => {
+            defmt::println!("DPCD read failed: {}", error);
+            // the receiver is armed the moment the transmitter lets go, so
+            // junk on the line shows up here as unexpected or overrun
+            let raw = dp.aux_int_raw().read();
+            defmt::println!(
+                "  AUX rxUnexpected {}, rxOverrun {}, requestDropped {}, result {=u8}",
+                raw.rx_unexpected_raw().bit_is_set(),
+                raw.rx_overrun_raw().bit_is_set(),
+                raw.request_dropped_raw().bit_is_set(),
+                dp.status().read().result().bits()
+            );
+        }
     }
 
     read_edid(dp);
@@ -83,8 +96,31 @@ async fn main(_spawner: Spawner) {
 
     defmt::println!("dptest starting");
 
+    // stop guessing what the AUX link is configured with and read it back
+    let config = dp.config().read();
+    defmt::println!(
+        "AUX config: replyTimeout {=u32} clocks, maxRetries {=u8}",
+        config.reply_timeout().bits(),
+        config.max_retries().bits()
+    );
+    // The register keeps its value across a firmware reload, so a previous
+    // build that wrote nonsense into it survives until the fabric is
+    // reconfigured. Nothing works with a zero timeout, so say so.
+    if config.reply_timeout().bits() == 0 {
+        defmt::println!(
+            "AUX reply timeout is zero, every transaction will time out. \
+             Reload the bitstream or reset the board to restore the default."
+        );
+    }
+
     loop {
         read_dpcd(dp).await;
+
+        match train::clock_recovery(dp).await {
+            Ok(true) => defmt::println!("sink locked to training pattern 1"),
+            Ok(false) => defmt::println!("sink did not lock"),
+            Err(error) => defmt::println!("training pattern 1 failed: {}", error),
+        }
 
         // heartbeat, and hold here until the sink goes away
         let mut leds: u8 = 1;

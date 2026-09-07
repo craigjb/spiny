@@ -38,6 +38,7 @@ pub enum AuxError {
 
 /// Native AUX read command, in the top nibble of the first request byte
 pub const NATIVE_READ: u8 = 0x9;
+pub const NATIVE_WRITE: u8 = 0x8;
 
 /// Clears the latched AUX events so the next transaction starts clean
 fn clear_events(dp: &DisplayPort) {
@@ -107,6 +108,20 @@ pub fn dpcd_read<'a>(
     let bytes = transact(dp, &request, reply)?;
     // the first reply byte is the AUX_ACK header, the rest is DPCD data
     Ok(&bytes[1..])
+}
+
+/// Writes up to 16 bytes to DPCD
+pub fn dpcd_write(dp: &DisplayPort, address: u32, data: &[u8]) -> Result<(), AuxError> {
+    let mut request = [0u8; 4 + AUX_MAX_DATA];
+    request[0] = (NATIVE_WRITE << 4) | ((address >> 16) & 0xf) as u8;
+    request[1] = (address >> 8) as u8;
+    request[2] = address as u8;
+    request[3] = (data.len() - 1) as u8;
+    request[4..4 + data.len()].copy_from_slice(data);
+
+    let mut reply = [0u8; 1];
+    transact(dp, &request[..4 + data.len()], &mut reply)?;
+    Ok(())
 }
 
 /// I2C over AUX command codes, with MOT set while the transaction stays open
