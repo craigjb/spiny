@@ -57,11 +57,6 @@ object XilinxGtpPhyTx extends MainLinkPhyTxType {
   /** TXPOSTCURSOR for DisplayPort pre-emphasis levels 0 to 3 */
   val DefaultPreEmphasisLevels = Seq(0x00, 0x08, 0x0e, 0x14)
 
-  /** Training pattern 1 is D10.2, which 8b/10b encoding turns into
-   *  a square wave that the sink clock locks onto
-   */
-  val D10_2 = 0x4a
-
   /** Dividers that reach a line rate from a reference clock
    *
    *  @param refClkFreq Reference clock frequency
@@ -372,41 +367,30 @@ case class XilinxGtpPhyTx(
   io.tx.driver.preCursorInvert := False
   io.tx.driver.postCursorInvert := False
 
+  val txData = io.tx.data()
   val pattern = fabricClkDomain on new Area {
+    // the select crosses from the register domain into the transmit domain
     val select = BufferCC(io.control.pattern, MainLinkPattern.Quiet())
-    val symbol = RegInit(B(0, 8 bits))
-    val quiet = RegInit(True)
 
-    /** The select as the transmit domain sees it */
-    val transmitting = select =/= MainLinkPattern.Quiet
-
-    switch(select) {
-      is(MainLinkPattern.TrainingPattern1) {
-        symbol := XilinxGtpPhyTx.D10_2
-        quiet := False
-      }
-      default {
-        symbol := 0
-        quiet := True
-      }
+    val generator = TrainingPatternGenerator(txData.length)
+    generator.io.pattern := select
+    for ((slot, index) <- txData.zipWithIndex) {
+      slot := generator.io.symbol(index)
     }
   }
-
-  // Training pattern 1 is D10.2 repeated
-  io.tx.data().foreach(_ := pattern.symbol)
 
   // DisplayPort uses 8b/10b encoding
   io.tx.encoder8b10b.enable := True
   io.tx.encoder8b10b.bypass := B"4'0"
 
-  // training patterns carry no K characters
-  io.tx.encoder8b10b.charIsK := B"4'0"
+  // pattern 2's commas are the only control characters we transmit
+  io.tx.encoder8b10b.charIsK := Cat(pattern.generator.io.isK).resized
 
   // use electrical idle when quiet
-  io.tx.driver.electricalIdle := pattern.quiet
+  io.tx.driver.electricalIdle := pattern.generator.io.quiet
 
   // feedback on whether the transmitter is actually sending something
-  val patternActive = BufferCC(pattern.transmitting, False)
+  val patternActive = BufferCC(!pattern.generator.io.quiet, False)
 
   phy.pllLocked := status.pllLocked
   phy.refClkLost := status.refClkLost

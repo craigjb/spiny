@@ -42,6 +42,9 @@ object MainLinkPattern extends SpinalEnum(binarySequential) {
 
   /** Training pattern 1, D10.2 on every lane, for the sink's clock recovery */
   val TrainingPattern1 = newElement()
+
+  /** Training pattern 2, the sequence the sink equalizes and symbol locks to */
+  val TrainingPattern2 = newElement()
 }
 
 /** Drive levels for one lane (DPCD levels)

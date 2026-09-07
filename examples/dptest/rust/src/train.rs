@@ -21,6 +21,8 @@ const SET_POWER: u32 = 0x00600;
 const LINK_BW_HBR: u8 = 0x0a;
 /// Training pattern 1, with the scrambler off as the spec requires for it
 const TPS1_SCRAMBLING_OFF: u8 = 0x21;
+/// Training pattern 2, scrambler still off, for channel equalization
+const TPS2_SCRAMBLING_OFF: u8 = 0x22;
 const TRAINING_OFF: u8 = 0x00;
 /// Normal operation, as opposed to the D3 the sink may be sitting in
 const POWER_D0: u8 = 0x01;
@@ -36,6 +38,13 @@ const EQ_DONE: u8 = 0x02;
 const SYMBOL_LOCKED: u8 = 0x04;
 /// SINK_STATUS bit 0, receive port 0 is in sync with the stream
 const RX_IN_SYNC: u8 = 0x01;
+/// LANE_ALIGN_STATUS_UPDATED bit 0, the lanes are aligned with each other
+const INTERLANE_ALIGN_DONE: u8 = 0x01;
+
+/// MainLinkPattern as the pattern field encodes it, see MainLinkPhy.scala
+const PATTERN_QUIET: u8 = 0;
+const PATTERN_TPS1: u8 = 1;
+const PATTERN_TPS2: u8 = 2;
 
 /// The sink is given 100 us minimum to lock, so read back well after that
 const LOCK_WAIT_MS: u64 = 10;
@@ -49,6 +58,8 @@ const READY_RESTARTS: u32 = 3;
 const WRITE_ATTEMPTS: u32 = 3;
 /// Clock recovery attempts before giving up, the spec allows 10
 const CR_ATTEMPTS: u32 = 10;
+/// Equalization attempts, which the spec caps at five
+const EQ_ATTEMPTS: u32 = 5;
 /// The spec stops after five attempts at one voltage swing
 const MAX_TRIES_PER_SWING: u32 = 5;
 /// DisplayPort has four swing levels, so this is the last one
@@ -215,20 +226,42 @@ fn cr_done(dp: &DisplayPort) -> bool {
     }
 }
 
-/// Drives training pattern 1 on lane 0 and reports whether the sink locked
-pub async fn clock_recovery(dp: &DisplayPort) -> Result<bool, AuxError> {
-    let result = attempt_clock_recovery(dp).await;
+/// Trains the link: clock recovery, then channel equalization
+///
+/// Returns true only if the sink reached equalization, symbol lock and lane
+/// alignment, which are what say the link carries symbols rather than just a
+/// recoverable clock.
+pub async fn train(dp: &DisplayPort) -> Result<bool, AuxError> {
+    let result = attempt_training(dp).await;
 
     // Whatever happened, do not walk away leaving the sink in training with
     // the scrambler off. An early return used to skip this, so a failed run
     // left the sink stuck until it was unplugged.
     let _ = aux::dpcd_write(dp, TRAINING_PATTERN_SET, &[TRAINING_OFF]);
-    dp.main_link_control().write(|w| w.enable().clear_bit());
+
+    // Only stop transmitting if training failed. Going electrically idle
+    // after a successful run throws away the clock and symbol lock that was
+    // just established, so the lanes keep carrying training pattern 2 until
+    // there is an idle pattern to replace it with.
+    if !matches!(result, Ok(true)) {
+        dp.main_link_control()
+            .write(|w| unsafe { w.enable().clear_bit().pattern().bits(PATTERN_QUIET) });
+    }
 
     result
 }
 
-async fn attempt_clock_recovery(dp: &DisplayPort) -> Result<bool, AuxError> {
+async fn attempt_training(dp: &DisplayPort) -> Result<bool, AuxError> {
+    let Some((swing, emphasis)) = clock_recovery(dp).await? else {
+        return Ok(false);
+    };
+    channel_equalization(dp, swing, emphasis).await
+}
+
+/// Drives training pattern 1 until the sink recovers the clock
+///
+/// Returns the drive levels it locked at, which equalization starts from.
+async fn clock_recovery(dp: &DisplayPort) -> Result<Option<(u8, u8)>, AuxError> {
     defmt::println!("enabling main link");
     // a sink parked in D3 will not train, and this has to happen while AUX
     // is known good, before anything else
@@ -236,7 +269,7 @@ async fn attempt_clock_recovery(dp: &DisplayPort) -> Result<bool, AuxError> {
 
     dp.main_link_control().write(|w| w.enable().set_bit());
     if !bring_up(dp).await {
-        return Ok(false);
+        return Ok(None);
     }
 
     write_dpcd(dp, "LINK_BW_SET", LINK_BW_SET, LINK_BW_HBR).await?;
@@ -261,7 +294,7 @@ async fn attempt_clock_recovery(dp: &DisplayPort) -> Result<bool, AuxError> {
 
     // the spec has the pattern on the wire before the sink is told to look
     dp.main_link_control()
-        .write(|w| w.enable().set_bit().pattern().set_bit());
+        .write(|w| unsafe { w.enable().set_bit().pattern().bits(PATTERN_TPS1) });
     write_dpcd(dp, "TRAINING_PATTERN_SET", TRAINING_PATTERN_SET, TPS1_SCRAMBLING_OFF)
         .await?;
 
@@ -335,14 +368,75 @@ async fn attempt_clock_recovery(dp: &DisplayPort) -> Result<bool, AuxError> {
         emphasis = wants_emphasis;
     }
 
-    if locked {
-        // equalization picks up from here, once there is an equalization
+    if !locked {
+        return Ok(None);
+    }
+
+    defmt::println!(
+        "clock recovery done, sink wants swing {=u8} emphasis {=u8} for equalization",
+        swing,
+        emphasis
+    );
+    Ok(Some((swing, emphasis)))
+}
+
+/// Drives training pattern 2 until the sink equalizes and locks its symbols
+///
+/// Clock recovery has to hold through this, so losing CR_DONE is a failure
+/// rather than something to retry at a higher swing.
+async fn channel_equalization(
+    dp: &DisplayPort,
+    start_swing: u8,
+    start_emphasis: u8,
+) -> Result<bool, AuxError> {
+    defmt::println!("starting channel equalization");
+
+    // pattern before the sink is told to look, as in clock recovery
+    dp.main_link_control()
+        .write(|w| unsafe { w.enable().set_bit().pattern().bits(PATTERN_TPS2) });
+    write_dpcd(dp, "TRAINING_PATTERN_SET", TRAINING_PATTERN_SET, TPS2_SCRAMBLING_OFF)
+        .await?;
+
+    let mut swing = start_swing;
+    let mut emphasis = start_emphasis;
+    for attempt in 0..EQ_ATTEMPTS {
+        dp.lane0drive().write(|w| unsafe {
+            w.swing().bits(swing).pre_emphasis().bits(emphasis)
+        });
+        write_dpcd(dp, "TRAINING_LANE0_SET", TRAINING_LANE0_SET,
+            training_lane_set(swing, emphasis)).await?;
+        Timer::after_millis(LOCK_WAIT_MS).await;
+
+        let mut reply = [0u8; 8];
+        let status = match aux::dpcd_read(dp, STATUS_BLOCK, 6, &mut reply) {
+            Ok(status) => status,
+            Err(error) => {
+                defmt::println!("status read failed: {}", error);
+                return Ok(false);
+            }
+        };
         defmt::println!(
-            "clock recovery done, sink wants swing {=u8} emphasis {=u8} for equalization",
+            "eq attempt {=u32}: sent swing {=u8} emphasis {=u8}",
+            attempt,
             swing,
             emphasis
         );
+        dump_status(status);
+
+        if status[0] & CR_DONE == 0 {
+            defmt::println!("  clock recovery was lost, equalization cannot continue");
+            return Ok(false);
+        }
+        let equalized = status[0] & (EQ_DONE | SYMBOL_LOCKED) == (EQ_DONE | SYMBOL_LOCKED);
+        if equalized && status[2] & INTERLANE_ALIGN_DONE != 0 {
+            defmt::println!("equalized, symbol locked and lane aligned");
+            return Ok(true);
+        }
+
+        swing = status[4] & 0x3;
+        emphasis = (status[4] >> 2) & 0x3;
     }
 
-    Ok(locked)
+    defmt::println!("{=u32} equalization attempts without success", EQ_ATTEMPTS);
+    Ok(false)
 }

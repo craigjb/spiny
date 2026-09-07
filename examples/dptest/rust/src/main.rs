@@ -116,10 +116,10 @@ async fn main(_spawner: Spawner) {
     loop {
         read_dpcd(dp).await;
 
-        match train::clock_recovery(dp).await {
-            Ok(true) => defmt::println!("sink locked to training pattern 1"),
-            Ok(false) => defmt::println!("sink did not lock"),
-            Err(error) => defmt::println!("training pattern 1 failed: {}", error),
+        match train::train(dp).await {
+            Ok(true) => defmt::println!("link trained"),
+            Ok(false) => defmt::println!("link training did not complete"),
+            Err(error) => defmt::println!("link training failed: {}", error),
         }
 
         // heartbeat, and hold here until the sink goes away

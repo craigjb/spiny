@@ -174,12 +174,59 @@ class XilinxGtpPhyTxSpec extends AnyFunSuite {
       dut.io.control.pattern #= MainLinkPattern.TrainingPattern1
       dut.clockDomain.waitSampling(20)
       // a 20 bit datapath = two symbols, both D10.2 here
-      val expected = (XilinxGtpPhyTx.D10_2 << 8) | XilinxGtpPhyTx.D10_2
+      val expected = (TrainingPatternGenerator.D10_2 << 8) | TrainingPatternGenerator.D10_2
       assert(dut.io.tx.rawData.toBigInt == expected,
         s"TXDATA should carry D10.2 twice, was ${dut.io.tx.rawData.toBigInt.toString(16)}")
       assert(!dut.io.tx.driver.electricalIdle.toBoolean,
         "the driver should be on while transmitting")
       assert(phy.transmitting.toBoolean, "and should report that it is")
+    }
+  }
+
+  test("XilinxGtpPhyTx should transmit the pattern 2 sequence in order") {
+    withPhy("PhyTx_pattern2") { (dut, phy) =>
+      dut.io.control.enable #= true
+      dut.io.tx.resetDone #= true
+      dut.io.control.pattern #= MainLinkPattern.TrainingPattern2
+      dut.clockDomain.waitSampling(4)
+
+      // the fabric side runs on TXOUTCLK, so step it by hand and read one
+      // slotful of the sequence per cycle
+      val seen = for (_ <- 0 until 40) yield {
+        dut.io.tx.fabricClockOutput.outClk #= false
+        sleep(2)
+        dut.io.tx.fabricClockOutput.outClk #= true
+        sleep(2)
+        val data = dut.io.tx.rawData.toBigInt
+        val k = dut.io.tx.encoder8b10b.charIsK.toInt
+        Seq(
+          ((data & 0xff).toInt, (k & 1) != 0),
+          (((data >> 8) & 0xff).toInt, (k & 2) != 0)
+        )
+      }
+      val stream = seen.flatten
+
+      val expected = TrainingPatternGenerator.TrainingPattern2Symbols.map(s => (s.value, s.isK))
+      val start = stream.indices.find(i =>
+        stream.slice(i, i + expected.length * 2) ==
+          (expected ++ expected).toIndexedSeq
+      )
+      assert(start.isDefined,
+        s"pattern 2 never appeared, saw ${stream.take(24).map(_._1.toHexString)}")
+      assert(start.get < expected.length * 2,
+        "the sequence should start within a couple of periods of the select")
+    }
+  }
+
+  test("XilinxGtpPhyTx should send no control characters for pattern 1") {
+    withPhy("PhyTx_pattern1_k") { (dut, phy) =>
+      dut.io.control.enable #= true
+      dut.io.tx.resetDone #= true
+      dut.io.control.pattern #= MainLinkPattern.TrainingPattern1
+      startOutClk(dut)
+      dut.clockDomain.waitSampling(20)
+      assert(dut.io.tx.encoder8b10b.charIsK.toInt == 0,
+        "training pattern 1 is all data characters")
     }
   }
 
