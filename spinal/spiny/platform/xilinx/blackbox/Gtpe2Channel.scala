@@ -36,12 +36,23 @@ import spinal.lib._
 
 import spiny.DiffPair
 
+/**
+ * @groupname ports SpinalHDL IO Ports
+ * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
+ */
 case class Gtpe2ChannelClocking() extends Bundle {
+  /** @group ports */
   val pll0Clk = Bool()
+  /** @group ports */
   val pll0RefClk = Bool()
+  /** @group ports */
   val pll1Clk = Bool()
+  /** @group ports */
   val pll1RefClk = Bool()
 
+  /** @group spiny */
   def fromGtpe2Common(common: Gtpe2Common) = {
     pll0Clk := common.io.pll0.outClk
     pll0RefClk := common.io.pll0.outRefClk
@@ -55,6 +66,7 @@ case class Gtpe2ChannelClocking() extends Bundle {
  *  the transceiver's internal use
  */
 private[xilinx] object Gtpe2Clk25Div {
+  /** @group spiny */
   def apply(side: String, refClkFreq: HertzNumber): Int = {
     val div = (refClkFreq.toBigDecimal / BigDecimal(25e6))
       .setScale(0, BigDecimal.RoundingMode.CEILING)
@@ -79,6 +91,7 @@ private[xilinx] object Gtpe2SymbolFormat {
    *  @param dataWidth TX or RX datapath width (20 or 40 bits)
    *  @param bypass8b10b Whether the 8b/10b encoder or decoder is bypassed,
    *         which is what makes the difference between 8 and 10 bit symbols
+   *  @group spiny
    */
   def of(side: String, dataWidth: Int, bypass8b10b: Boolean): Gtpe2SymbolFormat = {
     if (!bypass8b10b && !Seq(20, 40).contains(dataWidth)) {
@@ -150,14 +163,22 @@ case class Gtpe2TxConfig(
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxBufferBypassSyncIo() extends Bundle {
+    /** @group ports */
     val mode = in Bool() setName("RXSYNCMODE")
+    /** @group ports */
     val input = in Bool() setName("RXSYNCIN")
+    /** @group ports */
     val allPhaseAlignDone = in Bool() setName("RXSYNCALLIN")
+    /** @group ports */
     val output = out Bool() setName("RXSYNCOUT")
+    /** @group ports */
     val done = out Bool() setName("RXSYNCDONE")
 
+    /** @group spiny */
     def disable() = {
       mode := False
       input := False
@@ -169,15 +190,24 @@ case class Gtpe2RxBufferBypassSyncIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxBufferBypassDelayAlignmentIo() extends Bundle {
+    /** @group ports */
     val bypass = in Bool() setName("RXDLYBYPASS")
+    /** @group ports */
     val softReset = in Bool() setName("RXDLYSRESET")
+    /** @group ports */
     val softResetDone = out Bool() setName("RXDLYSRESETDONE")
+    /** @group ports */
     val enable = in Bool() setName("RXDLYEN")
+    /** @group ports */
     val counterOverrideEn = in Bool() setName("RXDLYOVRDEN")
+    /** @group ports */
     val insertionEnable = in Bool() setName("RXDDIEN")
 
+    /** @group spiny */
     def disable() = {
       bypass := True
       softReset := False
@@ -191,15 +221,24 @@ case class Gtpe2RxBufferBypassDelayAlignmentIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxBufferBypassPhaseAlignmentIo() extends Bundle {
+    /** @group ports */
     val enable = in Bool() setName("RXPHALIGNEN")
+    /** @group ports */
     val set = in Bool() setName("RXPHALIGN")
+    /** @group ports */
     val done = out Bool() setName("RXPHALIGNDONE")
+    /** @group ports */
     val counterOverrideEn = in Bool() setName("RXPHOVRDEN")
+    /** @group ports */
     val monitor = out Bits(5 bits) setName("RXPHMONITOR")
+    /** @group ports */
     val slipMonitor = out Bits(5 bits) setName("RXPHSLIPMONITOR")
 
+    /** @group spiny */
     def disable() = {
       enable := False
       set := False
@@ -211,20 +250,27 @@ case class Gtpe2RxBufferBypassPhaseAlignmentIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxFabricClockOutputRateIo() extends Bundle {
+    /** @group ports */
     val mode = in Bool() setName("RXRATEMODE")
+    /** @group ports */
     val divider = in Bits(3 bits) setName("RXRATE")
+    /** @group ports */
     val done = out Bool() setName("RXRATEDONE")
 
     /** RXRATE is synchronous to RXUSRCLK2 in this mode, asynchronous in the
      *  other, so only this path tags it
+     *  @group spiny
      */
     def syncMode(usrClk2Domain: ClockDomain) = {
       mode := False
       ClockDomainTag(usrClk2Domain)(divider)
     }
 
+    /** @group spiny */
     def disable() = {
       mode := False
       divider := B"3'0"
@@ -235,11 +281,16 @@ case class Gtpe2RxFabricClockOutputRateIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxClockDataRecoveryOffsetIo() extends Bundle {
+    /** @group ports */
     val hold = in Bool() setName("RXOSHOLD")
+    /** @group ports */
     val overrideEn = in Bool() setName("RXOSOVRDEN")
 
+    /** @group spiny */
     def disable() = {
       hold := False
       overrideEn := False
@@ -250,20 +301,27 @@ case class Gtpe2RxClockDataRecoveryOffsetIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2TxFabricClockOutputRateIo() extends Bundle {
+    /** @group ports */
     val mode = in Bool() setName("TXRATEMODE")
+    /** @group ports */
     val divider = in Bits(3 bits) setName("TXRATE")
+    /** @group ports */
     val done = out Bool() setName("TXRATEDONE")
 
     /** TXRATE is synchronous to TXUSRCLK2 in this mode, asynchronous in the
      *  other, so only this path tags it
+     *  @group spiny
      */
     def syncMode(usrClk2Domain: ClockDomain) = {
       mode := False
       ClockDomainTag(usrClk2Domain)(divider)
     }
 
+    /** @group spiny */
     def disable() = {
       mode := False
       divider := B"3'0"
@@ -274,18 +332,29 @@ case class Gtpe2TxFabricClockOutputRateIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2TxBufferBypassDelayAlignmentIo() extends Bundle {
+    /** @group ports */
     val bypass = in Bool() setName("TXDLYBYPASS")
+    /** @group ports */
     val softReset = in Bool() setName("TXDLYSRESET")
+    /** @group ports */
     val softResetDone = out Bool() setName("TXDLYSRESETDONE")
+    /** @group ports */
     val enable = in Bool() setName("TXDLYEN")
+    /** @group ports */
     val counterOverrideEn = in Bool() setName("TXDLYOVRDEN")
 
+    /** @group ports */
     val clk = in Bool() setName("TXPHDLYTSTCLK")
+    /** @group ports */
     val hold = in Bool() setName("TXDLYHOLD")
+    /** @group ports */
     val upOrDown = in Bool() setName("TXDLYUPDOWN")
 
+    /** @group spiny */
     def disable() = {
       bypass := True
       softReset := False
@@ -301,15 +370,24 @@ case class Gtpe2TxBufferBypassDelayAlignmentIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2TxBufferBypassPhaseAlignmentIo() extends Bundle {
+    /** @group ports */
     val enable = in Bool() setName("TXPHALIGNEN")
+    /** @group ports */
     val set = in Bool() setName("TXPHALIGN")
+    /** @group ports */
     val done = out Bool() setName("TXPHALIGNDONE")
+    /** @group ports */
     val init = in Bool() setName("TXPHINIT")
+    /** @group ports */
     val initDone = out Bool() setName("TXPHINITDONE")
+    /** @group ports */
     val counterOverrideEn = in Bool() setName("TXPHOVRDEN")
 
+    /** @group spiny */
     def disable() = {
       enable := False
       set := False
@@ -324,8 +402,11 @@ case class Gtpe2TxBufferBypassPhaseAlignmentIo() extends Bundle {
  * @groupprio ports 0
  */
 case class Gtpe2RxPcieIo() extends Bundle {
+  /** @group ports */
   val valid = out Bool() setName("RXVALID")
+  /** @group ports */
   val status = out Bits(3 bits) setName("RXSTATUS")
+  /** @group ports */
   val phyStatus = out Bool() setName("PHYSTATUS")
 
 }
@@ -334,14 +415,22 @@ case class Gtpe2RxPcieIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxGearboxIo() extends Bundle {
+  /** @group ports */
   val slip = in Bool() setName("RXGEARBOXSLIP") default(False)
+  /** @group ports */
   val dataValid = out Bits(2 bits) setName("RXDATAVALID")
+  /** @group ports */
   val headerValid = out Bool() setName("RXHEADERVALID")
+  /** @group ports */
   val header = out Bits(3 bits) setName("RXHEADER")
+  /** @group ports */
   val startOfSeq = out Bits(2 bits) setName("RXSTARTOFSEQ")
 
+  /** @group spiny */
   def disable() = {
     slip := False
   }
@@ -351,18 +440,30 @@ case class Gtpe2RxGearboxIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxChannelBondingIo() extends Bundle {
+  /** @group ports */
   val enable = in Bool() setName("RXCHBONDEN")
+  /** @group ports */
   val master = in Bool() setName("RXCHBONDMASTER")
+  /** @group ports */
   val slave = in Bool() setName("RXCHBONDSLAVE")
+  /** @group ports */
   val seqDetected = out Bool() setName("RXCHANBONDSEQ")
+  /** @group ports */
   val isAligned = out Bool() setName("RXCHANISALIGNED")
+  /** @group ports */
   val realign = out Bool() setName("RXCHANREALIGN")
+  /** @group ports */
   val level = in Bits(3 bits) setName("RXCHBONDLEVEL")
+  /** @group ports */
   val output = out Bits(4 bits) setName("RXCHBONDO")
+  /** @group ports */
   val input = in Bits(4 bits) setName("RXCHBONDI")
 
+  /** @group spiny */
   def disable() = {
     enable := False
     master := False
@@ -378,6 +479,7 @@ case class Gtpe2RxChannelBondingIo() extends Bundle {
  * @groupprio ports 0
  */
 case class Gtpe2RxClockCorrectionIo() extends Bundle {
+  /** @group ports */
   val status = out Bits(2 bits) setName("RXCLKCORCNT")
 }
 
@@ -385,12 +487,17 @@ case class Gtpe2RxClockCorrectionIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxElasticBufferIo() extends Bundle {
+  /** @group ports */
   val reset = in Bool() setName("RXBUFRESET")
+  /** @group ports */
   val status = out Bits(3 bits) setName("RXBUFSTATUS")
 
 
+  /** @group spiny */
   def disable() = {
     reset := False
   }
@@ -400,11 +507,16 @@ case class Gtpe2RxElasticBufferIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxBufferBypassIo() extends Bundle {
+  /** @group ports */
   val powerDown = in Bool() setName("RXPHDLYPD")
+  /** @group ports */
   val reset = in Bool() setName("RXPHDLYRESET")
 
+  /** @group spiny */
   def disable() = {
     powerDown := False
     reset := False
@@ -414,10 +526,13 @@ case class Gtpe2RxBufferBypassIo() extends Bundle {
     sync.disable()
   }
 
+  /** @group ports */
   val phaseAlignment = Gtpe2RxBufferBypassPhaseAlignmentIo()
 
+  /** @group ports */
   val delayAlignment = Gtpe2RxBufferBypassDelayAlignmentIo()
 
+  /** @group ports */
   val sync = Gtpe2RxBufferBypassSyncIo()
 }
 
@@ -425,14 +540,22 @@ case class Gtpe2RxBufferBypassIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxDecoder8b10bIo() extends Bundle {
+  /** @group ports */
   val enable = in Bool() setName("RX8B10BEN")
+  /** @group ports */
   val charIsComma = out Bits(4 bits) setName("RXCHARISCOMMA")
+  /** @group ports */
   val charIsK = out Bits(4 bits) setName("RXCHARISK")
+  /** @group ports */
   val disparityErr = out Bits(4 bits) setName("RXDISPERR")
+  /** @group ports */
   val notInTable = out Bits(4 bits) setName("RXNOTINTABLE")
 
+  /** @group spiny */
   def disable() = {
     enable := False
   }
@@ -442,14 +565,22 @@ case class Gtpe2RxDecoder8b10bIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxCommaAlignmentIo() extends Bundle {
+  /** @group ports */
   val detectEnable = in Bool() setName("RXCOMMADETEN")
+  /** @group ports */
   val detect = out Bool() setName("RXCOMMADET")
+  /** @group ports */
   val mCommaEnable = in Bool() setName("RXMCOMMAALIGNEN")
+  /** @group ports */
   val pCommaEnable = in Bool() setName("RXPCOMMAALIGNEN")
+  /** @group ports */
   val slide = in Bool() setName("RXSLIDE")
 
+  /** @group spiny */
   def disable() = {
     detectEnable := False
     mCommaEnable := False
@@ -464,7 +595,9 @@ case class Gtpe2RxCommaAlignmentIo() extends Bundle {
  * @groupprio ports 0
  */
 case class Gtpe2RxByteAlignmentIo() extends Bundle {
+  /** @group ports */
   val isAligned = out Bool() setName("RXBYTEISALIGNED")
+  /** @group ports */
   val realign = out Bool() setName("RXBYTEREALIGN")
 
 }
@@ -473,12 +606,18 @@ case class Gtpe2RxByteAlignmentIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxPatternCheckerIo() extends Bundle {
+  /** @group ports */
   val prbsErrCounterReset = in Bool() setName("RXPRBSCNTRESET")
+  /** @group ports */
   val prbsPatternSelect = in Bits(3 bits) setName("RXPRBSSEL")
+  /** @group ports */
   val prbsErr = out Bool() setName("RXPRBSERR")
 
+  /** @group spiny */
   def disable() = {
     prbsErrCounterReset := False
     prbsPatternSelect := B"3'0"
@@ -489,10 +628,14 @@ case class Gtpe2RxPatternCheckerIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxPolarityIo() extends Bundle {
+  /** @group ports */
   val invert = in Bool() setName("RXPOLARITY")
 
+  /** @group spiny */
   def disable() = {
     invert := False
   }
@@ -502,13 +645,20 @@ case class Gtpe2RxPolarityIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxMarginAnalysisIo() extends Bundle {
+  /** @group ports */
   val reset = in Bool() setName("EYESCANRESET")
+  /** @group ports */
   val mode = in Bool() setName("EYESCANMODE")
+  /** @group ports */
   val trigger = in Bool() setName("EYESCANTRIGGER")
+  /** @group ports */
   val dataErr = out Bool() setName("EYESCANDATAERROR")
 
+  /** @group spiny */
   def disable() = {
     reset := False
     mode := False
@@ -520,21 +670,28 @@ case class Gtpe2RxMarginAnalysisIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxFabricClockOutputIo() extends Bundle {
+  /** @group ports */
   val outClkSelect = in Bits(3 bits) setName("RXOUTCLKSEL")
+  /** @group ports */
   val outClk = out Bool() setName("RXOUTCLK")
 
+  /** @group spiny */
   def rxOutClkPma(): Bool = {
     outClkSelect := B"3'010"
     outClk
   }
 
+  /** @group spiny */
   def disable() = {
     outClkSelect := B"3'011"
     rate.disable()
   }
 
+  /** @group ports */
   val rate = Gtpe2RxFabricClockOutputRateIo()
 }
 
@@ -542,16 +699,21 @@ case class Gtpe2RxFabricClockOutputIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxClockDataRecoveryIo() extends Bundle {
+  /** @group ports */
   val hold = in Bool() setName("RXCDRHOLD")
 
+  /** @group spiny */
   def disable() = {
     hold := False
 
     offset.disable()
   }
 
+  /** @group ports */
   val offset = Gtpe2RxClockDataRecoveryOffsetIo()
 }
 
@@ -559,14 +721,22 @@ case class Gtpe2RxClockDataRecoveryIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxEqualizerIo() extends Bundle {
+  /** @group ports */
   val lpmReset = in Bool() setName("RXLPMRESET")
+  /** @group ports */
   val lpmHighFreqOverrideEn = in Bool() setName("RXLPMHFOVRDEN")
+  /** @group ports */
   val lpmHighFreqHold = in Bool() setName("RXLPMHFHOLD")
+  /** @group ports */
   val lpmLowFreqOverrideEn = in Bool() setName("RXLPMLFOVRDEN")
+  /** @group ports */
   val lpmLowFreqHold = in Bool() setName("RXLPMLFHOLD")
 
+  /** @group spiny */
   def disable() = {
     lpmReset := False
     lpmHighFreqOverrideEn := False
@@ -580,16 +750,26 @@ case class Gtpe2RxEqualizerIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxOutOfBandIo() extends Bundle {
+  /** @group ports */
   val reset = in Bool() setName("RXOOBRESET")
+  /** @group ports */
   val comInitDetect = out Bool() setName("RXCOMINITDET")
+  /** @group ports */
   val comSasDetect = out Bool() setName("RXCOMSASDET")
+  /** @group ports */
   val comWakeDetect = out Bool() setName("RXCOMWAKEDET")
+  /** @group ports */
   val electricalIdle = out Bool() setName("RXELECIDLE")
+  /** @group ports */
   val electricalIdleMode = in Bits(2 bits) setName("RXELECIDLEMODE")
+  /** @group ports */
   val sigValidClk = in Bool() setName("SIGVALIDCLK")
 
+  /** @group spiny */
   def disable() = {
     reset := False
     electricalIdleMode := B"2'11"
@@ -601,12 +781,16 @@ case class Gtpe2RxOutOfBandIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxAnalogFrontEndIo() extends Bundle {
+  /** @group ports */
   val input = in(DiffPair())
   input.p.setName("GTPRXP")
   input.n.setName("GTPRXN")
 
+  /** @group spiny */
   def disable() = {
     input.p := False
     input.n := False
@@ -617,16 +801,22 @@ case class Gtpe2RxAnalogFrontEndIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxClockingIo() extends Bundle {
+  /** @group ports */
   val sysClkSelect = in Bits(2 bits) setName("RXSYSCLKSEL")
+  /** @group ports */
   val usrClk = in Bool() setName("RXUSRCLK")
+  /** @group ports */
   val usrClk2 = in Bool() setName("RXUSRCLK2")
 
   /** Drives RXUSRCLK and RXUSRCLK2 from the owner's domains
    *
    *  @param usrClkDomain Drives RXUSRCLK
    *  @param usrClk2Domain Drives RXUSRCLK2, the same domain at 20 bits
+   *  @group spiny
    */
   def connectClocks(
     usrClkDomain: ClockDomain,
@@ -635,10 +825,12 @@ case class Gtpe2RxClockingIo() extends Bundle {
     usrClk := usrClkDomain.readClockWire
     usrClk2 := Option(usrClk2Domain).getOrElse(usrClkDomain).readClockWire
   }
+  /** @group ports */
   val usrReady = in Bool() setName("RXUSERRDY")
 
 
 
+  /** @group spiny */
   def staticSysClk(pmaClkPll: Int, rxOutClkPll: Int) = {
     assert(
       (0 to 1).contains(pmaClkPll),
@@ -652,6 +844,7 @@ case class Gtpe2RxClockingIo() extends Bundle {
     sysClkSelect(1) := Bool(rxOutClkPll == 1)
   }
 
+  /** @group spiny */
   def disable() = {
     sysClkSelect := B"2'0"
     usrClk := False
@@ -664,14 +857,22 @@ case class Gtpe2RxClockingIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2TxOutOfBandIo() extends Bundle {
+  /** @group ports */
   val comInit = in Bool() setName("TXCOMINIT")
+  /** @group ports */
   val comSas = in Bool() setName("TXCOMSAS")
+  /** @group ports */
   val comWake = in Bool() setName("TXCOMWAKE")
+  /** @group ports */
   val comFinish = out Bool() setName("TXCOMFINISH")
+  /** @group ports */
   val electricalIdleMode = in Bool() setName("TXPDELECIDLEMODE")
 
+  /** @group spiny */
   def disable() = {
     comInit := False
     comSas := False
@@ -684,11 +885,16 @@ case class Gtpe2TxOutOfBandIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2TxPcieIo() extends Bundle {
+  /** @group ports */
   val swing = in Bool() setName("TXSWING")
+  /** @group ports */
   val detectReceiver = in Bool() setName("TXDETECTRX")
 
+  /** @group spiny */
   def disable() = {
     swing := False
     detectReceiver := False
@@ -699,27 +905,42 @@ case class Gtpe2TxPcieIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2TxDriverIo() extends Bundle {
+  /** @group ports */
   val inhibit = in Bool() setName("TXINHIBIT")
+  /** @group ports */
   val electricalIdle = in Bool() setName("TXELECIDLE")
+  /** @group ports */
   val preDriverSwing = in Bits(3 bits) setName("TXBUFDIFFCTRL")
+  /** @group ports */
   val driverSwing = in Bits(4 bits) setName("TXDIFFCTRL")
+  /** @group ports */
   val deEmphasis = in Bool() setName("TXDEEMPH")
 
+  /** @group ports */
   val mainCursor = in Bits(7 bits) setName("TXMAINCURSOR")
+  /** @group ports */
   val margin = in Bits(3 bits) setName("TXMARGIN")
 
+  /** @group ports */
   val preCursor = in Bits(5 bits) setName("TXPRECURSOR")
+  /** @group ports */
   val preCursorInvert = in Bool() setName("TXPRECURSORINV")
 
+  /** @group ports */
   val postCursor = in Bits(5 bits) setName("TXPOSTCURSOR")
+  /** @group ports */
   val postCursorInvert = in Bool() setName("TXPOSTCURSORINV")
 
+  /** @group ports */
   val output = out(new DiffPair())
   output.p.setName("GTPTXP")
   output.n.setName("GTPTXN")
 
+  /** @group spiny */
   def disable() = {
     inhibit := False
     electricalIdle := True
@@ -739,13 +960,20 @@ case class Gtpe2TxDriverIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2TxPhaseInterpolatorIo() extends Bundle {
+  /** @group ports */
   val powerDown = in Bool() setName("TXPIPPMPD")
+  /** @group ports */
   val enable = in Bool() setName("TXPIPPMEN")
+  /** @group ports */
   val overrideEn = in Bool() setName("TXPIPPMOVRDEN")
+  /** @group ports */
   val stepSize = in Bits(5 bits) setName("TXPIPPMSTEPSIZE")
 
+  /** @group spiny */
   def disable() = {
     powerDown := False
     enable := False
@@ -758,22 +986,30 @@ case class Gtpe2TxPhaseInterpolatorIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2TxFabricClockOutputIo() extends Bundle {
+  /** @group ports */
   val outClkSelect = in Bits(3 bits) setName("TXOUTCLKSEL")
+  /** @group ports */
   val outClk = out Bool() setName("TXOUTCLK")
 
-  /** Takes TXOUTCLK from the PMA, the source a serial link wants */
+  /** Takes TXOUTCLK from the PMA, the source a serial link wants
+   *  @group spiny
+   */
   def txOutClkPma(): Bool = {
     outClkSelect := B"3'010"
     outClk
   }
 
+  /** @group spiny */
   def disable() = {
     outClkSelect := B"3'011"
     rate.disable()
   }
 
+  /** @group ports */
   val rate = Gtpe2TxFabricClockOutputRateIo()
 }
 
@@ -781,10 +1017,14 @@ case class Gtpe2TxFabricClockOutputIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2TxPolarityIo() extends Bundle {
+  /** @group ports */
   val invert = in Bool() setName("TXPOLARITY")
 
+  /** @group spiny */
   def disable() = {
     invert := False
   }
@@ -794,11 +1034,16 @@ case class Gtpe2TxPolarityIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2TxPatternGeneratorIo() extends Bundle {
+  /** @group ports */
   val prbsPatternSelect = in Bits(3 bits) setName("TXPRBSSEL")
+  /** @group ports */
   val prbsForceErr = in Bool() setName("TXPRBSFORCEERR")
 
+  /** @group spiny */
   def disable() = {
     prbsPatternSelect := B"3'0"
     prbsForceErr := False
@@ -809,11 +1054,16 @@ case class Gtpe2TxPatternGeneratorIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2TxBufferBypassIo() extends Bundle {
+  /** @group ports */
   val powerDown = in Bool() setName("TXPHDLYPD")
+  /** @group ports */
   val reset = in Bool() setName("TXPHDLYRESET")
 
+  /** @group spiny */
   def disable() = {
     powerDown := False
     reset := False
@@ -822,8 +1072,10 @@ case class Gtpe2TxBufferBypassIo() extends Bundle {
     delayAlignment.disable()
   }
 
+  /** @group ports */
   val phaseAlignment = Gtpe2TxBufferBypassPhaseAlignmentIo()
 
+  /** @group ports */
   val delayAlignment = Gtpe2TxBufferBypassDelayAlignmentIo()
 }
 
@@ -833,6 +1085,7 @@ case class Gtpe2TxBufferBypassIo() extends Bundle {
  * @groupprio ports 0
  */
 case class Gtpe2TxBufferIo() extends Bundle {
+  /** @group ports */
   val status = out Bits(2 bits) setName("TXBUFSTATUS")
 }
 
@@ -840,13 +1093,20 @@ case class Gtpe2TxBufferIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2TxGearboxIo() extends Bundle {
+  /** @group ports */
   val ready = out Bool() setName("TXGEARBOXREADY")
+  /** @group ports */
   val header = in Bits(3 bits) setName("TXHEADER")
+  /** @group ports */
   val sequence = in Bits(7 bits) setName("TXSEQUENCE")
+  /** @group ports */
   val startSeq = in Bool() setName("TXSTARTSEQ")
 
+  /** @group spiny */
   def disable() = {
     header := B"3'0"
     sequence := B"7'0"
@@ -858,14 +1118,22 @@ case class Gtpe2TxGearboxIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2TxEncoder8b10bIo() extends Bundle {
+  /** @group ports */
   val enable = in Bool() setName("TX8B10BEN")
+  /** @group ports */
   val bypass = in Bits(4 bits) setName("TX8B10BBYPASS")
+  /** @group ports */
   val charDisparityMode = in Bits(4 bits) setName("TXCHARDISPMODE")
+  /** @group ports */
   val charDisparityValue = in Bits(4 bits) setName("TXCHARDISPVAL")
+  /** @group ports */
   val charIsK = in Bits(4 bits) setName("TXCHARISK")
 
+  /** @group spiny */
   def disable() = {
     enable := False
     bypass := B"4'0"
@@ -879,16 +1147,22 @@ case class Gtpe2TxEncoder8b10bIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2TxClockingIo() extends Bundle {
+  /** @group ports */
   val sysClkSelect = in Bits(2 bits) setName("TXSYSCLKSEL")
+  /** @group ports */
   val usrClk = in Bool() setName("TXUSRCLK")
+  /** @group ports */
   val usrClk2 = in Bool() setName("TXUSRCLK2")
 
   /** Drives TXUSRCLK and TXUSRCLK2 from the owner's domains
    *
    *  @param usrClkDomain Drives TXUSRCLK
    *  @param usrClk2Domain Drives TXUSRCLK2, the same domain at 20 bits
+   *  @group spiny
    */
   def connectClocks(
     usrClkDomain: ClockDomain,
@@ -897,8 +1171,10 @@ case class Gtpe2TxClockingIo() extends Bundle {
     usrClk := usrClkDomain.readClockWire
     usrClk2 := Option(usrClk2Domain).getOrElse(usrClkDomain).readClockWire
   }
+  /** @group ports */
   val usrReady = in Bool() setName("TXUSERRDY")
 
+  /** @group spiny */
   def staticSysClk(pmaClkPll: Int, txOutClkPll: Int) = {
     assert(
       (0 to 1).contains(pmaClkPll),
@@ -912,6 +1188,7 @@ case class Gtpe2TxClockingIo() extends Bundle {
     sysClkSelect(1) := Bool(txOutClkPll == 1)
   }
 
+  /** @group spiny */
   def disable() = {
     sysClkSelect := B"2'0"
     usrClk := False
@@ -920,61 +1197,114 @@ case class Gtpe2TxClockingIo() extends Bundle {
   }
 }
 
+/**
+ * @groupname ports SpinalHDL IO Ports
+ * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
+ */
 case class Gtpe2ChannelReservedIo() extends Bundle {
+  /** @group ports */
   val gtRsvd = in Bits(16 bits) setName("GTRSVD") default(B"16'0")
+  /** @group ports */
   val pcsRsvdIn = in Bits(16 bits) setName("PCSRSVDIN") default(B"16'0")
+  /** @group ports */
   val tstIn = in Bits(20 bits) setName("TSTIN") default(B"20'hFFFFF")
+  /** @group ports */
   val pmaRsvdOut0 = out Bool() setName("PMARSVDOUT0")
+  /** @group ports */
   val pmaRsvdOut1 = out Bool() setName("PMARSVDOUT1")
+  /** @group ports */
   val pmaRsvdIn0 = in Bool() setName("PMARSVDIN0") default(False)
+  /** @group ports */
   val pmaRsvdIn1 = in Bool() setName("PMARSVDIN1") default(False)
+  /** @group ports */
   val pmaRsvdIn2 = in Bool() setName("PMARSVDIN2") default(False)
+  /** @group ports */
   val pmaRsvdIn3 = in Bool() setName("PMARSVDIN3") default(False)
+  /** @group ports */
   val pmaRsvdIn4 = in Bool() setName("PMARSVDIN4") default(False)
+  /** @group ports */
   val rxCdrReset = in Bool() setName("RXCDRRESET") default(False)
+  /** @group ports */
   val rxCdrFreqReset = in Bool() setName("RXCDRFREQRESET") default(False)
+  /** @group ports */
   val rxCdrOvrdEn = in Bool() setName("RXCDROVRDEN") default(False)
+  /** @group ports */
   val rxCdrResetRsv = in Bool() setName("RXCDRRESETRSV") default(False)
+  /** @group ports */
   val rxCdrLock = out Bool() setName("RXCDRLOCK")
+  /** @group ports */
   val rxOsIntDone = out Bool() setName("RXOSINTDONE")
+  /** @group ports */
   val rxOsIntStarted = out Bool() setName("RXOSINTSTARTED")
+  /** @group ports */
   val rxOsIntStrobeDone = out Bool() setName("RXOSINTSTROBEDONE")
+  /** @group ports */
   val rxOsIntStrobeStarted = out Bool() setName("RXOSINTSTROBESTARTED")
+  /** @group ports */
   val rxOsCalReset = in Bool() setName("RXOSCALRESET") default(False)
+  /** @group ports */
   val rxOsIntEn = in Bool() setName("RXOSINTEN") default(True)
+  /** @group ports */
   val rxOsIntHold = in Bool() setName("RXOSINTHOLD") default(False)
+  /** @group ports */
   val rxOsIntNtrLen = in Bool() setName("RXOSINTNTRLEN") default(False)
+  /** @group ports */
   val rxOsIntOvrdEn = in Bool() setName("RXOSINTOVRDEN") default(False)
+  /** @group ports */
   val rxOsIntPd = in Bool() setName("RXOSINTPD") default(False)
+  /** @group ports */
   val rxOsIntStrobe = in Bool() setName("RXOSINTSTROBE") default(False)
   val rxOsIntTestOvrdEn =
     in Bool() setName("RXOSINTTESTOVRDEN") default(False)
   val rxOsIntCfg =
     in Bits(4 bits) setName("RXOSINTCFG") default(B"4'b0010")
+  /** @group ports */
   val rxOsIntID0 = in Bits(4 bits) setName("RXOSINTID0") default(B"4'0")
   val rxLpmOsIntNtrLen =
     in Bool() setName("RXLPMOSINTNTRLEN") default(False)
+  /** @group ports */
   val rxOutClkFabric = out Bool() setName("RXOUTCLKFABRIC")
+  /** @group ports */
   val rxOutClkPcs = out Bool() setName("RXOUTCLKPCS")
+  /** @group ports */
   val dMonFifoReset = in Bool() setName("DMONFIFORESET") default(False)
+  /** @group ports */
   val pcsRsvdOut = out Bits(16 bits) setName("PCSRSVDOUT")
+  /** @group ports */
   val clkRsvd0 = in Bool() setName("CLKRSVD0") default(False)
+  /** @group ports */
   val clkRsvd1 = in Bool() setName("CLKRSVD1") default(False)
+  /** @group ports */
   val resetOvrd = in Bool() setName("RESETOVRD") default(False)
+  /** @group ports */
   val rxDfeXYDEn = in Bool() setName("RXDFEXYDEN") default(False)
   val rxAdaptSelTest =
     in Bits(14 bits) setName("RXADAPTSELTEST") default(B"14'0")
+  /** @group ports */
   val setErrStatus = in Bool() setName("SETERRSTATUS") default(False)
+  /** @group ports */
   val txSyncMode = in Bool() setName("TXSYNCMODE") default(False)
+  /** @group ports */
   val txSyncIn = in Bool() setName("TXSYNCIN") default(False)
+  /** @group ports */
   val txSyncOut = out Bool() setName("TXSYNCOUT")
+  /** @group ports */
   val txSyncAllIn = in Bool() setName("TXSYNCALLIN") default(False)
+  /** @group ports */
   val txSyncDone = out Bool() setName("TXSYNCDONE")
+  /** @group ports */
   val txOutClkFabric = out Bool() setName("TXOUTCLKFABRIC")
+  /** @group ports */
   val txOutClkPcs = out Bool() setName("TXOUTCLKPCS")
+  /** @group ports */
   val txPiPpmSel = in Bool() setName("TXPIPPMSEL") default(True)
+  /** @group ports */
   val txPiSoPd = in Bool() setName("TXPISOPD") default(False)
+  /** @group ports */
   val txDiffPd = in Bool() setName("TXDIFFPD") default(False)
+  /** @group ports */
   val cfgReset = in Bool() setName("CFGRESET") default(False)
 }
 
@@ -982,11 +1312,16 @@ case class Gtpe2ChannelReservedIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2DigitalMonitorIo() extends Bundle {
+  /** @group ports */
   val clk = in Bool() setName("DMONITORCLK")
+  /** @group ports */
   val output = out Bits(15 bits) setName("DMONITOROUT")
 
+  /** @group spiny */
   def disable() = {
     clk := False
   }
@@ -996,10 +1331,14 @@ case class Gtpe2DigitalMonitorIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2LoopbackIo() extends Bundle {
+  /** @group ports */
   val mode = in Bits(3 bits) setName("LOOPBACK")
 
+  /** @group spiny */
   def disable() = {
     mode := B"3'0"
   }
@@ -1009,24 +1348,34 @@ case class Gtpe2LoopbackIo() extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2TxIo(config: Gtpe2TxConfig) extends Bundle {
+  /** @group ports */
   val powerDown = in Bits(2 bits) setName("TXPD")
 
+  /** @group ports */
   val reset = in Bool() setName("GTTXRESET")
+  /** @group ports */
   val resetDone = out Bool() setName("TXRESETDONE")
 
+  /** @group ports */
   val pmaReset = in Bool() setName("TXPMARESET")
+  /** @group ports */
   val pmaResetDone = out Bool() setName("TXPMARESETDONE")
 
+  /** @group ports */
   val pcsReset = in Bool() setName("TXPCSRESET")
 
+  /** @group ports */
   val rawData = in Bits(32 bits) setName("TXDATA")
 
   /** Data port based on config dataWidth and 8b10b encoding
    *
    *  This helper assumes 8b10b encoding is statically on or off. It automatically
    *  handles wiring TXCHARDISPMODE and TXCHARDISPVAL if needed.
+   *  @group spiny
    */
   def data(bypass8b10b: Boolean = false): Vec[Bits] = {
     val format = Gtpe2SymbolFormat.of("tx", config.dataWidth, bypass8b10b)
@@ -1044,6 +1393,7 @@ case class Gtpe2TxIo(config: Gtpe2TxConfig) extends Bundle {
     port
   }
 
+  /** @group spiny */
   def disable() = {
     powerDown := B"2'11"
     reset := False
@@ -1064,28 +1414,40 @@ case class Gtpe2TxIo(config: Gtpe2TxConfig) extends Bundle {
     outOfBand.disable()
   }
 
+  /** @group ports */
   val clocking = Gtpe2TxClockingIo()
 
+  /** @group ports */
   val encoder8b10b = Gtpe2TxEncoder8b10bIo()
 
+  /** @group ports */
   val gearbox = Gtpe2TxGearboxIo()
 
+  /** @group ports */
   val buffer = Gtpe2TxBufferIo()
 
+  /** @group ports */
   val bufferBypass = Gtpe2TxBufferBypassIo()
 
+  /** @group ports */
   val patternGenerator = Gtpe2TxPatternGeneratorIo()
 
+  /** @group ports */
   val polarity = Gtpe2TxPolarityIo()
 
+  /** @group ports */
   val fabricClockOutput = Gtpe2TxFabricClockOutputIo()
 
+  /** @group ports */
   val phaseInterpolator = Gtpe2TxPhaseInterpolatorIo()
 
+  /** @group ports */
   val driver = Gtpe2TxDriverIo()
 
+  /** @group ports */
   val pcie = Gtpe2TxPcieIo()
 
+  /** @group ports */
   val outOfBand = Gtpe2TxOutOfBandIo()
 
   /** The domain TXUSRCLK2 puts the synchronous pins in, taken from the pin
@@ -1141,18 +1503,27 @@ case class Gtpe2TxIo(config: Gtpe2TxConfig) extends Bundle {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2RxIo(config: Gtpe2RxConfig) extends Bundle {
+  /** @group ports */
   val powerDown = in Bits(2 bits) setName("RXPD")
 
+  /** @group ports */
   val reset = in Bool() setName("GTRXRESET")
+  /** @group ports */
   val resetDone = out Bool() setName("RXRESETDONE")
 
+  /** @group ports */
   val pmaReset = in Bool() setName("RXPMARESET")
+  /** @group ports */
   val pmaResetDone = out Bool() setName("RXPMARESETDONE")
 
+  /** @group ports */
   val pcsReset = in Bool() setName("RXPCSRESET")
 
+  /** @group spiny */
   def disable() = {
     powerDown := B"2'11"
     reset := False
@@ -1176,51 +1547,71 @@ case class Gtpe2RxIo(config: Gtpe2RxConfig) extends Bundle {
     gearbox.disable()
   }
 
+  /** @group ports */
   val clocking = Gtpe2RxClockingIo()
 
+  /** @group ports */
   val analogFrontEnd = Gtpe2RxAnalogFrontEndIo()
 
+  /** @group ports */
   val outOfBand = Gtpe2RxOutOfBandIo()
 
+  /** @group ports */
   val equalizer = Gtpe2RxEqualizerIo()
 
+  /** @group ports */
   val clockDataRecovery = Gtpe2RxClockDataRecoveryIo()
 
+  /** @group ports */
   val fabricClockOutput = Gtpe2RxFabricClockOutputIo()
 
+  /** @group ports */
   val marginAnalysis = Gtpe2RxMarginAnalysisIo()
 
+  /** @group ports */
   val polarity = Gtpe2RxPolarityIo()
 
+  /** @group ports */
   val patternChecker = Gtpe2RxPatternCheckerIo()
 
   // Byte alignment
+  /** @group ports */
   val byteAlignment = Gtpe2RxByteAlignmentIo()
 
   // Comma alignment
+  /** @group ports */
   val commaAlignment = Gtpe2RxCommaAlignmentIo()
 
   // 8b/10b decoder (not TMDS compatible)
+  /** @group ports */
   val decoder8b10b = Gtpe2RxDecoder8b10bIo()
 
+  /** @group ports */
   val bufferBypass = Gtpe2RxBufferBypassIo()
 
+  /** @group ports */
   val elasticBuffer = Gtpe2RxElasticBufferIo()
 
+  /** @group ports */
   val clockCorrection = Gtpe2RxClockCorrectionIo()
 
+  /** @group ports */
   val channelBonding = Gtpe2RxChannelBondingIo()
 
+  /** @group ports */
   val gearbox = Gtpe2RxGearboxIo()
 
+  /** @group ports */
   val pcie = Gtpe2RxPcieIo()
 
+  /** @group ports */
   val rawData = out Bits(32 bits) setName("RXDATA")
 
   /** Data port based on config dataWidth and 8b10b encoding
    *
    *  This helper assumes 8b10b encoding is statically on or off. It automatically
    *  handles wiring RXDISPERR and RXCHARISK if needed.
+   *  @group spiny
    */
   def data(bypass8b10b: Boolean = false): Vec[Bits] = {
     val format = Gtpe2SymbolFormat.of("rx", config.dataWidth, bypass8b10b)
@@ -1310,8 +1701,10 @@ case class Gtpe2ChannelIo(
   txConfig: Gtpe2TxConfig,
   drpClkDomain: ClockDomain
 ) extends Bundle {
+  /** @group ports */
   val resetSelection = in Bool() setName("GTRESETSEL")
 
+  /** @group ports */
   val drp = slave(Gtpe2DrpIo(9))
   drp.clk.setName("DRPCLK")
   ClockDomainTag(drpClkDomain)(
@@ -1322,24 +1715,36 @@ case class Gtpe2ChannelIo(
     drp.writeEnable.setName("DRPWE"),
     drp.ready.setName("DRPRDY")
   )
+  /** @group ports */
   val clocking = in(Gtpe2ChannelClocking())
   clocking.pll0Clk.setName("PLL0CLK")
   clocking.pll0RefClk.setName("PLL0REFCLK")
   clocking.pll1Clk.setName("PLL1CLK")
   clocking.pll1RefClk.setName("PLL1REFCLK")
 
+  /** @group ports */
   val rx = Gtpe2RxIo(rxConfig)
 
+  /** @group ports */
   val tx = Gtpe2TxIo(txConfig)
 
+  /** @group ports */
   val loopback = Gtpe2LoopbackIo()
 
+  /** @group ports */
   val digitalMonitor = Gtpe2DigitalMonitorIo()
 
+  /** @group ports */
   val reserved = Gtpe2ChannelReservedIo()
 }
 
-/** GTPE2_CHANNEL primitive: one transceiver lane */
+/** GTPE2_CHANNEL primitive: one transceiver lane
+ *
+ * @groupname ports SpinalHDL IO Ports
+ * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
+ */
 case class Gtpe2Channel(
   rxConfig: Gtpe2RxConfig,
   txConfig: Gtpe2TxConfig,
@@ -1663,6 +2068,7 @@ case class Gtpe2Channel(
     val TXSYNC_SKIP_DA = B"1'b0"
   }
 
+  /** @group ports */
   val io = Gtpe2ChannelIo(rxConfig, txConfig, drpClkDomain)
 
   if (drpClkDomain != null) {

@@ -53,13 +53,24 @@ object IBufDsGte2 {
   }
 }
 
-/** IBUFDS_GTE2 primitive: differential input buffer for a reference clock */
+/** IBUFDS_GTE2 primitive: differential input buffer for a reference clock
+ *
+ * @groupname ports SpinalHDL IO Ports
+ * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
+ */
 case class IBufDsGte2() extends BlackBox {
   val io = new Bundle {
+    /** @group ports */
     val I = in Bool()
+    /** @group ports */
     val IB = in Bool()
+    /** @group ports */
     val CEB = in Bool()
+    /** @group ports */
     val O = out Bool()
+    /** @group ports */
     val ODIV2 = out Bool()
   }
 
@@ -71,10 +82,15 @@ case class IBufDsGte2() extends BlackBox {
  *
  *  Plain data rather than a Bits, so a config holding one can be built
  *  outside an elaboration context. Use asBits to get the hardware literal.
+ * @groupname ports SpinalHDL IO Ports
+ * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2PllRefClk(code: Int) {
   assert((1 to 6).contains(code), s"refClkSelect code must be 1-6, was $code")
 
+  /** @group spiny */
   def asBits: Bits = B(code, 3 bits)
 }
 
@@ -94,6 +110,8 @@ object Gtpe2PllRefClk {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2PllIo() extends Bundle {
   /** PLL output clock, feeds a channel's TX or RX clock select
@@ -148,7 +166,9 @@ case class Gtpe2PllIo() extends Bundle {
    */
   val fbClkLost = out Bool()
 
-  /** Renames every port to its PLL0 or PLL1 primitive name */
+  /** Renames every port to its PLL0 or PLL1 primitive name
+   *  @group spiny
+   */
   def forPllIndex(i: Int) = {
     assert((0 to 1).contains(i), "Must be PLL0 or PLL1")
     outClk.setName(f"PLL${i}OUTCLK")
@@ -164,7 +184,9 @@ case class Gtpe2PllIo() extends Bundle {
     this
   }
 
-  /** Powers down an unused PLL and ties off its inputs */
+  /** Powers down an unused PLL and ties off its inputs
+   *  @group spiny
+   */
   def disable() = {
     powerDown := True
     refClkSelect := Gtpe2PllRefClk.GtRefClk0.asBits
@@ -231,6 +253,8 @@ case class Gtpe2PllConfig(
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class Gtpe2DrpIo(addressWidth: Int = 8)
   extends Bundle with IMasterSlave {
@@ -274,7 +298,9 @@ case class Gtpe2DrpIo(addressWidth: Int = 8)
     in(dataOut, ready)
   }
 
-  /** Ties off the port when nothing reconfigures the primitive */
+  /** Ties off the port when nothing reconfigures the primitive
+   *  @group spiny
+   */
   def disable() = {
     clk := False
     addr := 0
@@ -443,7 +469,13 @@ case class Gtpe2CommonIo() extends Bundle {
   val reserved = Gtpe2ReservedIo()
 }
 
-/** GTPE2_COMMON primitive: two PLLs and one shared DRP port */
+/** GTPE2_COMMON primitive: two PLLs and one shared DRP port
+ *
+ * @groupname ports SpinalHDL IO Ports
+ * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
+ */
 case class Gtpe2Common(
   pll0Config: Gtpe2PllConfig,
   pll1Config: Gtpe2PllConfig,
@@ -486,6 +518,7 @@ case class Gtpe2Common(
     val RSVD_ATTR1 = B"16'0"
   }
 
+  /** @group ports */
   val io = Gtpe2CommonIo()
 
   noIoPrefix()

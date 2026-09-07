@@ -42,6 +42,8 @@ import spiny.platform.xilinx.blackbox._
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class GtpPllIo(index: Int) extends Bundle with IMasterSlave {
   assert((0 to 1).contains(index), s"a GTPE2_COMMON has PLL 0 and 1, not $index")
@@ -97,6 +99,7 @@ case class GtpPllIo(index: Int) extends Bundle with IMasterSlave {
   }
 
   /** Drives the control inputs to their idle values
+   *  @group spiny
    */
   def tieOff(refClk: Gtpe2PllRefClk = Gtpe2PllRefClk.GtRefClk0): Unit = {
     reset := False
@@ -114,6 +117,8 @@ case class GtpPllIo(index: Int) extends Bundle with IMasterSlave {
  *
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class GtpCommon() extends Component {
   val io = new Bundle {
@@ -155,7 +160,9 @@ case class GtpCommon() extends Component {
   // finished elaborating, so the build waits for the parent.
   if (parent != null) parent.addPrePopTask(() => if (!built) build())
 
-  /** Claims the next free PLL */
+  /** Claims the next free PLL
+   *  @group spiny
+   */
   def requestPll(config: Gtpe2PllConfig): GtpPllIo = {
     assert(!built,
       "Cannot claim a PLL after the GTPE2_COMMON is built. The build runs " +
@@ -175,6 +182,7 @@ case class GtpCommon() extends Component {
    *
    *  Runs automatically at the end of the enclosing component.
    *  Calling explicitly is allowed.
+   *  @group spiny
    */
   def build(): Unit = rework {
     assert(!built, "build() already called")

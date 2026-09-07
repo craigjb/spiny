@@ -54,6 +54,8 @@ import spiny.platform.xilinx.blackbox._
  * @param drpClkDomain Clock domain for the dynamic reconfiguration port
  * @groupname ports SpinalHDL IO Ports
  * @groupprio ports 0
+ * @groupname spiny Spiny
+ * @groupprio spiny 1
  */
 case class GtpChannel(
   drpClkDomain: ClockDomain = null
@@ -73,7 +75,9 @@ case class GtpChannel(
   // finished elaborating, so the build waits for the parent.
   if (parent != null) parent.addPrePopTask(() => if (!built) build())
 
-  /** Claims the transmit half */
+  /** Claims the transmit half
+   *  @group spiny
+   */
   def requestTx(config: Gtpe2TxConfig): Gtpe2TxIo = {
     assert(!built, GtpChannel.lateClaim)
     assert(txClaim.isEmpty, "The transmit half is already claimed")
@@ -83,7 +87,9 @@ case class GtpChannel(
     port
   }
 
-  /** Claims the receive half */
+  /** Claims the receive half
+   *  @group spiny
+   */
   def requestRx(config: Gtpe2RxConfig): Gtpe2RxIo = {
     assert(!built, GtpChannel.lateClaim)
     assert(rxClaim.isEmpty, "The receive half is already claimed")
@@ -96,6 +102,7 @@ case class GtpChannel(
   /** Instantiates the primitive with whatever was claimed
    *
    *  Runs automatically at the end of the enclosing component.
+   *  @group spiny
    */
   def build(): Unit = rework {
     assert(!built, "build() already called")
