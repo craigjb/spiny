@@ -155,6 +155,21 @@ case class GtpCommon() extends Component {
 
   private val claims = mutable.ArrayBuffer[(Gtpe2PllConfig, GtpPllIo)]()
   private var built = false
+  private var builtPrimitive: Gtpe2Common = null
+
+  /** The GTPE2_COMMON, once it has been built
+   *  @group spiny
+   */
+  def primitive: Gtpe2Common = {
+    assert(builtPrimitive != null, "The GTPE2_COMMON has not been built yet")
+    builtPrimitive
+  }
+
+  /** The PLL handed out in each slot, empty where nothing claimed one
+   *  @group spiny
+   */
+  def plls: Seq[Option[GtpPllIo]] =
+    (0 to 1).map(i => claims.lift(i).map(_._2))
 
   // The claims are only all known once the enclosing component has
   // finished elaborating, so the build waits for the parent.
@@ -199,6 +214,7 @@ case class GtpCommon() extends Component {
     val dividers = Array.fill(2)(Gtpe2PllConfig.default())
     claims.zipWithIndex.foreach { case ((config, _), i) => dividers(i) = config }
     val common = Gtpe2Common(dividers(0), dividers(1))
+    builtPrimitive = common
 
     common.io.clocking.gtRefClk0 := io.gtRefClk0
     common.io.clocking.gtRefClk1 := io.gtRefClk1

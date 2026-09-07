@@ -61,50 +61,54 @@ class GtpCommonSpec extends AnyFunSuite {
   val Hbr = Gtpe2PllConfig(refClkDiv = 1, fbDiv = 4, fbDiv45 = 5)
   val Rbr = Gtpe2PllConfig(refClkDiv = 1, fbDiv = 3, fbDiv45 = 4)
 
-  def elaborate(claims: Seq[Gtpe2PllConfig]): GtpCommonHarness = {
-    SpinalConfig(
-      targetDirectory = ElaborationDir.path,
-      defaultClockDomainFrequency = FixedFrequency(100 MHz)
-    ).generateVerilog(GtpCommonHarness(claims)).toplevel
+  def elaborate(claims: Seq[Gtpe2PllConfig]): GtpCommonHarness =
+    SpinalConfig(targetDirectory = ElaborationDir.path)
+      .generateVerilog(GtpCommonHarness(claims))
+      .toplevel
+
+  test("GtpCommon should hand out a port for each claim") {
+    val one = elaborate(Seq(Hbr))
+    assert(one.plls.size == 1, "one claim should give one port")
+    assert(one.common.plls(1).isEmpty, "the second PLL should still be free")
+
+    val two = elaborate(Seq(Hbr, Rbr))
+    assert(two.plls.size == 2, "two claims should give two ports")
+    assert(two.plls.map(_.index) == Seq(0, 1),
+      "the ports should know which PLL they are")
   }
 
-  test("GtpCommon should hand out one PLL") {
-    val dut = elaborate(Seq(Hbr))
-    assert(dut.plls.size == 1, "one claim should give one port")
-  }
-
-  test("GtpCommon should hand out both PLLs") {
-    val dut = elaborate(Seq(Hbr, Rbr))
-    assert(dut.plls.size == 2, "two claims should give two ports")
-  }
-
-  /** The generated Verilog is the only place slot assignment is visible now */
-  def generated(): String = {
-    scala.io.Source.fromFile(s"${ElaborationDir.path}/GtpCommonHarness.v").mkString
-  }
-
-  test("GtpCommon should give each PLL its own config") {
+  test("GtpCommon should give each PLL the config that claimed it") {
     // distinct multipliers, so a swap between slots is visible
-    elaborate(Seq(Hbr, Rbr))
-    val v = generated()
-    assert(v.contains(".PLL0_FBDIV") && v.contains(".PLL1_FBDIV"),
-      "both PLLs should be configured")
-    def divider(pll: Int, name: String): String =
-      raw"""\.PLL${pll}_${name}\s*\(\s*(\d+)""".r
-        .findFirstMatchIn(v).map(_.group(1)).getOrElse("missing")
-    assert(divider(0, "FBDIV") == "4" && divider(0, "FBDIV_45") == "5",
-      s"PLL0 should be x20, got ${divider(0, "FBDIV")}/${divider(0, "FBDIV_45")}")
-    assert(divider(1, "FBDIV") == "3" && divider(1, "FBDIV_45") == "4",
-      s"PLL1 should be x12, got ${divider(1, "FBDIV")}/${divider(1, "FBDIV_45")}")
+    val dut = elaborate(Seq(Hbr, Rbr))
+    assert(dut.common.primitive.pll0Config == Hbr, "PLL0 took the first claim")
+    assert(dut.common.primitive.pll1Config == Rbr, "PLL1 took the second claim")
   }
 
-  test("GtpCommon should power down an unclaimed PLL") {
-    elaborate(Seq(Hbr))
-    val v = generated()
-    assert(raw"\.PLL1PD\s*\(\s*1'b1".r.findFirstIn(v).isDefined,
-      "the unclaimed PLL1 should be powered down")
-    assert(raw"\.PLL0PD\s*\(\s*pll_0_powerDown".r.findFirstIn(v).isDefined,
-      "the claimed PLL0 should be driven from its boundary port")
+  test("GtpCommon should use the dividers exactly as given") {
+    // the allocator hands the config through untouched, it solves nothing
+    val dut = elaborate(Seq(Rbr))
+    assert(dut.common.primitive.pll0Config.refClkDiv == Rbr.refClkDiv)
+    assert(dut.common.primitive.pll0Config.fbDiv == Rbr.fbDiv)
+    assert(dut.common.primitive.pll0Config.fbDiv45 == Rbr.fbDiv45)
+  }
+
+  test("GtpCommon should leave a PLL nobody claimed at its defaults") {
+    // an unclaimed PLL is powered down, but it still needs a legal set of
+    // dividers for the tools to accept the primitive
+    val dut = elaborate(Seq(Hbr))
+    assert(dut.common.primitive.pll1Config == Gtpe2PllConfig.default())
+  }
+
+  test("GtpCommon should wire each PLL to the port that claimed it") {
+    val dut = elaborate(Seq(Hbr, Rbr))
+    val primitive = dut.common.primitive
+    for ((port, slot) <- Seq((primitive.io.pll0, 0), (primitive.io.pll1, 1))) {
+      val claim = dut.common.plls(slot).get
+      assert(port.reset.getSingleDriver.exists(_ eq claim.reset),
+        s"PLL$slot should take its reset from the port that claimed it")
+      assert(claim.lock.getSingleDriver.exists(_ eq port.lock),
+        s"PLL$slot should report its lock to the port that claimed it")
+    }
   }
 
   test("GtpCommon should reject a third claim") {
