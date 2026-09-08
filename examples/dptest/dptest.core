@@ -66,7 +66,6 @@ targets:
           args:
             - --num-leds=8
             - --freq-mhz=70
-            - --firmware=rust/target/release/dptest.bin
     toplevel: DpTest
     flow: vivado
     flow_options:
